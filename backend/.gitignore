@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+enosis_dev.db
+.pytest_cache/
+.idea
