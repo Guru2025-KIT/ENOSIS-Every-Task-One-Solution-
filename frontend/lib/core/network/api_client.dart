@@ -92,4 +92,33 @@ class ApiClient {
       },
     );
   }
+
+  /// Multipart file upload — used for uploading Excel/CSV files. Supports both native path and Web bytes.
+  static Future<http.StreamedResponse> uploadFile(
+    String path, {
+    String? filePath,
+    List<int>? fileBytes,
+    required String fileName,
+    required String fieldName,
+    String? token,
+  }) async {
+    final request = http.MultipartRequest('POST', _uri(path));
+    if (token != null) {
+      request.headers['Authorization'] = 'Bearer $token';
+    }
+    
+    if (fileBytes != null) {
+      request.files.add(http.MultipartFile.fromBytes(
+        fieldName,
+        fileBytes,
+        filename: fileName,
+      ));
+    } else if (filePath != null) {
+      request.files.add(await http.MultipartFile.fromPath(fieldName, filePath));
+    } else {
+      throw ArgumentError('Either filePath or fileBytes must be provided');
+    }
+    
+    return request.send();
+  }
 }

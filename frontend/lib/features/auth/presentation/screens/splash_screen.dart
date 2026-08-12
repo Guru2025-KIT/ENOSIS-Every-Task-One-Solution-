@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import '../../../../core/institution/institution_repository.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_typography.dart';
+import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/enosis_wordmark.dart';
+import '../../../../core/widgets/loading_indicator.dart';
 import 'login_screen.dart';
 
-/// First screen shown when the app launches. Displays the brand logo
-/// briefly, fetches the real college name in the background (so Login can
-/// show it), then moves to Login. Later (once real auth persistence
-/// exists) this will check for a saved session/token and skip straight to
-/// Dashboard if found.
+/// Screen 1 — Splash Screen.
+///
+/// Designed with premium visual aesthetics:
+/// - Deep Navy brand gradient background
+/// - Centered brand logo / fallback wordmark
+/// - Rotating dotted circle loader indicating background loading
+/// - Tagline "Every Task. One Solution."
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -25,10 +30,9 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _prepareAndNavigate() async {
     // Run the minimum splash delay and the college-name fetch together,
-    // not back-to-back, so a slow/unreachable backend doesn't make the
-    // splash screen linger any longer than it already would.
+    // so a slow/unreachable backend doesn't make the splash screen linger.
     await Future.wait([
-      Future.delayed(const Duration(seconds: 2)),
+      Future.delayed(const Duration(seconds: 3)),
       InstitutionRepository().loadCollegeName(),
     ]);
 
@@ -40,29 +44,70 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
     return Scaffold(
-      backgroundColor: AppColors.primary,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Image.asset(
-              'assets/branding/enosis_logo.png',
-              width: 160,
-              // Fallback if you haven't dropped the logo file in yet
-              // (see assets/branding/README_ADD_LOGO_HERE.txt) — a
-              // styled brand mark instead of a broken-image icon, so the
-              // app still looks finished while you add the real PNG.
-              errorBuilder: (context, error, stackTrace) =>
-                  const EnosisWordmark(size: 140, onDarkBackground: true),
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          // Bottom Illustration (Campus building + Navy/Orange footer waves)
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: screenHeight * 0.45, // Constrain height to 45% of the viewport to prevent overlap
+            child: Image.asset(
+              'assets/branding/splash_illustration.png',
+              fit: BoxFit.fitWidth,
+              alignment: Alignment.bottomCenter,
+              errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
             ),
-            const SizedBox(height: 24),
-            const Text(
-              'Every Task. One Solution.',
-              style: TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+
+          // Center Logo and Tagline
+          SafeArea(
+            child: ResponsiveCenter(
+              maxWidth: 500,
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Stack(
+                children: [
+                  Align(
+                    alignment: const Alignment(0, -0.65), // Move logo higher up to give illustration breathing room
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Image.asset(
+                          'assets/branding/enosis_logo.png',
+                          width: 220,
+                          errorBuilder: (context, error, stackTrace) =>
+                              const EnosisWordmark(size: 140, onDarkBackground: false),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Every Task. One Solution.',
+                          style: AppTypography.bodySecondary.copyWith(
+                            color: AppColors.primary,
+                            letterSpacing: 1.2,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Centered loader indicator positioned directly above the illustration
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: screenHeight * 0.46,
+                    child: const Center(
+                      child: LoadingIndicator(size: 32),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

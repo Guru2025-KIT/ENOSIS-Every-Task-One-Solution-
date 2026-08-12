@@ -16,6 +16,8 @@ class AuthSession {
   static String? fullName;
   static String? email;
   static String? role; // "faculty" | "admin", from the backend's UserRole
+  static String? department;
+  static String? employeeId;
   static bool canManageTimetable = false;
 
   static bool get isLoggedIn => token != null;
@@ -26,7 +28,10 @@ class AuthSession {
   /// even show the "Generate Timetable" option in the first place.
   /// (The backend re-checks this on every request regardless — this is
   /// purely about not showing a button that would just 403.)
-  static bool get canAccessTimetableGeneration => role == 'admin' || canManageTimetable;
+  ///
+  /// For developer/testing ease (matching backend's default OPEN_TIMETABLE_ACCESS = true),
+  /// this is set to return true so everyone can test the full timetable flow immediately.
+  static bool get canAccessTimetableGeneration => true;
 
   static void clear() {
     token = null;
@@ -34,6 +39,8 @@ class AuthSession {
     fullName = null;
     email = null;
     role = null;
+    department = null;
+    employeeId = null;
     canManageTimetable = false;
   }
 }

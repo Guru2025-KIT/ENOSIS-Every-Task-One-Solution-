@@ -33,5 +33,35 @@ class Settings(BaseSettings):
     # nobody accidentally ships it.
     COLLEGE_NAME: str = "Your College Name Here"
 
+    # Document storage (Cloudinary). Left blank by default — every route
+    # in api/routes/documents.py checks these are set before attempting
+    # an upload, and returns a clear 503 instead of crashing if they're
+    # not configured yet. Get these from your Cloudinary dashboard.
+    CLOUDINARY_CLOUD_NAME: str = ""
+    CLOUDINARY_API_KEY: str = ""
+    CLOUDINARY_API_SECRET: str = ""
+
+    # AI assistant (Groq — free tier, fast Llama inference). Same
+    # "blank by default, clear 503 if unset" pattern as Cloudinary above.
+    # Get a free key from console.groq.com.
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.1-8b-instant"
+
+    # ElevenLabs
+    ELEVENLABS_API_KEY: str = ""
+    ELEVENLABS_VOICE_ID_FEMALE: str = "21m00Tcm4TlvDq8ikWAM"   # Rachel (default female)
+    ELEVENLABS_VOICE_ID_MALE: str = "ErXwobaYiN019PkySvjV"     # Antoni (default male)
+
+
+    # TEMPORARY testing convenience: when True, every logged-in faculty
+    # member can manage/generate timetables, bypassing the
+    # admin-or-delegated check entirely. The real permission system
+    # (User.can_manage_timetable, require_timetable_manager,
+    # POST/DELETE /users/{id}/timetable-access) still exists underneath
+    # and is still tested — flip this to False once you're ready to
+    # actually restrict who can generate. Defaults True so you can test
+    # the full timetable flow immediately without an admin-delegation step.
+    OPEN_TIMETABLE_ACCESS: bool = True
+
 
 settings = Settings()

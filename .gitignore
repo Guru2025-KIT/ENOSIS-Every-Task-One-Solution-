@@ -8,6 +8,9 @@
 # Python
 __pycache__/
 *.py[cod]
+*.db
+venv/
+.venv/
 
 # Flutter / Dart
 .dart_tool/

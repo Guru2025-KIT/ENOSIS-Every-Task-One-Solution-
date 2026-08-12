@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, timetable, users, todo
+from app.api.routes import auth, timetable, users, todo, documents, ai_assistant, notifications, achievements, voice
 from app.core.config import settings
 from app.db.base import Base, engine
 
@@ -10,7 +10,11 @@ from app.db.base import Base, engine
 # about these tables — SQLAlchemy only registers a model with Base once its
 # module has been imported somewhere. Easy to forget when adding a new
 # module's models; if a new table isn't showing up, check it's imported here.
-from app.models import user, academic, timetable as timetable_models, todo as todo_models  # noqa: F401
+from app.models import (  # noqa: F401
+    user, academic, timetable as timetable_models, todo as todo_models,
+    document, notification, achievement,
+    schedule_config, constraints, generation_history,
+)
 
 # Creates tables if they don't already exist. Fine for this early stage of
 # development; once the schema stabilizes across a few modules, we'll
@@ -34,6 +38,11 @@ app.include_router(auth.router)
 app.include_router(timetable.router)
 app.include_router(users.router)
 app.include_router(todo.router)
+app.include_router(documents.router)
+app.include_router(ai_assistant.router)
+app.include_router(notifications.router)
+app.include_router(achievements.router)
+app.include_router(voice.router)
 
 
 @app.get("/health")

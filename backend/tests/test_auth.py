@@ -97,3 +97,79 @@ def test_login_rejects_wrong_password():
 def test_protected_route_rejects_missing_token():
     response = client.get("/auth/me")
     assert response.status_code == 401
+
+
+def test_update_own_profile():
+    client.post(
+        "/auth/signup",
+        json={"email": "profile.test@enosis.edu.in", "password": "secret123", "full_name": "Original Name"},
+    )
+    login = client.post("/auth/login", data={"username": "profile.test@enosis.edu.in", "password": "secret123"})
+    token = login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    update = client.patch(
+        "/auth/me",
+        json={"full_name": "Updated Name", "department": "Computer Science"},
+        headers=headers,
+    )
+    assert update.status_code == 200
+    body = update.json()
+    assert body["full_name"] == "Updated Name"
+    assert body["department"] == "Computer Science"
+
+    # Confirm it actually persisted, not just echoed back
+    me = client.get("/auth/me", headers=headers)
+    assert me.json()["full_name"] == "Updated Name"
+
+
+def test_update_profile_ignores_unset_fields():
+    """PATCH semantics: fields not sent should be left untouched, not
+    wiped to null."""
+    client.post(
+        "/auth/signup",
+        json={
+            "email": "partial.update@enosis.edu.in",
+            "password": "secret123",
+            "full_name": "Keep My Name",
+            "department": "Keep My Department",
+        },
+    )
+    login = client.post("/auth/login", data={"username": "partial.update@enosis.edu.in", "password": "secret123"})
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    update = client.patch("/auth/me", json={"employee_id": "NEW123"}, headers=headers)
+    assert update.status_code == 200
+    assert update.json()["full_name"] == "Keep My Name"
+    assert update.json()["department"] == "Keep My Department"
+    assert update.json()["employee_id"] == "NEW123"
+
+
+def test_change_password_requires_correct_current_password():
+    client.post(
+        "/auth/signup",
+        json={"email": "pwchange@enosis.edu.in", "password": "originalpass123", "full_name": "PW Test"},
+    )
+    login = client.post("/auth/login", data={"username": "pwchange@enosis.edu.in", "password": "originalpass123"})
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    wrong_attempt = client.post(
+        "/auth/me/change-password",
+        json={"current_password": "wrongpassword", "new_password": "newpass456"},
+        headers=headers,
+    )
+    assert wrong_attempt.status_code == 400
+
+    correct_attempt = client.post(
+        "/auth/me/change-password",
+        json={"current_password": "originalpass123", "new_password": "newpass456"},
+        headers=headers,
+    )
+    assert correct_attempt.status_code == 200
+
+    # Old password no longer works, new one does
+    old_login = client.post("/auth/login", data={"username": "pwchange@enosis.edu.in", "password": "originalpass123"})
+    assert old_login.status_code == 401
+
+    new_login = client.post("/auth/login", data={"username": "pwchange@enosis.edu.in", "password": "newpass456"})
+    assert new_login.status_code == 200

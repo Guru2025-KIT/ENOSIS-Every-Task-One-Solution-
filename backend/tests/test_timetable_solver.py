@@ -162,3 +162,61 @@ def test_empty_input_reports_infeasible_not_a_crash():
     result = generate_timetable(request)
     assert result.status == "INFEASIBLE"
     assert result.entries == []
+
+
+def test_multi_lecture_subject_is_spread_across_different_days():
+    """
+    The specific bug being fixed: a subject meeting 3x/week must land on
+    3 DIFFERENT days, not get crammed onto one day just because that's
+    technically conflict-free. Uses a single division/subject/faculty so
+    there's nothing else competing for room/slots — if the spread
+    constraint weren't enforced, the solver would have no reason to avoid
+    stacking all 3 on Monday.
+    """
+    request = TimetableGenerationRequest(
+        divisions=[SolverDivision(id="div-A", name="TE-A", strength=60)],
+        subjects=[
+            SolverSubject(id="sub-daa", name="DAA", weekly_lectures=3, is_lab=False, lab_sessions_per_week=0, lab_block_size=2),
+        ],
+        rooms=[SolverRoom(id="room-301", name="Room 301", type=RoomType.LECTURE, capacity=70)],
+        assignments=[SolverAssignment(faculty_id="fac-sharma", subject_id="sub-daa", division_id="div-A")],
+        working_days=6,
+        periods_per_day=6,
+    )
+    result = generate_timetable(request)
+    assert result.status in ("OPTIMAL", "FEASIBLE")
+    assert len(result.entries) == 3
+
+    days_used = [e.day for e in result.entries]
+    assert len(set(days_used)) == 3, f"Expected 3 distinct days, got {days_used}"
+
+
+def test_spread_constraint_applies_per_division_independently():
+    """Two divisions each having DAA 3x/week — the spread constraint is
+    per (division, subject), so each division independently gets 3
+    distinct days; they don't have to be the SAME 3 days as each other."""
+    request = TimetableGenerationRequest(
+        divisions=[
+            SolverDivision(id="div-A", name="TE-A", strength=60),
+            SolverDivision(id="div-B", name="TE-B", strength=60),
+        ],
+        subjects=[
+            SolverSubject(id="sub-daa", name="DAA", weekly_lectures=3, is_lab=False, lab_sessions_per_week=0, lab_block_size=2),
+        ],
+        rooms=[
+            SolverRoom(id="room-301", name="Room 301", type=RoomType.LECTURE, capacity=70),
+            SolverRoom(id="room-302", name="Room 302", type=RoomType.LECTURE, capacity=70),
+        ],
+        assignments=[
+            SolverAssignment(faculty_id="fac-sharma", subject_id="sub-daa", division_id="div-A"),
+            SolverAssignment(faculty_id="fac-kumar", subject_id="sub-daa", division_id="div-B"),
+        ],
+        working_days=6,
+        periods_per_day=6,
+    )
+    result = generate_timetable(request)
+    assert result.status in ("OPTIMAL", "FEASIBLE")
+
+    for division_id in ("div-A", "div-B"):
+        days_used = [e.day for e in result.entries if e.division_id == division_id]
+        assert len(set(days_used)) == 3, f"{division_id}: expected 3 distinct days, got {days_used}"

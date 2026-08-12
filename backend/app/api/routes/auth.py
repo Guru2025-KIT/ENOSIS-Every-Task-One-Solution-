@@ -6,7 +6,7 @@ from app.api.deps import get_current_user
 from app.core.security import hash_password, verify_password, create_access_token
 from app.db.base import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserOut, Token
+from app.schemas.user import UserCreate, UserUpdate, UserOut, Token, ChangePasswordRequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -67,3 +67,39 @@ def read_current_user(current_user: User = Depends(get_current_user)):
     Proves the whole JWT flow works end-to-end.
     """
     return current_user
+
+
+@router.patch("/me", response_model=UserOut)
+def update_current_user(
+    payload: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Self-service profile editing — full_name/department/employee_id only.
+    Deliberately does NOT allow changing email or role here: email change
+    would need re-verification (not built), and role changes must stay
+    admin-only (see /users routes) — self-promoting to admin would defeat
+    the whole permission system.
+    """
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(current_user, field, value)
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.post("/me/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Requires the CURRENT password to change it — standard practice so
+    a stolen/left-open session can't silently lock the real owner out."""
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    current_user.hashed_password = hash_password(payload.new_password)
+    db.commit()
+    return {"status": "password updated"}

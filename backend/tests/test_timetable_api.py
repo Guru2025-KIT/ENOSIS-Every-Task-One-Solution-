@@ -7,6 +7,8 @@ they cover: "is the algorithm correct?" (solver test) and
 
 Run with: pytest tests/test_timetable_api.py -v
 """
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -18,13 +20,17 @@ def _auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_non_admin_cannot_create_division(faculty_user):
+def test_non_admin_cannot_create_division_when_access_restricted(faculty_user):
+    """OPEN_TIMETABLE_ACCESS defaults to True (a testing convenience —
+    see app/core/config.py), so this test explicitly restricts access to
+    prove the underlying permission check itself is still correct."""
     _, faculty_token = faculty_user
-    response = client.post(
-        "/timetable/divisions",
-        json={"name": "TE-Z", "strength": 60},
-        headers=_auth_headers(faculty_token),
-    )
+    with patch("app.api.deps.settings.OPEN_TIMETABLE_ACCESS", False):
+        response = client.post(
+            "/timetable/divisions",
+            json={"name": "TE-Z", "strength": 60},
+            headers=_auth_headers(faculty_token),
+        )
     assert response.status_code == 403
 
 
@@ -97,9 +103,10 @@ def test_full_generation_flow(admin_token, faculty_user):
     assert len(division_timetable.json()) >= 3
 
 
-def test_generate_requires_admin(faculty_user):
+def test_generate_requires_admin_when_access_restricted(faculty_user):
     _, faculty_token = faculty_user
-    response = client.post("/timetable/generate", headers=_auth_headers(faculty_token))
+    with patch("app.api.deps.settings.OPEN_TIMETABLE_ACCESS", False):
+        response = client.post("/timetable/generate", headers=_auth_headers(faculty_token))
     assert response.status_code == 403
 
 
@@ -132,3 +139,32 @@ def test_assignment_rejects_unknown_faculty_id(admin_token):
         headers=headers,
     )
     assert response.status_code == 404
+
+
+def test_seed_sample_data_then_generate(faculty_user):
+    """The real end-to-end proof for the one-tap seeder: seed, then
+    generate, and confirm real entries come back for the seeding user."""
+    faculty_id, faculty_token = faculty_user
+    headers = _auth_headers(faculty_token)
+
+    seed = client.post("/timetable/seed-sample-data", headers=headers)
+    assert seed.status_code == 200
+    body = seed.json()
+    assert body["divisions_created"] == 2
+    assert body["subjects_created"] == 4
+    assert body["assignments_created"] == 8
+
+    generate = client.post("/timetable/generate", headers=headers)
+    assert generate.status_code == 200
+    assert generate.json()["total_entries"] > 0
+
+    my_timetable = client.get("/timetable/me", headers=headers)
+    assert my_timetable.status_code == 200
+    assert len(my_timetable.json()) > 0
+
+
+def test_seed_sample_data_requires_timetable_manager_access(faculty_user):
+    _, faculty_token = faculty_user
+    with patch("app.api.deps.settings.OPEN_TIMETABLE_ACCESS", False):
+        response = client.post("/timetable/seed-sample-data", headers=_auth_headers(faculty_token))
+    assert response.status_code == 403

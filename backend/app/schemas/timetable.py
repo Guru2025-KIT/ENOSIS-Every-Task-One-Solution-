@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -82,6 +83,87 @@ class FacultyUnavailabilityCreate(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Schedule Configuration schemas
+# ---------------------------------------------------------------------------
+
+class ScheduleConfigCreate(BaseModel):
+    working_days: int = Field(ge=1, le=6, default=6)
+    day_names: list[str] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    periods_per_day: int = Field(ge=1, le=20, default=8)
+    period_duration_minutes: int = Field(ge=15, le=180, default=60)
+    start_time: str = "09:00"
+    break_slots: list[int] = []
+    break_labels: dict[str, str] = {}
+    max_lectures_per_day_per_faculty: int | None = None
+    college_name: str | None = None
+    department_name: str | None = None
+    academic_year: str | None = None
+    semester: str | None = None
+    time_limit_seconds: int = Field(ge=5, le=300, default=30)
+
+
+class ScheduleConfigOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    working_days: int
+    day_names: list[str]
+    periods_per_day: int
+    period_duration_minutes: int
+    start_time: str
+    break_slots: list[int]
+    break_labels: dict[str, str]
+    max_lectures_per_day_per_faculty: int | None
+    college_name: str | None
+    department_name: str | None
+    academic_year: str | None
+    semester: str | None
+    time_limit_seconds: int
+
+
+# ---------------------------------------------------------------------------
+# Dynamic constraint schemas
+# ---------------------------------------------------------------------------
+
+class ConstraintCreate(BaseModel):
+    """
+    Generic constraint envelope.  `constraint_type` tells the solver what to
+    build; `payload` carries the type-specific data.  `priority` decides
+    whether this is a hard constraint (solver must satisfy) or soft
+    (objective penalty if violated).
+
+    Examples
+    --------
+    Hard faculty unavailability:
+        {"constraint_type": "faculty_unavailability", "priority": "hard",
+         "payload": {"faculty_id": "...", "day": 0, "slot": 2}}
+
+    Soft avoid-first-period:
+        {"constraint_type": "avoid_first_period", "priority": "soft",
+         "payload": {"faculty_id": "..."}}
+
+    Soft preferred room:
+        {"constraint_type": "preferred_room", "priority": "soft",
+         "payload": {"subject_id": "...", "room_id": "..."}}
+    """
+    constraint_type: str
+    priority: str = Field(pattern="^(hard|soft)$", default="hard")
+    payload: dict[str, Any] = {}
+    description: str = ""
+    is_active: bool = True
+
+
+class ConstraintOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    constraint_type: str
+    priority: str
+    payload: dict[str, Any]
+    description: str
+    is_active: bool
+    created_at: datetime | None = None
+
+
+# ---------------------------------------------------------------------------
 # Solver input/output contract
 #
 # WHY THIS IS SEPARATE FROM THE DB MODELS ABOVE: the solver
@@ -127,6 +209,12 @@ class SolverUnavailability(BaseModel):
     slot: int
 
 
+class SolverSoftConstraint(BaseModel):
+    """A soft preference the solver will try to optimise for."""
+    type: str          # e.g. "avoid_first_period", "prefer_morning"
+    payload: dict[str, Any] = {}
+
+
 class TimetableGenerationRequest(BaseModel):
     """Everything the solver needs, and nothing it doesn't."""
     divisions: list[SolverDivision]
@@ -135,9 +223,11 @@ class TimetableGenerationRequest(BaseModel):
     assignments: list[SolverAssignment]
     unavailability: list[SolverUnavailability] = []
     working_days: int = 6          # Mon-Sat
-    periods_per_day: int = 6
+    periods_per_day: int = 8
+    break_slots: list[int] = []    # period indices with NO classes (breaks/lunch)
     max_lectures_per_day_per_faculty: int | None = None
-    time_limit_seconds: int = 20
+    time_limit_seconds: int = 30
+    soft_constraints: list[SolverSoftConstraint] = []
 
 
 class TimetableEntryResult(BaseModel):
@@ -150,11 +240,54 @@ class TimetableEntryResult(BaseModel):
     is_lab_block: bool = False
 
 
+class ConflictDetail(BaseModel):
+    """A structured conflict found before or after solving."""
+    type: str            # "no_compatible_room" | "faculty_overloaded" | etc.
+    subject: str | None = None
+    division: str | None = None
+    faculty: str | None = None
+    room: str | None = None
+    details: str = ""
+
+
 class TimetableGenerationResult(BaseModel):
-    status: str  # "OPTIMAL" | "FEASIBLE" | "INFEASIBLE" | "UNKNOWN"
+    status: str          # "OPTIMAL" | "FEASIBLE" | "INFEASIBLE" | "UNKNOWN"
     entries: list[TimetableEntryResult]
     solve_time_seconds: float
+    objective_score: float | None = None
+    validation_passed: bool = True
+    conflicts: list[ConflictDetail] = []
+    suggestions: list[str] = []
     message: str | None = None
+    solver_log: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Generation history schemas
+# ---------------------------------------------------------------------------
+
+class GenerationRunOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    generated_at: datetime | None
+    status: str
+    solve_time_seconds: float | None
+    total_entries: int
+    objective_score: float | None
+    validation_passed: bool | None
+    conflicts: list[dict] | None
+    suggestions: list[str] | None
+
+
+# ---------------------------------------------------------------------------
+# Pre-validation response
+# ---------------------------------------------------------------------------
+
+class ValidationResponse(BaseModel):
+    valid: bool
+    conflicts: list[ConflictDetail] = []
+    suggestions: list[str] = []
+    summary: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -179,3 +312,23 @@ class TimetableEntryOut(BaseModel):
 
 class CollegeInfo(BaseModel):
     college_name: str
+
+
+# ---------------------------------------------------------------------------
+# Voice schemas
+# ---------------------------------------------------------------------------
+
+class TtsRequest(BaseModel):
+    text: str
+    role: str = "assistant"   # "assistant" | "error" | "success" | "conflict"
+
+
+class ParseConstraintRequest(BaseModel):
+    speech_text: str
+
+
+class ParseConstraintResponse(BaseModel):
+    constraint: ConstraintCreate | None = None
+    confirmation_message: str
+    raw_text: str
+    parsed_successfully: bool

@@ -2,6 +2,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import decode_access_token
 from app.db.base import get_db
 from app.models.user import User, UserRole
@@ -65,7 +66,15 @@ def require_timetable_manager(current_user: User = Depends(get_current_user)) ->
     department's timetable coordinator, per the real-world workflow where
     "some faculty have this work" rather than only central admin staff.
     See User.can_manage_timetable and POST/DELETE /users/{id}/timetable-access.
+
+    TEMPORARY: settings.OPEN_TIMETABLE_ACCESS (default True) bypasses this
+    check entirely so every faculty member can test the full timetable
+    flow immediately. The check below still runs (and is still tested)
+    once that's set to False.
     """
+    if settings.OPEN_TIMETABLE_ACCESS:
+        return current_user
+
     if current_user.role == UserRole.ADMIN or current_user.can_manage_timetable:
         return current_user
 

@@ -32,6 +32,19 @@ class UserOut(BaseModel):
     created_at: datetime
 
 
+class UserUpdate(BaseModel):
+    """All fields optional — self-service profile editing via PATCH /auth/me.
+    Deliberately excludes email and role (see the route's docstring for why)."""
+    full_name: str | None = None
+    department: str | None = None
+    employee_id: str | None = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class Token(BaseModel):
     """Shape returned by POST /auth/login."""
     access_token: str

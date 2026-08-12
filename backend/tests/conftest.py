@@ -27,7 +27,11 @@ def cleanup_after_all_tests():
     """Removes the test database file once, after the entire test run finishes."""
     yield
     if os.path.exists("test_enosis.db"):
-        os.remove("test_enosis.db")
+        try:
+            os.remove("test_enosis.db")
+        except PermissionError:
+            pass
+
 
 
 @pytest.fixture

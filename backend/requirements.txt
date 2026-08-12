@@ -10,4 +10,6 @@ pymysql==1.1.1
 python-dotenv==1.0.1
 python-multipart==0.0.9
 ortools==9.15.6755
+cloudinary==1.45.0
+groq==1.6.0
 cryptography
