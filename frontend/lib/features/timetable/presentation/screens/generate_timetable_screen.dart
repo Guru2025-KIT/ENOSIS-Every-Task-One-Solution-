@@ -119,7 +119,7 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
     try {
       await _flutterTts.setVolume(1.0);
       await _flutterTts.setPitch(1.05);
-      await _flutterTts.setSpeechRate(0.45);
+      await _flutterTts.setSpeechRate(0.75);
 
       // Query all available voices and pick the best Indian voice
       final voices = await _flutterTts.getVoices;
@@ -469,33 +469,42 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
         allowedExtensions: ['xlsx', 'xls', 'csv'],
         allowMultiple: false,
         dialogTitle: 'Select Timetable Configuration File',
-        withData: true, // Must be true so file.bytes is populated on web!
+        withData: true,
       );
 
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;
+
         final filePath = file.path;
         final fileBytes = file.bytes;
         final fileName = file.name;
 
-        // On Web, file.path is null, but file.bytes is populated.
         if (filePath == null && fileBytes == null) {
-          _addSystemMessage('❌ Could not access the selected file. Please try again.');
+          _addSystemMessage(
+            '❌ Could not access the selected file. Please try again.',
+          );
           return;
         }
 
-        _addUserMessage('📎 Selected file: $fileName (${(file.size / 1024).toStringAsFixed(1)} KB)');
+        _addUserMessage(
+          '📎 Selected file: $fileName '
+              '(${(file.size / 1024).toStringAsFixed(1)} KB)',
+        );
+
         await _uploadExcelFile(
           filePath: filePath,
           fileBytes: fileBytes,
           fileName: fileName,
         );
       } else {
-        // User cancelled the picker
-        _addSystemMessage('File selection cancelled. You can try again or configure manually.');
+        _addSystemMessage(
+          'File selection cancelled. You can try again or configure manually.',
+        );
       }
     } catch (e) {
-      _addSystemMessage('❌ Error opening file picker: $e');
+      _addSystemMessage(
+        '❌ Error opening file picker: $e',
+      );
     }
   }
 

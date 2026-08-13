@@ -14,8 +14,8 @@ dependencies:
   google_fonts: ^6.2.1
   flutter_tts: ^4.0.2
   shared_preferences: ^2.2.3
-  file_picker: ^8.0.3
-  speech_to_text: ^6.6.0
+  file_picker: 10.3.10
+  speech_to_text: ^7.4.0
   permission_handler: ^11.3.1
 
 

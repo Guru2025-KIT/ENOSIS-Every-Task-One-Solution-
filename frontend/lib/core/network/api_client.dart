@@ -20,7 +20,7 @@ class ApiClient {
   /// Change this to match how you're running the app right now — see the
   /// table in docs/CONNECTING_FRONTEND_BACKEND.md for the exact value per
   /// platform (Android emulator / physical device / Flutter Web).
-  static const String baseUrl = 'http://127.0.0.1:8000';
+  static const String baseUrl = 'http://192.168.1.15:8000';
 
   static Uri _uri(String path) => Uri.parse('$baseUrl$path');
 

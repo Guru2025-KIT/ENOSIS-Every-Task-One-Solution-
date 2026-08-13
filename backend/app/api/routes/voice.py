@@ -81,7 +81,7 @@ async def text_to_speech(payload: TtsRequest, _: User = Depends(get_current_user
             if payload.role in ("error", "conflict"):
                 voice = "en-IN-PrabhatNeural"
 
-            communicate = edge_tts.Communicate(text, voice)
+            communicate = edge_tts.Communicate(text, voice, rate="+20%")
             
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
                 tmp_path = tmp.name

@@ -31,6 +31,28 @@
 
   <title>enosis</title>
   <link rel="manifest" href="manifest.json">
+  <script>
+    window.playAudioBytes = function(base64Data, rate) {
+      try {
+        const binaryString = atob(base64Data);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], {type: 'audio/mp3'});
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        if (rate) {
+          audio.defaultPlaybackRate = rate;
+          audio.playbackRate = rate;
+        }
+        audio.play();
+      } catch (e) {
+        console.error('playAudioBytes error:', e);
+      }
+    }
+  </script>
 </head>
 <body>
   <!--
