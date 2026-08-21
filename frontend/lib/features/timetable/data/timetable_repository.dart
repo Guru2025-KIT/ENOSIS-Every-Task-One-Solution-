@@ -179,6 +179,9 @@ class ScheduleConfigModel {
   final List<String> dayNames;
   final int periodsPerDay;
   final int periodDurationMinutes;
+  final int lectureDurationMinutes;
+  final int labDurationMinutes;
+  final int tutorialDurationMinutes;
   final String startTime;
   final List<int> breakSlots;
   final Map<String, String> breakLabels;
@@ -187,6 +190,7 @@ class ScheduleConfigModel {
   final String? departmentName;
   final String? academicYear;
   final String? semester;
+  final String? hodName;
   final int timeLimitSeconds;
 
   ScheduleConfigModel({
@@ -194,6 +198,9 @@ class ScheduleConfigModel {
     required this.dayNames,
     required this.periodsPerDay,
     required this.periodDurationMinutes,
+    required this.lectureDurationMinutes,
+    required this.labDurationMinutes,
+    required this.tutorialDurationMinutes,
     required this.startTime,
     required this.breakSlots,
     required this.breakLabels,
@@ -202,6 +209,7 @@ class ScheduleConfigModel {
     this.departmentName,
     this.academicYear,
     this.semester,
+    this.hodName,
     required this.timeLimitSeconds,
   });
 
@@ -211,6 +219,9 @@ class ScheduleConfigModel {
       dayNames: (json['day_names'] as List<dynamic>).cast<String>(),
       periodsPerDay: json['periods_per_day'] as int,
       periodDurationMinutes: json['period_duration_minutes'] as int,
+      lectureDurationMinutes: json['lecture_duration_minutes'] as int? ?? 60,
+      labDurationMinutes: json['lab_duration_minutes'] as int? ?? 120,
+      tutorialDurationMinutes: json['tutorial_duration_minutes'] as int? ?? 60,
       startTime: json['start_time'] as String,
       breakSlots: (json['break_slots'] as List<dynamic>).cast<int>(),
       breakLabels: (json['break_labels'] as Map<String, dynamic>).cast<String, String>(),
@@ -219,6 +230,7 @@ class ScheduleConfigModel {
       departmentName: json['department_name'] as String?,
       academicYear: json['academic_year'] as String?,
       semester: json['semester'] as String?,
+      hodName: json['hod_name'] as String?,
       timeLimitSeconds: json['time_limit_seconds'] as int,
     );
   }
@@ -229,6 +241,9 @@ class ScheduleConfigModel {
       'day_names': dayNames,
       'periods_per_day': periodsPerDay,
       'period_duration_minutes': periodDurationMinutes,
+      'lecture_duration_minutes': lectureDurationMinutes,
+      'lab_duration_minutes': labDurationMinutes,
+      'tutorial_duration_minutes': tutorialDurationMinutes,
       'start_time': startTime,
       'break_slots': breakSlots,
       'break_labels': breakLabels,
@@ -237,8 +252,91 @@ class ScheduleConfigModel {
       'department_name': departmentName,
       'academic_year': academicYear,
       'semester': semester,
+      'hod_name': hodName,
       'time_limit_seconds': timeLimitSeconds,
     };
+  }
+}
+
+class InstitutionalCourseModel {
+  final String id;
+  final String courseName;
+  final String? courseCode;
+  final int year;
+  final List<String> divisions;
+  final int day;
+  final int startSlot;
+  final int durationSlots;
+  final String? facultyId;
+  final String? roomId;
+
+  InstitutionalCourseModel({
+    required this.id,
+    required this.courseName,
+    this.courseCode,
+    required this.year,
+    required this.divisions,
+    required this.day,
+    required this.startSlot,
+    required this.durationSlots,
+    this.facultyId,
+    this.roomId,
+  });
+
+  factory InstitutionalCourseModel.fromJson(Map<String, dynamic> json) {
+    return InstitutionalCourseModel(
+      id: json['id'] as String,
+      courseName: json['course_name'] as String,
+      courseCode: json['course_code'] as String?,
+      year: json['year'] as int,
+      divisions: (json['divisions'] as List<dynamic>).cast<String>(),
+      day: json['day'] as int,
+      startSlot: json['start_slot'] as int,
+      durationSlots: json['duration_slots'] as int,
+      facultyId: json['faculty_id'] as String?,
+      roomId: json['room_id'] as String?,
+    );
+  }
+}
+
+class SharedCourseModel {
+  final String id;
+  final String courseName;
+  final String? courseCode;
+  final int year;
+  final List<String> divisions;
+  final String facultyId;
+  final String? roomId;
+  final int durationSlots;
+  final int weeklySessions;
+  final String sessionType;
+
+  SharedCourseModel({
+    required this.id,
+    required this.courseName,
+    this.courseCode,
+    required this.year,
+    required this.divisions,
+    required this.facultyId,
+    this.roomId,
+    required this.durationSlots,
+    required this.weeklySessions,
+    required this.sessionType,
+  });
+
+  factory SharedCourseModel.fromJson(Map<String, dynamic> json) {
+    return SharedCourseModel(
+      id: json['id'] as String,
+      courseName: json['course_name'] as String,
+      courseCode: json['course_code'] as String?,
+      year: json['year'] as int,
+      divisions: (json['divisions'] as List<dynamic>).cast<String>(),
+      facultyId: json['faculty_id'] as String,
+      roomId: json['room_id'] as String?,
+      durationSlots: json['duration_slots'] as int,
+      weeklySessions: json['weekly_sessions'] as int,
+      sessionType: json['session_type'] as String,
+    );
   }
 }
 
@@ -396,6 +494,10 @@ class TimetableRepository {
     });
   }
 
+  Future<List<dynamic>> fetchAssignments() async {
+    return await _getSetupList('/timetable/assignments');
+  }
+
   Future<void> clearAll() async {
     final response = await ApiClient.postJson('/timetable/clear-all', {}, token: AuthSession.token);
     if (response.statusCode != 200) {
@@ -413,6 +515,90 @@ class TimetableRepository {
       'day': day,
       'slot': slot,
     });
+  }
+
+  // ─── Institutional Fixed Courses Taps ───────────────────────────────
+
+  Future<List<InstitutionalCourseModel>> fetchInstitutionalCourses() async {
+    final response = await ApiClient.get('/timetable/institutional-courses', token: AuthSession.token);
+    if (response.statusCode != 200) {
+      throw TimetableException('Failed to fetch institutional courses.');
+    }
+    final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
+    return data.map((e) => InstitutionalCourseModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> createInstitutionalCourse({
+    required String courseName,
+    String? courseCode,
+    required int year,
+    required List<String> divisions,
+    required int day,
+    required int startSlot,
+    required int durationSlots,
+    String? facultyId,
+    String? roomId,
+  }) async {
+    await _postSetup('/timetable/institutional-courses', {
+      'course_name': courseName,
+      if (courseCode != null && courseCode.isNotEmpty) 'course_code': courseCode,
+      'year': year,
+      'divisions': divisions,
+      'day': day,
+      'start_slot': startSlot,
+      'duration_slots': durationSlots,
+      if (facultyId != null && facultyId.isNotEmpty) 'faculty_id': facultyId,
+      if (roomId != null && roomId.isNotEmpty) 'room_id': roomId,
+    });
+  }
+
+  Future<void> deleteInstitutionalCourse(String id) async {
+    final response = await ApiClient.delete('/timetable/institutional-courses/$id', token: AuthSession.token);
+    if (response.statusCode != 200) {
+      throw TimetableException('Failed to delete fixed course.');
+    }
+  }
+
+  // ─── Shared / Simultaneous Courses Taps ─────────────────────────────
+
+  Future<List<SharedCourseModel>> fetchSharedCourses() async {
+    final response = await ApiClient.get('/timetable/shared-courses', token: AuthSession.token);
+    if (response.statusCode != 200) {
+      throw TimetableException('Failed to fetch shared courses.');
+    }
+    final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
+    return data.map((e) => SharedCourseModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> createSharedCourse({
+    required String courseName,
+    String? courseCode,
+    required int year,
+    required List<String> divisions,
+    required String facultyId,
+    String? roomId,
+    required int durationSlots,
+    required int weeklySessions,
+    required String sessionType,
+  }) async {
+    await _postSetup('/timetable/shared-courses', {
+      'course_name': courseName,
+      if (courseCode != null && courseCode.isNotEmpty) 'course_code': courseCode,
+      'year': year,
+      'divisions': divisions,
+      'faculty_id': facultyId,
+      if (roomId != null && roomId.isNotEmpty) 'room_id': roomId,
+      'duration_slots': durationSlots,
+      'weekly_sessions': weeklySessions,
+      'session_type': sessionType,
+    });
+  }
+
+  Future<void> deleteSharedCourse(String id) async {
+    final response = await ApiClient.delete('/timetable/shared-courses/$id', token: AuthSession.token);
+    if (response.statusCode != 200) {
+      throw TimetableException('Failed to delete shared course.');
+    }
   }
 
   // ─── Schedule Config Taps ───────────────────────────────────────────

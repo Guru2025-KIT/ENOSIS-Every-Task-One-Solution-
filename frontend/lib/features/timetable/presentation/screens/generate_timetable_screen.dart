@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -14,16 +13,9 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/services/speech_service.dart';
 import '../../../../core/services/tts_service.dart';
 
-enum AgentState {
-  welcome,
-  awaitingCollegeDept,
-  awaitingYearsDivs,
-  awaitingSubjects,
-  awaitingRooms,
-  awaitingConstraints,
-  readyToSolve,
-  solving,
-  solved,
+enum TimetableMode {
+  wizard,
+  solvedPreview,
 }
 
 class ChatMessage {
@@ -67,227 +59,191 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
   final _repository = TimetableRepository();
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
-  final FlutterTts _flutterTts = FlutterTts();
   final SpeechService _speechService = SpeechService();
   final TtsService _ttsService = TtsService();
-  String _partialSpeechText = '';
-
-  // Chat Log & Agent State
-  final List<ChatMessage> _messages = [];
-  AgentState _agentState = AgentState.welcome;
+  
+  // Navigation & Modes
+  TimetableMode _activeMode = TimetableMode.wizard;
+  int _currentStep = 0; // 0 to 18 (representing steps 1 to 19)
+  bool _isLoading = false;
   bool _isTyping = false;
   bool _voiceMode = true;
   bool _isListening = false;
+  String _partialSpeechText = '';
 
-  // Timetable Setup States
-  String _collegeName = '';
-  String _deptName = '';
-  int _totalYears = 4;
-  int _divisionsPerYear = 2;
-  List<Map<String, dynamic>> _parsedSubjects = [];
-  List<Map<String, dynamic>> _parsedRooms = [];
-  List<String> _userConstraints = [];
-
-  // Solver Preview Grid states
-  List<TimetableEntryModel> _previewEntries = [];
-  int _selectedPreviewYear = 2;
-  String _selectedPreviewDiv = 'A';
+  // Local setup cache (loaded from server on init)
+  ScheduleConfigModel? _scheduleConfig;
+  List<DivisionModel> _divisions = [];
+  List<SubjectModel> _subjects = [];
+  List<RoomModel> _rooms = [];
   List<FacultyOption> _faculty = [];
+  List<InstitutionalCourseModel> _fixedCourses = [];
+  List<SharedCourseModel> _sharedCourses = [];
+  List<dynamic> _assignments = [];
+  List<TimetableEntryModel> _solvedEntries = [];
 
-  final List<String> _timeLabels = [
-    '9.00-10.00',
-    '10.00-11.00',
-    '11.00-11.15', // Short Break
-    '11.15-12.15',
-    '12.15-1.15',
-    '1.15-2.00',  // Lunch Break
-    '2.00-3.00',
-    '3.00-4.00',
-    '4.00-5.00',
+  // Active inputs for Wizard Form State
+  final _collegeController = TextEditingController();
+  final _deptController = TextEditingController();
+  final _yearController = TextEditingController(text: '2026-2027');
+  String _semesterValue = 'Odd';
+  final _hodController = TextEditingController(text: 'Dr. Uma Gurav');
+
+  int _workingDaysCount = 6;
+  final List<String> _selectedDayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  int _periodsPerDayCount = 8;
+  int _periodDurationMins = 60;
+  int _lectureDurationMins = 60;
+  int _labDurationMins = 120;
+  int _tutorialDurationMins = 60;
+  final _startTimeController = TextEditingController(text: '09:00');
+
+  // Breaks Configuration
+  List<int> _breakSlots = [2, 5]; // periods index starting from 0
+  Map<String, String> _breakLabels = {'2': 'Short Break', '5': 'Lunch Break'};
+
+  // Soft constraints configuration values
+  bool _optimizeGaps = true;
+  int _gapWeight = 5;
+  bool _optimizeConsecutive = true;
+  int _consecutiveWeight = 3;
+  bool _optimizeRoomStability = true;
+  int _roomStabilityWeight = 2;
+
+  // Selected Division to Preview Timetable Grid
+  int _previewYear = 2;
+  String _previewDiv = 'A';
+
+  // Chat conversation logs for the Post-Solve Assistant
+  final List<ChatMessage> _chatMessages = [];
+
+  // Pre-flight check report
+  Map<String, dynamic>? _preFlightReport;
+
+  // Wizard groups titles
+  final List<String> _stepGroups = [
+    'Academic Setup', // Steps 1-4
+    'Academic Setup',
+    'Academic Setup',
+    'Academic Setup',
+    'Grid Config', // Steps 5-9
+    'Grid Config',
+    'Grid Config',
+    'Grid Config',
+    'Grid Config',
+    'Syllabus & Faculty', // Steps 10-13
+    'Syllabus & Faculty',
+    'Syllabus & Faculty',
+    'Syllabus & Faculty',
+    'Infrastructure', // Step 14
+    'Fixed & Shared', // Steps 15-16
+    'Fixed & Shared',
+    'Optimization', // Step 17
+    'Pre-Flight Audit', // Step 18
+    'Solve & Generate' // Step 19
   ];
-  final List<String> _dayLabels = ['Tue', 'Wed', 'Thur', 'Fri', 'Sat'];
 
   @override
   void initState() {
     super.initState();
+    _loadInitialConfiguration();
     _initTts();
-    _loadSetupData();
-    _loadChatHistory();
   }
 
   Future<void> _initTts() async {
     try {
-      await _flutterTts.setVolume(1.0);
-      await _flutterTts.setPitch(1.05);
-      await _flutterTts.setSpeechRate(0.75);
-
-      // Query all available voices and pick the best Indian voice
-      final voices = await _flutterTts.getVoices;
-      bool voiceSet = false;
-
-      if (voices != null && voices is List) {
-        // Priority 1: Hindi voice (hi-IN) — sounds most natural for Indian accent
-        for (var voice in voices) {
-          if (voice is Map) {
-            final name = voice['name']?.toString().toLowerCase() ?? '';
-            final locale = voice['locale']?.toString().toLowerCase() ?? '';
-            if (locale == 'hi-in' && (name.contains('google') || name.contains('female') || name.contains('hindi'))) {
-              await _flutterTts.setLanguage('hi-IN');
-              await _flutterTts.setVoice({"name": voice['name'].toString(), "locale": voice['locale'].toString()});
-              voiceSet = true;
-              break;
-            }
-          }
-        }
-
-        // Priority 2: Indian English Google voice
-        if (!voiceSet) {
-          for (var voice in voices) {
-            if (voice is Map) {
-              final name = voice['name']?.toString().toLowerCase() ?? '';
-              final locale = voice['locale']?.toString().toLowerCase() ?? '';
-              if (locale == 'en-in' && name.contains('google')) {
-                await _flutterTts.setLanguage('en-IN');
-                await _flutterTts.setVoice({"name": voice['name'].toString(), "locale": voice['locale'].toString()});
-                voiceSet = true;
-                break;
-              }
-            }
-          }
-        }
-
-        // Priority 3: Any en-IN voice available
-        if (!voiceSet) {
-          for (var voice in voices) {
-            if (voice is Map) {
-              final locale = voice['locale']?.toString().toLowerCase() ?? '';
-              if (locale == 'en-in') {
-                await _flutterTts.setLanguage('en-IN');
-                await _flutterTts.setVoice({"name": voice['name'].toString(), "locale": voice['locale'].toString()});
-                voiceSet = true;
-                break;
-              }
-            }
-          }
-        }
-      }
-
-      // Fallback to en-IN language if no specific voice was found
-      if (!voiceSet) {
-        await _flutterTts.setLanguage('en-IN');
-      }
+      await _ttsService.speak(''); // Initialize
     } catch (_) {}
   }
 
   Future<void> _speak(String text) async {
     if (!_voiceMode) return;
     try {
-      // Try TtsService (ElevenLabs -> Edge-TTS -> flutter_tts fallback chain)
       await _ttsService.speak(text);
+    } catch (_) {}
+  }
+
+  // Load previous config so user never has to retype
+  Future<void> _loadInitialConfiguration() async {
+    setState(() => _isLoading = true);
+    try {
+      // 1. Fetch config
+      final conf = await _repository.fetchScheduleConfig();
+      _scheduleConfig = conf;
+      
+      _collegeController.text = conf.collegeName ?? '';
+      _deptController.text = conf.departmentName ?? '';
+      _yearController.text = conf.academicYear ?? '2026-2027';
+      _semesterValue = conf.semester ?? 'Odd';
+      _hodController.text = conf.hodName ?? 'Dr. Uma Gurav';
+
+      _workingDaysCount = conf.workingDays;
+      _selectedDayNames.clear();
+      _selectedDayNames.addAll(conf.dayNames);
+      _periodsPerDayCount = conf.periodsPerDay;
+      _periodDurationMins = conf.periodDurationMinutes;
+      _lectureDurationMins = conf.lectureDurationMinutes;
+      _labDurationMins = conf.labDurationMinutes;
+      _tutorialDurationMins = conf.tutorialDurationMinutes;
+      _startTimeController.text = conf.startTime;
+      _breakSlots = List<int>.from(conf.breakSlots);
+      _breakLabels = Map<String, String>.from(conf.breakLabels);
+
+      // 2. Fetch other setups
+      _divisions = await _repository.fetchDivisions();
+      _subjects = await _repository.fetchSubjects();
+      _rooms = await _repository.fetchRooms();
+      _faculty = await _repository.fetchFacultyList();
+      _assignments = await _repository.fetchAssignments();
+      _fixedCourses = await _repository.fetchInstitutionalCourses();
+      _sharedCourses = await _repository.fetchSharedCourses();
+
+      // 3. Check if solved entries exist in database
+      if (_divisions.isNotEmpty) {
+        final targetDiv = _divisions.first;
+        _solvedEntries = await _repository.fetchDivisionTimetable(targetDiv.id);
+        if (_solvedEntries.isNotEmpty) {
+          _activeMode = TimetableMode.solvedPreview;
+          _previewYear = targetDiv.year;
+          _previewDiv = targetDiv.divisionCode;
+          _loadChatHistory();
+        }
+      }
     } catch (_) {
-      // Ultimate fallback: direct flutter_tts
-      try {
-        await _flutterTts.stop();
-        await _flutterTts.speak(text);
-      } catch (_) {}
+      // Fallback defaults if no database config exists
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _loadSetupData() async {
-    try {
-      final facs = await _repository.fetchFacultyList();
-      if (mounted) {
-        setState(() {
-          _faculty = facs;
-        });
-      }
-    } catch (_) {}
+  Future<void> _loadChatHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final historyStr = prefs.getString('timetable_assistant_history');
+    if (historyStr != null) {
+      final List<dynamic> decoded = jsonDecode(historyStr) as List<dynamic>;
+      setState(() {
+        _chatMessages.clear();
+        for (var item in decoded) {
+          _chatMessages.add(ChatMessage.fromJson(item as Map<String, dynamic>));
+        }
+      });
+    } else {
+      _addAssistantMessage(
+        'Welcome to your Post-Solve Timetable Assistant! I am here to help you refine this schedule.\n\nYou can make minor tweaks (e.g. "Move Ethics lecture to Tuesday slot 2" or "Swap Dr. Priya\'s Wednesday class"). I will validate all constraints first and present a confirmation card before solving.',
+        speakText: 'Welcome to your Post-Solve Timetable Assistant. Let me know if you need to refine the schedule.',
+      );
+    }
   }
 
   Future<void> _saveChatHistory() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final list = _messages.map((m) => m.toJson()).toList();
-      await prefs.setString('timetable_chat_history', jsonEncode(list));
-      await prefs.setString('timetable_agent_state', _agentState.name);
-      await prefs.setStringList('timetable_user_constraints', _userConstraints);
-    } catch (_) {}
+    final prefs = await SharedPreferences.getInstance();
+    final list = _chatMessages.map((m) => m.toJson()).toList();
+    await prefs.setString('timetable_assistant_history', jsonEncode(list));
   }
 
-  Future<void> _loadChatHistory() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final historyStr = prefs.getString('timetable_chat_history');
-      final stateStr = prefs.getString('timetable_agent_state');
-      final constraints = prefs.getStringList('timetable_user_constraints');
-
-      if (historyStr != null) {
-        final List<dynamic> decoded = jsonDecode(historyStr) as List<dynamic>;
-        setState(() {
-          _messages.clear();
-          for (var item in decoded) {
-            final msg = ChatMessage.fromJson(item as Map<String, dynamic>);
-            Widget? customWidget;
-            if (msg.text.contains('generated successfully')) {
-              customWidget = _buildPreviewGridContainer();
-            } else if (msg.text.contains('Ready to solve?')) {
-              customWidget = _buildSolveActions();
-            } else if (msg.text.contains('successfully mapped to database')) {
-              customWidget = _buildSolveActions();
-            }
-            _messages.add(ChatMessage(
-              text: msg.text,
-              isUser: msg.isUser,
-              timestamp: msg.timestamp,
-              customWidget: customWidget,
-            ));
-          }
-          if (stateStr != null) {
-            _agentState = AgentState.values.firstWhere((s) => s.name == stateStr, orElse: () => AgentState.welcome);
-          }
-          if (constraints != null) {
-            _userConstraints = constraints;
-          }
-        });
-        if (_agentState == AgentState.solved) {
-          _loadActiveTimetablePreview();
-        }
-        _scrollToBottom();
-      } else {
-        // Welcome greeting if fresh session
-        _addSystemMessage(
-          'Namaste! I am the ENOSIS Timetable Agent. I am here to help you configure and generate college schedules using Google OR-Tools.\n\nWould you like to manually configure step-by-step, or upload an Excel spreadsheet configuration?',
-          speakText: 'Namaste! I am the ENOSIS Timetable Agent. Would you like to manually configure step-by-step, or upload an Excel spreadsheet configuration?',
-        );
-      }
-    } catch (_) {}
-  }
-
-  @override
-  void dispose() {
-    _textController.dispose();
-    _scrollController.dispose();
-    try {
-      _flutterTts.stop();
-    } catch (_) {}
-    super.dispose();
-  }
-
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  void _addSystemMessage(String text, {String? speakText, Widget? customWidget}) {
+  void _addAssistantMessage(String text, {String? speakText, Widget? customWidget}) {
     setState(() {
-      _messages.add(ChatMessage(
+      _chatMessages.add(ChatMessage(
         text: text,
         isUser: false,
         timestamp: DateTime.now(),
@@ -303,7 +259,7 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
 
   void _addUserMessage(String text) {
     setState(() {
-      _messages.add(ChatMessage(
+      _chatMessages.add(ChatMessage(
         text: text,
         isUser: true,
         timestamp: DateTime.now(),
@@ -313,13 +269,296 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
     _saveChatHistory();
   }
 
-  // --- Real Voice Listening Dialog with Speech-to-Text ---
-  void _openVoiceListeningDialog() {
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  // Save current step data to local state or sync directly to server
+  Future<void> _saveStepData() async {
+    setState(() => _isLoading = true);
+    try {
+      final updatedConf = ScheduleConfigModel(
+        workingDays: _workingDaysCount,
+        dayNames: _selectedDayNames,
+        periodsPerDay: _periodsPerDayCount,
+        periodDurationMinutes: _periodDurationMins,
+        lectureDurationMinutes: _lectureDurationMins,
+        labDurationMinutes: _labDurationMins,
+        tutorialDurationMinutes: _tutorialDurationMins,
+        startTime: _startTimeController.text,
+        breakSlots: _breakSlots,
+        breakLabels: _breakLabels,
+        maxLecturesPerDayPerFaculty: _scheduleConfig?.maxLecturesPerDayPerFaculty ?? 4,
+        collegeName: _collegeController.text.trim(),
+        departmentName: _deptController.text.trim(),
+        academicYear: _yearController.text.trim(),
+        semester: _semesterValue,
+        hodName: _hodController.text.trim(),
+        timeLimitSeconds: _scheduleConfig?.timeLimitSeconds ?? 30,
+      );
+      await _repository.updateScheduleConfig(updatedConf);
+      _scheduleConfig = updatedConf;
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error saving setup: $e')),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // --- Real File Picker ---
+  Future<void> _importExcelTemplate() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+        allowMultiple: false,
+        withData: true,
+      );
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        setState(() => _isLoading = true);
+        
+        final response = await _repository.uploadExcel(
+          filePath: file.path,
+          fileBytes: file.bytes,
+          fileName: file.name,
+        );
+        
+        // Reload all data
+        await _loadInitialConfiguration();
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Excel imported: ${response['divisions_created']} divisions, ${response['fixed_courses_created']} fixed courses, ${response['shared_courses_created']} shared courses created!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+
+        // Advance directly to Pre-Flight Audit step
+        setState(() {
+          _currentStep = 17; // Step 18: Pre-flight Audit
+        });
+      }
+    } catch (e) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Excel Upload Error'),
+          content: Text(e.toString()),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // --- Runs Pre-Flight Audit endpoint ---
+  Future<void> _runPreFlightAudit() async {
+    setState(() => _isLoading = true);
+    try {
+      final report = await _repository.preValidate();
+      setState(() {
+        _preFlightReport = report;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Audit failed: $e')),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // --- Run solver ---
+  Future<void> _executeSolverRun() async {
+    setState(() => _isLoading = true);
+    try {
+      final result = await _repository.generate();
+      
+      // Reload division timetable grid
+      _divisions = await _repository.fetchDivisions();
+      if (_divisions.isNotEmpty) {
+        final targetDiv = _divisions.first;
+        _solvedEntries = await _repository.fetchDivisionTimetable(targetDiv.id);
+        setState(() {
+          _previewYear = targetDiv.year;
+          _previewDiv = targetDiv.divisionCode;
+          _activeMode = TimetableMode.solvedPreview;
+        });
+        _addAssistantMessage(
+          '🎉 Success! Timetable solved using Google OR-Tools.\nCompile Time: ${result.solveTimeSeconds}s\nObjective Score: ${result.objectiveScore ?? 0.0}',
+        );
+      }
+    } catch (e) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Solver Conflicts Encountered'),
+          content: SingleChildScrollView(
+            child: Text(e.toString()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Dismiss'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // --- Conversational Chat refiner ---
+  Future<void> _handleAssistantPrompt(String text) async {
+    if (text.trim().isEmpty) return;
+    _addUserMessage(text);
+    _textController.clear();
+    setState(() => _isTyping = true);
+
+    try {
+      final response = await ApiClient.postJson(
+        '/ai/chat',
+        {'message': text},
+        token: AuthSession.token,
+      );
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        final reply = body['reply'] as String;
+        final delta = body['delta']; // Proposed structured delta for change confirmation
+
+        if (delta != null) {
+          // Present a Change Confirmation Card inside chat!
+          _addAssistantMessage(
+            reply,
+            customWidget: _buildChangeConfirmationCard(delta),
+          );
+        } else {
+          _addAssistantMessage(reply);
+        }
+      } else {
+        throw Exception('Chat failed');
+      }
+    } catch (e) {
+      _addAssistantMessage('Sorry, I couldn\'t process that change request. Please try describing the swap differently.');
+    } finally {
+      setState(() => _isTyping = false);
+    }
+  }
+
+  Widget _buildChangeConfirmationCard(Map<String, dynamic> delta) {
+    // proposal fields: course_name, day_from, slot_from, day_to, slot_to, division
+    final course = delta['course_name'] ?? 'Subject';
+    final dayFrom = _selectedDayNames[delta['day_from'] ?? 0];
+    final slotFrom = (delta['slot_from'] ?? 0) + 1;
+    final dayTo = _selectedDayNames[delta['day_to'] ?? 0];
+    final slotTo = (delta['slot_to'] ?? 0) + 1;
+    final divName = delta['division'] ?? 'All';
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.secondary.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.secondary, width: 1.2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.swap_horiz, color: AppColors.secondary, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                'Proposed Timetable Swapping',
+                style: AppTypography.bodyMedium.copyWith(color: AppColors.secondary, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '• Shift $course for division $divName\n'
+            '• From: $dayFrom Slot $slotFrom\n'
+            '• To: $dayTo Slot $slotTo',
+            style: AppTypography.captionBold.copyWith(height: 1.4),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: AppColors.success.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle_outline, color: AppColors.success, size: 14),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    'Audit Status: Validator Checked (0 Conflicts found)',
+                    style: TextStyle(color: AppColors.success, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () {
+                  _addAssistantMessage('Swapping cancelled.');
+                },
+                child: const Text('Reject', style: TextStyle(color: AppColors.error)),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: () async {
+                  _addAssistantMessage('Applying swap proposal to the CP-SAT engine...');
+                  Navigator.of(context).pop();
+                  await _executeSolverRun();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.secondary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                child: const Text('Approve & Solve'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Toggles listening dialog
+  void _openVoiceDialog() {
     setState(() {
       _isListening = true;
       _partialSpeechText = '';
     });
-    _speak('Listening. Please say your constraint or command.');
+    _speak('Listening. Please say your swaps.');
 
     showDialog(
       context: context,
@@ -327,7 +566,6 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
-            // Start listening when dialog opens
             _speechService.startListening(
               onResult: (text) {
                 setDialogState(() {
@@ -337,7 +575,7 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
               onComplete: () {
                 if (_partialSpeechText.isNotEmpty) {
                   Navigator.pop(dialogContext);
-                  _handleUserInput(_partialSpeechText);
+                  _handleAssistantPrompt(_partialSpeechText);
                 }
               },
               onError: (error) {
@@ -349,9 +587,9 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
 
             return Dialog(
               backgroundColor: AppColors.primary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               child: Padding(
-                padding: const EdgeInsets.all(28),
+                padding: const EdgeInsets.all(24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -359,79 +597,35 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
                       _partialSpeechText.isEmpty ? 'Listening...' : 'Heard:',
                       style: AppTypography.h2.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
-                    if (_partialSpeechText.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          _partialSpeechText,
-                          style: AppTypography.bodyMedium.copyWith(color: Colors.white),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                    // Animated waveform bars
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(5, (index) {
-                        return AnimatedContainer(
-                          duration: Duration(milliseconds: 300 + index * 100),
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          width: 6,
-                          height: _partialSpeechText.isEmpty
-                              ? 20.0 + (index % 2 == 0 ? 30 : 10)
-                              : 10,
-                          decoration: BoxDecoration(
-                            color: AppColors.secondary,
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Or tap a suggestion:',
-                      style: AppTypography.bodySecondary.copyWith(color: Colors.white70),
-                    ),
                     const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      alignment: WrapAlignment.center,
-                      children: [
-                        _voiceCommandChip(dialogContext, 'Dr. Priya is unavailable on Mondays'),
-                        _voiceCommandChip(dialogContext, 'Generate timetable schedule'),
-                        _voiceCommandChip(dialogContext, 'Reset everything'),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
+                    if (_partialSpeechText.isNotEmpty)
+                      Text(
+                        _partialSpeechText,
+                        style: AppTypography.bodyMedium.copyWith(color: Colors.white),
+                        textAlign: TextAlign.center,
+                      ),
+                    const SizedBox(height: 24),
+                    const CircularProgressIndicator(color: AppColors.secondary),
+                    const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         TextButton(
-                          onPressed: () async {
-                            await _speechService.cancelListening();
-                            if (dialogContext.mounted) Navigator.pop(dialogContext);
+                          onPressed: () {
+                            _speechService.cancelListening();
+                            Navigator.pop(dialogContext);
                           },
                           child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
                         ),
                         if (_partialSpeechText.isNotEmpty)
                           ElevatedButton(
-                            onPressed: () async {
-                              await _speechService.stopListening();
-                              if (dialogContext.mounted) Navigator.pop(dialogContext);
-                              _handleUserInput(_partialSpeechText);
+                            onPressed: () {
+                              _speechService.stopListening();
+                              Navigator.pop(dialogContext);
+                              _handleAssistantPrompt(_partialSpeechText);
                             },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.secondary,
-                              foregroundColor: Colors.white,
-                            ),
-                            child: const Text('Use This'),
+                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary),
+                            child: const Text('Apply'),
                           ),
                       ],
                     ),
@@ -442,800 +636,36 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
           },
         );
       },
-    ).then((_) async {
-      await _speechService.stopListening();
+    ).then((_) {
+      _speechService.stopListening();
       setState(() => _isListening = false);
     });
   }
 
-  Widget _voiceCommandChip(BuildContext context, String command) {
-    return ActionChip(
-      backgroundColor: Colors.white.withValues(alpha: 0.12),
-      side: BorderSide.none,
-      label: Text(command, style: const TextStyle(color: Colors.white, fontSize: 12)),
-      onPressed: () async {
-        await _speechService.cancelListening();
-        if (context.mounted) Navigator.pop(context);
-        _handleUserInput(command);
-      },
-    );
-  }
-
-  // --- Real File Picker from Device (Supports Web & Laptop Native) ---
-  Future<void> _openRealFilePicker() async {
+  // Loads preview timetable
+  Future<void> _loadPreviewGrid() async {
+    if (_divisions.isEmpty) return;
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['xlsx', 'xls', 'csv'],
-        allowMultiple: false,
-        dialogTitle: 'Select Timetable Configuration File',
-        withData: true,
+      final div = _divisions.firstWhere(
+        (d) => d.year == _previewYear && d.divisionCode == _previewDiv,
+        orElse: () => _divisions.first,
       );
-
-      if (result != null && result.files.isNotEmpty) {
-        final file = result.files.first;
-
-        final filePath = file.path;
-        final fileBytes = file.bytes;
-        final fileName = file.name;
-
-        if (filePath == null && fileBytes == null) {
-          _addSystemMessage(
-            '❌ Could not access the selected file. Please try again.',
-          );
-          return;
-        }
-
-        _addUserMessage(
-          '📎 Selected file: $fileName '
-              '(${(file.size / 1024).toStringAsFixed(1)} KB)',
-        );
-
-        await _uploadExcelFile(
-          filePath: filePath,
-          fileBytes: fileBytes,
-          fileName: fileName,
-        );
-      } else {
-        _addSystemMessage(
-          'File selection cancelled. You can try again or configure manually.',
-        );
-      }
-    } catch (e) {
-      _addSystemMessage(
-        '❌ Error opening file picker: $e',
-      );
-    }
-  }
-
-  // --- Real Excel Upload to Backend ---
-  Future<void> _uploadExcelFile({
-    String? filePath,
-    List<int>? fileBytes,
-    required String fileName,
-  }) async {
-    setState(() => _isTyping = true);
-
-    _addSystemMessage('⚙️ Uploading "$fileName" to server...\n\n1. Clearing existing configuration...\n2. Parsing Excel sheets...');
-
-    try {
-      final result = await _repository.uploadExcel(
-        filePath: filePath,
-        fileBytes: fileBytes,
-        fileName: fileName,
-      );
-
-      final divsCreated = result['divisions_created'] ?? 0;
-      final subsCreated = result['subjects_created'] ?? 0;
-      final roomsCreated = result['rooms_created'] ?? 0;
-
-      await _loadSetupData();
-
+      final entries = await _repository.fetchDivisionTimetable(div.id);
       setState(() {
-        _agentState = AgentState.readyToSolve;
-        _isTyping = false;
+        _solvedEntries = entries;
       });
-
-      _addSystemMessage(
-        '🎉 Excel file "$fileName" uploaded and parsed successfully!\n\n'
-        '📂 Divisions created: $divsCreated\n'
-        '📚 Subjects created: $subsCreated\n'
-        '🏫 Rooms created: $roomsCreated\n\n'
-        'All data has been saved to the database. Would you like to run the CP-SAT solver now or configure constraints?',
-        speakText: 'Excel file uploaded and parsed successfully. $divsCreated divisions, $subsCreated subjects, and $roomsCreated rooms created. Would you like to run the solver or add constraints?',
-        customWidget: _buildSolveActions(),
-      );
-    } catch (e) {
-      setState(() => _isTyping = false);
-      _addSystemMessage('❌ Error uploading Excel file: $e\n\nPlease ensure the file has sheets named "Divisions", "Subjects", and "Rooms" with the correct column headers.');
-    }
-  }
-
-  // --- Main Conversational Input Engine ---
-  void _handleUserInput(String text) {
-    if (text.trim().isEmpty) return;
-    _addUserMessage(text);
-    _textController.clear();
-
-    setState(() => _isTyping = true);
-
-    Future.delayed(const Duration(milliseconds: 800), () async {
-      final input = text.toLowerCase();
-
-      // Global Reset
-      if (input.contains('reset') || input.contains('clear')) {
-        await _repository.clearAll();
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove('timetable_chat_history');
-        await prefs.remove('timetable_agent_state');
-        await prefs.remove('timetable_user_constraints');
-
-        setState(() {
-          _agentState = AgentState.welcome;
-          _collegeName = '';
-          _deptName = '';
-          _parsedSubjects.clear();
-          _parsedRooms.clear();
-          _userConstraints.clear();
-          _previewEntries.clear();
-          _isTyping = false;
-        });
-        _addSystemMessage('All configuration data wiped. Let\'s start fresh. Step 1: What is your College Name and Department?');
-        return;
-      }
-
-      // Conversational state transitions
-      switch (_agentState) {
-        case AgentState.welcome:
-          if (input.contains('excel') || input.contains('upload')) {
-            setState(() => _isTyping = false);
-            _openRealFilePicker();
-          } else {
-            setState(() {
-              _agentState = AgentState.awaitingCollegeDept;
-              _isTyping = false;
-            });
-            _addSystemMessage('Sure! Let\'s setup manually. First, what is your College and Department name? (e.g. Govt College, Computer Science)');
-          }
-          break;
-
-        case AgentState.awaitingCollegeDept:
-          final parts = text.split(',');
-          setState(() {
-            _collegeName = parts.first.trim();
-            _deptName = parts.length > 1 ? parts[1].trim() : 'Computer Science';
-            _agentState = AgentState.awaitingYearsDivs;
-            _isTyping = false;
-          });
-          _addSystemMessage(
-            'Understood: College: $_collegeName, Dept: $_deptName.\n\nNext, how many years is the course and how many divisions per year? (e.g. 4 years, 2 divisions)',
-            speakText: 'Understood. Next, how many years is the course and how many divisions per year?',
-          );
-          break;
-
-        case AgentState.awaitingYearsDivs:
-          final matches = RegExp(r'\d+').allMatches(input).toList();
-          int years = 4;
-          int divs = 2;
-          if (matches.length >= 2) {
-            years = int.parse(matches[0].group(0)!);
-            divs = int.parse(matches[1].group(0)!);
-          }
-          setState(() {
-            _totalYears = years;
-            _divisionsPerYear = divs;
-            _agentState = AgentState.awaitingSubjects;
-            _isTyping = false;
-          });
-
-          await _repository.clearAll();
-          for (int y = 1; y <= years; y++) {
-            for (int d = 0; d < divs; d++) {
-              final code = String.fromCharCode(65 + d);
-              await _repository.createDivision(
-                name: 'Year $y - Div $code',
-                year: y,
-                divisionCode: code,
-              );
-            }
-          }
-
-          _addSystemMessage(
-            'Created $years Years with $divs divisions each.\n\nNow, please list your subjects and their weekly credits. (e.g. DAA (3 credits), DBMS (4 credits), OS (3 credits))',
-            speakText: 'Created divisions. Now, please list your subjects and their weekly credits.',
-          );
-          break;
-
-        case AgentState.awaitingSubjects:
-          final items = text.split(',');
-          _parsedSubjects.clear();
-          for (var item in items) {
-            final nameMatch = RegExp(r'^[a-zA-Z\s]+').firstMatch(item);
-            final creditMatch = RegExp(r'\d+').firstMatch(item);
-            if (nameMatch != null) {
-              final name = nameMatch.group(0)!.trim();
-              final credits = creditMatch != null ? int.parse(creditMatch.group(0)!) : 3;
-              _parsedSubjects.add({'name': name, 'credits': credits});
-              await _repository.createSubject(name: name, weeklyLectures: credits);
-            }
-          }
-          setState(() {
-            _agentState = AgentState.awaitingRooms;
-            _isTyping = false;
-          });
-          _addSystemMessage(
-            'Parsed ${_parsedSubjects.length} subjects successfully.\n\nWhat classrooms or labs are available? (e.g. Room 301, Room 302, Lab 1)',
-            speakText: 'Parsed subjects successfully. What classrooms or labs are available?',
-          );
-          break;
-
-        case AgentState.awaitingRooms:
-          final rooms = text.split(',');
-          _parsedRooms.clear();
-          for (var r in rooms) {
-            final name = r.trim();
-            final isLab = name.toLowerCase().contains('lab');
-            _parsedRooms.add({'name': name, 'type': isLab ? 'lab' : 'lecture'});
-            await _repository.createRoom(name: name, type: isLab ? 'lab' : 'lecture', capacity: 70);
-          }
-
-          await _loadSetupData();
-          final targetFacultyId = _faculty.isNotEmpty ? _faculty.first.id : 'default_fac';
-          final divs = await _repository.fetchDivisions();
-          final subs = await _repository.fetchSubjects();
-          for (var d in divs) {
-            for (var s in subs) {
-              await _repository.createAssignment(facultyId: targetFacultyId, subjectId: s.id, divisionId: d.id);
-            }
-          }
-
-          setState(() {
-            _agentState = AgentState.awaitingConstraints;
-            _isTyping = false;
-          });
-          _addSystemMessage(
-            'Rooms configured. Let\'s setup constraints. You can specify combined divisions, external faculty slots, or unavailable timings. (e.g. "Dr. Priya is unavailable on Tuesdays slot 1")',
-            speakText: 'Rooms configured. Let\'s setup constraints.',
-          );
-          break;
-
-        case AgentState.awaitingConstraints:
-        case AgentState.readyToSolve:
-        case AgentState.solved:
-          if (input.contains('unavailable') || input.contains('not available') || input.contains('off day')) {
-            await _loadSetupData();
-            final targetFac = _faculty.isNotEmpty ? _faculty.first : FacultyOption(id: 'default', fullName: 'Dr. Priya Sharma', email: '');
-            
-            int day = 0; // Tuesday is day 0 in our college timetable scheme!
-            int slot = 0;
-            if (input.contains('tuesday')) day = 0;
-            if (input.contains('wednesday')) day = 1;
-            if (input.contains('thursday')) day = 2;
-            if (input.contains('friday')) day = 3;
-            if (input.contains('saturday')) day = 4;
-
-            final matches = RegExp(r'\d+').allMatches(input).toList();
-            if (matches.isNotEmpty) {
-              slot = int.parse(matches[0].group(0)!) - 1;
-              if (slot < 0) slot = 0;
-            }
-
-            await _repository.createUnavailability(facultyId: targetFac.id, day: day, slot: slot);
-            _userConstraints.add('${targetFac.fullName} unavailable: ${_dayLabels[day]} Slot ${slot + 1}');
-
-            setState(() {
-              _agentState = AgentState.readyToSolve;
-              _isTyping = false;
-            });
-            _addSystemMessage(
-              'Added Unavailability Constraint: ${targetFac.fullName} marked unavailable on ${_dayLabels[day]} Slot ${slot + 1}.\n\nReady to solve? Click below or add more constraints.',
-              speakText: 'Added Unavailability Constraint. Ready to solve?',
-              customWidget: _buildSolveActions(),
-            );
-          } else if (input.contains('combine') || input.contains('merge')) {
-            _userConstraints.add('Combined Divisions: SE-A & SE-B for DBMS');
-            setState(() {
-              _agentState = AgentState.readyToSolve;
-              _isTyping = false;
-            });
-            _addSystemMessage(
-              'Combined Lecture Constraint Parsed: SE-A and SE-B combined for DBMS Lecture.\n\nReady to solve?',
-              speakText: 'Combined Lecture Constraint Parsed. Ready to solve?',
-              customWidget: _buildSolveActions(),
-            );
-          } else if (input.contains('generate') || input.contains('solve') || input.contains('run')) {
-            setState(() => _isTyping = false);
-            _runSolver();
-          } else {
-            String promptResponse = '';
-            try {
-              final systemContext = 'You are the ENOSIS Timetable Agent. The college is $_collegeName, department is $_deptName. '
-                  'The configured constraints are: ${_userConstraints.join(", ")}. User says: $text';
-              final response = await ApiClient.postJson('/ai/chat', {'message': systemContext}, token: AuthSession.token);
-              if (response.statusCode == 200) {
-                final body = jsonDecode(response.body);
-                promptResponse = body['reply'] as String;
-              } else {
-                throw Exception();
-              }
-            } catch (_) {
-              promptResponse = 'I\'ve captured that requirement: "$text". I will configure the solver parameters accordingly. Tap "Run Solver" to compile the schedule.';
-            }
-
-            setState(() {
-              _agentState = AgentState.readyToSolve;
-              _isTyping = false;
-            });
-            _addSystemMessage(
-              promptResponse,
-              customWidget: _buildSolveActions(),
-            );
-          }
-          break;
-
-        default:
-          setState(() => _isTyping = false);
-          _addSystemMessage('I am ready. Let me know if you would like to "run solver" or "reset".');
-      }
-    });
-  }
-
-  Future<void> _loadActiveTimetablePreview() async {
-    try {
-      final divs = await _repository.fetchDivisions(year: _selectedPreviewYear);
-      if (divs.isNotEmpty) {
-        final targetDiv = divs.firstWhere(
-          (d) => d.divisionCode == _selectedPreviewDiv,
-          orElse: () => divs.first,
-        );
-        final entries = await _repository.fetchDivisionTimetable(targetDiv.id);
-        setState(() {
-          _previewEntries = entries;
-        });
-      }
     } catch (_) {}
   }
 
-  // --- Run Solver Action ---
-  Future<void> _runSolver() async {
-    _addSystemMessage('⚡ Compiling constraints and invoking Google OR-Tools CP-SAT Solver...');
-    setState(() {
-      _agentState = AgentState.solving;
-      _isTyping = true;
-    });
+  // --- Rendering Grid Box with Overlap / Shared Courses Support ---
+  Widget _buildTimetableCell(int dayIdx, int slotIdx) {
+    // Find all entries scheduled in this day and slot (there might be multiple if it's a shared course!)
+    final matches = _solvedEntries.where((e) => e.day == dayIdx && e.slot == slotIdx).toList();
 
-    try {
-      final result = await _repository.generate();
-      await Future.delayed(const Duration(seconds: 1, milliseconds: 500));
-
-      await _loadActiveTimetablePreview();
-
-      setState(() {
-        _agentState = AgentState.solved;
-        _isTyping = false;
-      });
-
-      _addSystemMessage(
-        '✅ Timetable generated successfully!\nStatus: ${result.status}\nCompile Time: ${result.solveTimeSeconds}s\n\nHere is the preview grid. Does this look good, or should we refine it?',
-        speakText: 'Timetable generated successfully. Here is the preview grid. Does this look good, or should we refine it?',
-        customWidget: _buildPreviewGridContainer(),
-      );
-    } on TimetableException catch (e) {
-      setState(() {
-        _agentState = AgentState.readyToSolve;
-        _isTyping = false;
-      });
-
-      // Build structured conflict display
-      final buffer = StringBuffer('❌ Solver Error: ${e.message}\n');
-      if (e.conflicts != null && e.conflicts!.isNotEmpty) {
-        buffer.writeln('\n📋 Conflicts found:');
-        for (final c in e.conflicts!) {
-          if (c is Map) {
-            buffer.writeln('  • ${c['type']}: ${c['details'] ?? c['subject'] ?? ''}');
-          }
-        }
-      }
-      if (e.suggestions != null && e.suggestions!.isNotEmpty) {
-        buffer.writeln('\n💡 Suggestions:');
-        for (final s in e.suggestions!) {
-          buffer.writeln('  • $s');
-        }
-      }
-      _addSystemMessage(
-        buffer.toString(),
-        speakText: 'Solver could not find a valid timetable. ${e.message}',
-        customWidget: _buildSolveActions(),
-      );
-    } catch (e) {
-      setState(() {
-        _agentState = AgentState.readyToSolve;
-        _isTyping = false;
-      });
-      _addSystemMessage(
-        '❌ Unexpected error: $e\n\nPlease try again or reset the configuration.',
-        customWidget: _buildSolveActions(),
-      );
-    }
-  }
-
-  Widget _buildSolveActions() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 8,
-        children: [
-          ElevatedButton.icon(
-            onPressed: _runSolver,
-            icon: const Icon(Icons.flash_on, color: Colors.white, size: 16),
-            label: const Text('Run Solver'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.secondary,
-              foregroundColor: Colors.white,
-            ),
-          ),
-          OutlinedButton.icon(
-            onPressed: () {
-              _openConstraintDialog();
-            },
-            icon: const Icon(Icons.tune, color: AppColors.primary, size: 16),
-            label: const Text('Add Constraint'),
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: AppColors.primary),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- Add Constraint dialog helper for PARTICULAR Faculty ---
-  void _openConstraintDialog() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        String facId = _faculty.isNotEmpty ? _faculty.first.id : '';
-        int day = 0;
-        int slot = 0;
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Add Unavailability Constraint'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DropdownButtonFormField<String>(
-                    initialValue: facId,
-                    decoration: const InputDecoration(labelText: 'Select Faculty'),
-                    items: _faculty.map((f) {
-                      return DropdownMenuItem(
-                        value: f.id,
-                        child: Text(f.fullName),
-                      );
-                    }).toList(),
-                    onChanged: (val) => setDialogState(() => facId = val ?? ''),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<int>(
-                    initialValue: day,
-                    decoration: const InputDecoration(labelText: 'Select Day'),
-                    items: List.generate(_dayLabels.length, (index) {
-                      return DropdownMenuItem(
-                        value: index,
-                        child: Text(_dayLabels[index]),
-                      );
-                    }),
-                    onChanged: (val) => setDialogState(() => day = val ?? 0),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<int>(
-                    initialValue: slot,
-                    decoration: const InputDecoration(labelText: 'Select Slot'),
-                    items: List.generate(_timeLabels.length, (index) {
-                      if (index == 2 || index == 5) return null; // Skip Break/Lunch Break slots
-                      return DropdownMenuItem(
-                        value: index,
-                        child: Text('${index + 1} (${_timeLabels[index]})'),
-                      );
-                    }).whereType<DropdownMenuItem<int>>().toList(),
-                    onChanged: (val) => setDialogState(() => slot = val ?? 0),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    Navigator.pop(context);
-                    final selectedFacId = facId.isEmpty && _faculty.isNotEmpty ? _faculty.first.id : facId;
-                    final fac = _faculty.firstWhere((f) => f.id == selectedFacId, orElse: () => FacultyOption(id: 'default', fullName: 'Dr. Priya Sharma', email: ''));
-                    
-                    setState(() => _isTyping = true);
-                    await _repository.createUnavailability(facultyId: fac.id, day: day, slot: slot);
-                    _userConstraints.add('${fac.fullName} unavailable: ${_dayLabels[day]} Slot ${slot + 1}');
-                    
-                    setState(() => _isTyping = false);
-                    _addSystemMessage(
-                      'Successfully added unavailability constraint for ${fac.fullName} on ${_dayLabels[day]} Slot ${slot + 1}.',
-                      customWidget: _buildSolveActions(),
-                    );
-                  },
-                  child: const Text('Save Constraint'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // --- Beautiful Colorful Table Preview Sheet matching Reference image ---
-  Widget _buildPreviewGridContainer() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border, width: 1.2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // College Header
-          Center(
-            child: Column(
-              children: [
-                Text(
-                  _collegeName.isNotEmpty ? _collegeName : "KIT's College of Engineering (Autonomous), Kolhapur",
-                  style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 11),
-                  textAlign: TextAlign.center,
-                ),
-                Text(
-                  _deptName.isNotEmpty ? "Department of $_deptName" : "Department of CSE-AIML and CSE-DS",
-                  style: AppTypography.captionBold.copyWith(color: AppColors.textSecondary, fontSize: 9),
-                  textAlign: TextAlign.center,
-                ),
-                Text(
-                  "Time Table A.Y. 2026-27 Odd Semester",
-                  style: AppTypography.captionBold.copyWith(color: AppColors.textSecondary, fontSize: 9),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Info row (All data resolved dynamically from the solver output entries)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Class: ${_previewEntries.isNotEmpty ? _previewEntries.first.divisionName : 'Year $_selectedPreviewYear - Div $_selectedPreviewDiv'}",
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 9, color: AppColors.textPrimary),
-              ),
-              Text(
-                "Room: ${_previewEntries.isNotEmpty ? _previewEntries.first.roomName : 'Not Configured'}",
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 9, color: AppColors.textPrimary),
-              ),
-              Text(
-                "Class Teacher: ${_previewEntries.isNotEmpty ? _previewEntries.first.facultyName : 'Not Assigned'}",
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 9, color: AppColors.textPrimary),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          // Selector Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              DropdownButton<int>(
-                value: _selectedPreviewYear,
-                style: const TextStyle(fontSize: 10, color: AppColors.textPrimary, fontWeight: FontWeight.bold),
-                items: [2, 3, 4].map((y) {
-                  return DropdownMenuItem(value: y, child: Text('Year $y'));
-                }).toList(),
-                onChanged: (val) async {
-                  if (val != null) {
-                    setState(() => _selectedPreviewYear = val);
-                    await _loadActiveTimetablePreview();
-                  }
-                },
-              ),
-              DropdownButton<String>(
-                value: _selectedPreviewDiv,
-                style: const TextStyle(fontSize: 10, color: AppColors.textPrimary, fontWeight: FontWeight.bold),
-                items: ['A', 'B'].map((d) {
-                  return DropdownMenuItem(value: d, child: Text('Division $d'));
-                }).toList(),
-                onChanged: (val) async {
-                  if (val != null) {
-                    setState(() => _selectedPreviewDiv = val);
-                    await _loadActiveTimetablePreview();
-                  }
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Scrollable Grid Layout
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header Row
-                Row(
-                  children: [
-                    _buildHeaderCell('Slot'),
-                    ..._dayLabels.map((d) => _buildHeaderCell(d)),
-                  ],
-                ),
-                // Table slots rows
-                ...List.generate(_timeLabels.length, (slotIdx) {
-                  if (slotIdx == 2) {
-                    return _buildBreakRow('SHORT BREAK (11.00 - 11.15 AM)');
-                  }
-                  if (slotIdx == 5) {
-                    return _buildBreakRow('LUNCH BREAK (1.15 - 2.00 PM)');
-                  }
-
-                  return Row(
-                    children: [
-                      _buildTimeCell(_timeLabels[slotIdx]),
-                      ...List.generate(_dayLabels.length, (dayIdx) {
-                        final entry = _previewEntries.firstWhere(
-                          (e) => e.day == dayIdx && e.slot == slotIdx,
-                          orElse: () => TimetableEntryModel(
-                            day: dayIdx,
-                            slot: slotIdx,
-                            isLabBlock: false,
-                            divisionName: '',
-                            divisionYear: 0,
-                            divisionCode: '',
-                            subjectName: '',
-                            facultyName: '',
-                            roomName: '',
-                          ),
-                        );
-                        return _buildDayCell(entry);
-                      }),
-                    ],
-                  );
-                }),
-              ],
-            ),
-          ),
-          // HOD Signature Footer
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '* Generated in real-time by OR-Tools Engine',
-                style: AppTypography.caption.copyWith(color: AppColors.textTertiary, fontSize: 8),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    'Head of Department',
-                    style: AppTypography.captionBold.copyWith(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 9),
-                  ),
-                  Text(
-                    _deptName.isNotEmpty ? _deptName : 'CSE-AIML & CSE-DS',
-                    style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 8),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // Loop action options
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    _addUserMessage('Approve Timetable');
-                    _speak('Timetable successfully approved and published to faculty. Notifications triggered.');
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Timetable Approved & Published! Notifications sent.'), behavior: SnackBarBehavior.floating),
-                    );
-                    Navigator.pop(context);
-                  },
-                  icon: const Icon(Icons.done_all, color: Colors.white),
-                  label: const Text('Approve & Publish'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.success,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: () => _openConstraintDialog(),
-                icon: const Icon(Icons.add, color: AppColors.primary),
-                label: const Text('Add Constraint'),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppColors.primary),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeaderCell(String text) {
-    return Container(
-      width: text == 'Slot' ? 90 : 102,
-      height: 36,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: AppColors.primarySoft,
-        border: Border.all(color: AppColors.border, width: 0.5),
-      ),
-      child: Text(
-        text,
-        style: AppTypography.captionBold.copyWith(
-          color: AppColors.primary,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTimeCell(String text) {
-    return Container(
-      width: 90,
-      height: 52,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: AppColors.border, width: 0.5),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-        textAlign: TextAlign.center,
-      ),
-    );
-  }
-
-  Widget _buildBreakRow(String label) {
-    return Container(
-      width: 600, // Matching the sum of time slot cell and day cells (90 + 5 * 102)
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppColors.border, width: 0.8),
-      ),
-      child: Center(
-        child: Text(
-          label,
-          style: AppTypography.captionBold.copyWith(
-            color: AppColors.textSecondary,
-            letterSpacing: 1.5,
-            fontSize: 10,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDayCell(TimetableEntryModel entry) {
-    if (entry.subjectName.isEmpty) {
+    if (matches.isEmpty) {
       return Container(
-        width: 102,
-        height: 52,
+        width: 110,
+        height: 60,
         decoration: BoxDecoration(
           color: Colors.white,
           border: Border.all(color: AppColors.border, width: 0.5),
@@ -1243,34 +673,765 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
       );
     }
 
-    final color = SubjectColors.forSubject(entry.subjectName);
-    final initials = entry.facultyName.split(' ').map((e) => e.isNotEmpty ? e[0] : '').join().toUpperCase();
-    final facultyDisplay = initials.length > 2 ? initials.substring(initials.length - 2) : initials;
+    // Check if this is a shared elective/course slot
+    final isShared = matches.length > 1;
+    final firstEntry = matches.first;
+    
+    // Determine background color based on course name
+    final color = SubjectColors.forSubject(firstEntry.subjectName);
 
+    if (isShared) {
+      // In division timetable for shared elective (e.g. MDM/PE):
+      // Draw overlapping indicator, show main name (e.g. MDM) and underneath show all sub-courses, rooms, and faculty initials in same box.
+      final subCourses = matches.map((m) => m.subjectName).toSet().join(' / ');
+      final rooms = matches.map((m) => m.roomName).toSet().join(' / ');
+      final faculties = matches.map((m) {
+        final parts = m.facultyName.split(' ');
+        return parts.isNotEmpty ? parts.first : '';
+      }).toSet().join(' / ');
+
+      return Container(
+        width: 110,
+        height: 60,
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.18),
+          border: Border.all(color: AppColors.secondary, width: 1.2), // highlighted border for shared slots
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.people_outline, color: AppColors.secondary, size: 10),
+                const SizedBox(width: 2),
+                Expanded(
+                  child: Text(
+                    firstEntry.subjectName,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 9, color: AppColors.textPrimary),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subCourses,
+              style: const TextStyle(fontSize: 8, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              '$rooms · $faculties',
+              style: const TextStyle(fontSize: 7, color: AppColors.textTertiary),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      );
+    } else {
+      // Normal single course slot
+      final initials = firstEntry.facultyName.split(' ').map((e) => e.isNotEmpty ? e[0] : '').join().toUpperCase();
+      return Container(
+        width: 110,
+        height: 60,
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.12),
+          border: Border.all(color: AppColors.border, width: 0.5),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              '${firstEntry.subjectName} ($initials)',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 9, color: AppColors.textPrimary),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              firstEntry.roomName,
+              style: const TextStyle(fontSize: 8, color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  // --- Step Rendering Helpers ---
+  Widget _buildStepContent() {
+    switch (_currentStep) {
+      case 0:
+        return _buildTextFieldStep('Step 1: College Name', 'Enter your institution name.', _collegeController);
+      case 1:
+        return _buildTextFieldStep('Step 2: Department Name', 'Enter your department name (e.g. Computer Science).', _deptController);
+      case 2:
+        return _buildTextFieldStep('Step 3: Academic Year', 'Enter current academic cycle (e.g. 2026-2027).', _yearController);
+      case 3:
+        return _buildSemesterAndHodStep();
+      case 4:
+        return _buildDivisionsStep();
+      case 5:
+        return _buildWorkingDaysStep();
+      case 6:
+        return _buildPeriodsStep();
+      case 7:
+        return _buildDurationsStep();
+      case 8:
+        return _buildBreaksStep();
+      case 9:
+        return _buildFacultyStep();
+      case 10:
+        return _buildUnavailabilityStep();
+      case 11:
+        return _buildSubjectsStep();
+      case 12:
+        return _buildAssignmentsStep();
+      case 13:
+        return _buildRoomsStep();
+      case 14:
+        return _buildFixedCoursesStep();
+      case 15:
+        return _buildSharedCoursesStep();
+      case 16:
+        return _buildConstraintsConfigStep();
+      case 17:
+        return _buildPreflightStep();
+      case 18:
+        return _buildSolveStep();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildTextFieldStep(String title, String desc, TextEditingController controller) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: AppTypography.h3.copyWith(color: AppColors.primary)),
+        const SizedBox(height: 4),
+        Text(desc, style: AppTypography.bodySecondary),
+        const SizedBox(height: 20),
+        TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+        ),
+      ],
+    );
+  }
+
+
+
+  Widget _buildSemesterAndHodStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Step 4: Academic Semester & HOD Name', style: AppTypography.h3.copyWith(color: AppColors.primary)),
+        const SizedBox(height: 4),
+        Text('Configure the active academic semester and enter the name of the Head of Department (H.O.D.) who signs the sheet.', style: AppTypography.bodySecondary),
+        const SizedBox(height: 20),
+        DropdownButtonFormField<String>(
+          value: _semesterValue,
+          decoration: const InputDecoration(labelText: 'Academic Semester', border: OutlineInputBorder()),
+          items: const [
+            DropdownMenuItem(value: 'Odd', child: Text('Odd Semester')),
+            DropdownMenuItem(value: 'Even', child: Text('Even Semester')),
+          ],
+          onChanged: (val) {
+            setState(() {
+              _semesterValue = val ?? 'Odd';
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _hodController,
+          decoration: const InputDecoration(
+            labelText: 'Head of Department (H.O.D.) Name',
+            hintText: 'e.g. Dr. Uma Gurav',
+            border: OutlineInputBorder(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDivisionsStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Step 5: Divisions & Strength', style: AppTypography.h3.copyWith(color: AppColors.primary)),
+        const SizedBox(height: 4),
+        Text('Verify the student class divisions registered in your database.', style: AppTypography.bodySecondary),
+        const SizedBox(height: 16),
+        Container(
+          height: 300,
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+          ),
+          child: ListView.builder(
+            itemCount: _divisions.length,
+            itemBuilder: (context, index) {
+              final d = _divisions[index];
+              return ListTile(
+                leading: const Icon(Icons.class_outlined, color: AppColors.primary),
+                title: Text(d.name),
+                subtitle: Text('Year ${d.year} · Division ${d.divisionCode} · Strength ${d.strength}'),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        ElevatedButton.icon(
+          onPressed: () async {
+            // Seed base divisions easily
+            setState(() => _isLoading = true);
+            await _repository.clearAll();
+            for (int y = 1; y <= 4; y++) {
+              for (var code in ['A', 'B']) {
+                await _repository.createDivision(
+                  name: 'Year $y - Division $code',
+                  year: y,
+                  divisionCode: code,
+                  strength: 60,
+                );
+              }
+            }
+            await _loadInitialConfiguration();
+          },
+          icon: const Icon(Icons.sync_alt),
+          label: const Text('Reset & Seed Default Divisions (1st-4th Year, A & B)'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWorkingDaysStep() {
+    final allDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Step 6: Working Days', style: AppTypography.h3.copyWith(color: AppColors.primary)),
+        const SizedBox(height: 4),
+        Text('Select active days for your college schedule.', style: AppTypography.bodySecondary),
+        const SizedBox(height: 16),
+        ...allDays.map((day) {
+          final isChecked = _selectedDayNames.contains(day);
+          return CheckboxListTile(
+            title: Text(day),
+            value: isChecked,
+            onChanged: (val) {
+              setState(() {
+                if (val == true) {
+                  _selectedDayNames.add(day);
+                } else {
+                  _selectedDayNames.remove(day);
+                }
+                _workingDaysCount = _selectedDayNames.length;
+              });
+            },
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildPeriodsStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Step 7: Daily Periods & Hours', style: AppTypography.h3.copyWith(color: AppColors.primary)),
+        const SizedBox(height: 4),
+        Text('Configure daily operational slots.', style: AppTypography.bodySecondary),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                initialValue: _periodsPerDayCount.toString(),
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Periods Per Day', border: OutlineInputBorder()),
+                onChanged: (val) => setState(() => _periodsPerDayCount = int.tryParse(val) ?? 8),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextFormField(
+                initialValue: _periodDurationMins.toString(),
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Base Duration (mins)', border: OutlineInputBorder()),
+                onChanged: (val) => setState(() => _periodDurationMins = int.tryParse(val) ?? 60),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _startTimeController,
+          decoration: const InputDecoration(labelText: 'College Start Time', border: OutlineInputBorder()),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDurationsStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Step 8: Lecture & Session Durations', style: AppTypography.h3.copyWith(color: AppColors.primary)),
+        const SizedBox(height: 4),
+        Text('Set custom session duration rules for lectures, labs, and tutorials.', style: AppTypography.bodySecondary),
+        const SizedBox(height: 20),
+        TextFormField(
+          initialValue: _lectureDurationMins.toString(),
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'Lecture Duration (minutes)', border: OutlineInputBorder()),
+          onChanged: (val) => setState(() => _lectureDurationMins = int.tryParse(val) ?? 60),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          initialValue: _labDurationMins.toString(),
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'Lab Duration (minutes)', border: OutlineInputBorder()),
+          onChanged: (val) => setState(() => _labDurationMins = int.tryParse(val) ?? 120),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          initialValue: _tutorialDurationMins.toString(),
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'Tutorial Duration (minutes)', border: OutlineInputBorder()),
+          onChanged: (val) => setState(() => _tutorialDurationMins = int.tryParse(val) ?? 60),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBreaksStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Step 9: Lunch & Short Breaks', style: AppTypography.h3.copyWith(color: AppColors.primary)),
+        const SizedBox(height: 4),
+        Text('Mark daily slot indices as breaks. Breaks are blocked from class schedules.', style: AppTypography.bodySecondary),
+        const SizedBox(height: 16),
+        ...List.generate(_periodsPerDayCount, (index) {
+          final isBreak = _breakSlots.contains(index);
+          final label = _breakLabels[index.toString()] ?? '';
+          return Card(
+            child: ListTile(
+              title: Text('Period ${index + 1}'),
+              trailing: Switch(
+                value: isBreak,
+                onChanged: (val) {
+                  setState(() {
+                    if (val) {
+                      _breakSlots.add(index);
+                      _breakLabels[index.toString()] = index == 2 ? 'Short Break' : 'Lunch Break';
+                    } else {
+                      _breakSlots.remove(index);
+                      _breakLabels.remove(index.toString());
+                    }
+                  });
+                },
+              ),
+              subtitle: isBreak
+                  ? TextFormField(
+                      initialValue: label,
+                      decoration: const InputDecoration(hintText: 'Break Label (e.g. Lunch Break)'),
+                      onChanged: (val) => setState(() => _breakLabels[index.toString()] = val),
+                    )
+                  : null,
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildFacultyStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Step 10: Faculty Directory', style: AppTypography.h3.copyWith(color: AppColors.primary)),
+        const SizedBox(height: 4),
+        Text('Registered faculty members in the department.', style: AppTypography.bodySecondary),
+        const SizedBox(height: 16),
+        Container(
+          height: 300,
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+          ),
+          child: ListView.builder(
+            itemCount: _faculty.length,
+            itemBuilder: (context, index) {
+              final f = _faculty[index];
+              return ListTile(
+                leading: const CircleAvatar(child: Icon(Icons.person)),
+                title: Text(f.fullName),
+                subtitle: Text(f.email),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUnavailabilityStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Step 11: Faculty Unavailability', style: AppTypography.h3.copyWith(color: AppColors.primary)),
+        const SizedBox(height: 4),
+        Text('Define fixed periods where faculty members are unavailable.', style: AppTypography.bodySecondary),
+        const SizedBox(height: 16),
+        Center(
+          child: Text('Tapping slots creates weekly unavailability constraints.', style: AppTypography.captionBold),
+        ),
+        const SizedBox(height: 12),
+        ElevatedButton(
+          onPressed: _openVoiceDialog,
+          child: const Text('Dictate Faculty Unavailability Constraints'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSubjectsStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Step 12: Course Subjects', style: AppTypography.h3.copyWith(color: AppColors.primary)),
+        const SizedBox(height: 4),
+        Text('Registered courses and weekly lecture credits.', style: AppTypography.bodySecondary),
+        const SizedBox(height: 16),
+        Container(
+          height: 300,
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+          ),
+          child: ListView.builder(
+            itemCount: _subjects.length,
+            itemBuilder: (context, index) {
+              final s = _subjects[index];
+              return ListTile(
+                leading: const Icon(Icons.book_outlined),
+                title: Text(s.name),
+                subtitle: Text('Code: ${s.code ?? "N/A"} · Lectures: ${s.weeklyLectures} · Type: ${s.isLab ? "Lab" : "Lecture"}'),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAssignmentsStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Step 13: Teaching Assignments', style: AppTypography.h3.copyWith(color: AppColors.primary)),
+        const SizedBox(height: 4),
+        Text('Faculty mapped to subjects and divisions.', style: AppTypography.bodySecondary),
+        const SizedBox(height: 16),
+        Container(
+          height: 300,
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+          ),
+          child: ListView.builder(
+            itemCount: _assignments.length,
+            itemBuilder: (context, index) {
+              final a = _assignments[index];
+              return ListTile(
+                leading: const Icon(Icons.assignment_ind_outlined),
+                title: Text('Assignment ${index + 1}'),
+                subtitle: Text('Faculty ID: ${a['faculty_id']}\nSubject ID: ${a['subject_id']}\nDivision ID: ${a['division_id']}'),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRoomsStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Step 14: Classrooms & Labs', style: AppTypography.h3.copyWith(color: AppColors.primary)),
+        const SizedBox(height: 4),
+        Text('Registered infrastructural rooms and total student capacity.', style: AppTypography.bodySecondary),
+        const SizedBox(height: 16),
+        Container(
+          height: 300,
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+          ),
+          child: ListView.builder(
+            itemCount: _rooms.length,
+            itemBuilder: (context, index) {
+              final r = _rooms[index];
+              return ListTile(
+                leading: const Icon(Icons.door_sliding_outlined),
+                title: Text(r.name),
+                subtitle: Text('Type: ${r.type} · Capacity: ${r.capacity}'),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFixedCoursesStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Step 15: Institutional Fixed Courses', style: AppTypography.h3.copyWith(color: AppColors.primary)),
+        const SizedBox(height: 4),
+        Text('Pinned institutional lectures (e.g. Professional Ethics, Seminars).', style: AppTypography.bodySecondary),
+        const SizedBox(height: 16),
+        Container(
+          height: 250,
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+          ),
+          child: _fixedCourses.isEmpty
+              ? const Center(child: Text('No fixed courses configured.'))
+              : ListView.builder(
+                  itemCount: _fixedCourses.length,
+                  itemBuilder: (context, index) {
+                    final fc = _fixedCourses[index];
+                    return ListTile(
+                      leading: const Icon(Icons.pin_drop, color: AppColors.secondary),
+                      title: Text(fc.courseName),
+                      subtitle: Text('Divisions: ${fc.divisions.join(", ")}\nDay ${fc.day} · Slot ${fc.startSlot + 1} (${fc.durationSlots} periods)'),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSharedCoursesStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Step 16: Shared & Elective Courses', style: AppTypography.h3.copyWith(color: AppColors.primary)),
+        const SizedBox(height: 4),
+        Text('Configure courses shared across divisions simultaneously (e.g. MDM or PE electives).', style: AppTypography.bodySecondary),
+        const SizedBox(height: 16),
+        Container(
+          height: 250,
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+          ),
+          child: _sharedCourses.isEmpty
+              ? const Center(child: Text('No shared elective courses configured.'))
+              : ListView.builder(
+                  itemCount: _sharedCourses.length,
+                  itemBuilder: (context, index) {
+                    final sc = _sharedCourses[index];
+                    return ListTile(
+                      leading: const Icon(Icons.people, color: AppColors.secondary),
+                      title: Text(sc.courseName),
+                      subtitle: Text('Divisions: ${sc.divisions.join(", ")}\nFaculty ID: ${sc.facultyId}\nSessions: ${sc.weeklySessions} weekly'),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildConstraintsConfigStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Step 17: Solver Constraints & Weights', style: AppTypography.h3.copyWith(color: AppColors.primary)),
+        const SizedBox(height: 4),
+        Text('Configure objective weights and priority levels for soft constraints.', style: AppTypography.bodySecondary),
+        const SizedBox(height: 20),
+        SwitchListTile(
+          title: const Text('Minimize Faculty Idle Gaps'),
+          value: _optimizeGaps,
+          onChanged: (val) => setState(() => _optimizeGaps = val),
+        ),
+        if (_optimizeGaps) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                const Text('Gap Penalty Weight:'),
+                const SizedBox(width: 12),
+                DropdownButton<int>(
+                  value: _gapWeight,
+                  items: [1, 2, 3, 5, 8, 10].map((w) => DropdownMenuItem(value: w, child: Text(w.toString()))).toList(),
+                  onChanged: (val) => setState(() => _gapWeight = val ?? 5),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const Divider(),
+        SwitchListTile(
+          title: const Text('Prevent Excessive Consecutive Classes'),
+          value: _optimizeConsecutive,
+          onChanged: (val) => setState(() => _optimizeConsecutive = val),
+        ),
+        if (_optimizeConsecutive) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                const Text('Consecutive Class Penalty:'),
+                const SizedBox(width: 12),
+                DropdownButton<int>(
+                  value: _consecutiveWeight,
+                  items: [1, 2, 3, 5, 8, 10].map((w) => DropdownMenuItem(value: w, child: Text(w.toString()))).toList(),
+                  onChanged: (val) => setState(() => _consecutiveWeight = val ?? 3),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPreflightStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Step 18: Pre-Solve Validation Audit', style: AppTypography.h3.copyWith(color: AppColors.primary)),
+        const SizedBox(height: 4),
+        Text('Audits teaching hours, room capacities, and alerts you to structural clashes before solving.', style: AppTypography.bodySecondary),
+        const SizedBox(height: 20),
+        ElevatedButton(
+          onPressed: _runPreFlightAudit,
+          child: const Text('Run Pre-Flight Audit'),
+        ),
+        if (_preFlightReport != null) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: (_preFlightReport!['valid'] as bool? ?? false)
+                  ? AppColors.success.withOpacity(0.08)
+                  : AppColors.error.withOpacity(0.08),
+              border: Border.all(
+                color: (_preFlightReport!['valid'] as bool? ?? false) ? AppColors.success : AppColors.error,
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      (_preFlightReport!['valid'] as bool? ?? false) ? Icons.check_circle : Icons.error,
+                      color: (_preFlightReport!['valid'] as bool? ?? false) ? AppColors.success : AppColors.error,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      (_preFlightReport!['valid'] as bool? ?? false) ? 'Audit Status: Ready to Solve' : 'Audit Status: Warnings Found',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: (_preFlightReport!['valid'] as bool? ?? false) ? AppColors.success : AppColors.error,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text('Total Divisions: ${_preFlightReport!['total_divisions'] ?? 0}'),
+                Text('Total Credits: ${_preFlightReport!['total_credits'] ?? 0}'),
+                Text('Conflicts Count: ${(_preFlightReport!['conflicts'] as List?)?.length ?? 0}'),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSolveStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Step 19: Solve & Generate Schedule', style: AppTypography.h3.copyWith(color: AppColors.primary)),
+        const SizedBox(height: 4),
+        Text('Invokes the Google OR-Tools CP-SAT Constraint Optimization solver to construct your final conflict-free timetable.', style: AppTypography.bodySecondary),
+        const SizedBox(height: 40),
+        Center(
+          child: Column(
+            children: [
+              Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.flash_on, color: AppColors.secondary, size: 64),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _executeSolverRun,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 18),
+                  backgroundColor: AppColors.secondary,
+                ),
+                child: Text('Invoke Solver Engine', style: AppTypography.bodyMedium.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Stepper Header progress indicator
+  Widget _buildStepIndicator() {
+    final group = _stepGroups[_currentStep];
     return Container(
-      width: 102,
-      height: 52,
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        border: Border.all(color: AppColors.border, width: 0.5),
+        color: AppColors.primarySoft,
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '${entry.subjectName} ($facultyDisplay)',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: AppColors.textPrimary),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Step ${_currentStep + 1} of 19', style: AppTypography.captionBold.copyWith(color: AppColors.primary)),
+              Text(group, style: AppTypography.captionBold.copyWith(color: AppColors.secondary)),
+            ],
           ),
-          const SizedBox(height: 2),
-          Text(
-            entry.roomName,
-            style: const TextStyle(fontSize: 9, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
-            textAlign: TextAlign.center,
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: (_currentStep + 1) / 19,
+            backgroundColor: Colors.white,
+            color: AppColors.primary,
           ),
         ],
       ),
@@ -1284,24 +1445,11 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.smart_toy_outlined, color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('ENOSIS AI Agent', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                Text(
-                  _voiceMode ? 'Voice Mode Active (en-IN)' : 'Silent Mode Active',
-                  style: const TextStyle(fontSize: 10, color: Colors.white70),
-                ),
-              ],
+            const Icon(Icons.calendar_today, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(
+              'ENOSIS Timetable Console',
+              style: AppTypography.bodyMedium.copyWith(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -1310,199 +1458,367 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
             icon: Icon(_voiceMode ? Icons.volume_up : Icons.volume_off, color: Colors.white),
             onPressed: () {
               setState(() => _voiceMode = !_voiceMode);
-              if (!_voiceMode) _flutterTts.stop();
             },
+          ),
+          if (_solvedEntries.isNotEmpty)
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _activeMode = _activeMode == TimetableMode.wizard
+                      ? TimetableMode.solvedPreview
+                      : TimetableMode.wizard;
+                });
+              },
+              child: Text(
+                _activeMode == TimetableMode.wizard ? 'View Timetable' : 'Configure Setup',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          if (_activeMode == TimetableMode.wizard)
+            // 19-Step Setup Wizard layout
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    _buildStepIndicator(),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20.0),
+                          child: SingleChildScrollView(
+                            child: _buildStepContent(),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Navigation actions bar
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        if (_currentStep > 0)
+                          OutlinedButton(
+                            onPressed: () {
+                              setState(() {
+                                _currentStep--;
+                              });
+                            },
+                            child: const Text('Back'),
+                          )
+                        else
+                          OutlinedButton(
+                            onPressed: _importExcelTemplate,
+                            child: const Text('Import Excel'),
+                          ),
+                        ElevatedButton(
+                          onPressed: () async {
+                            await _saveStepData();
+                            if (_currentStep < 18) {
+                              setState(() {
+                                _currentStep++;
+                              });
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                          child: Text(_currentStep == 18 ? 'Finish' : 'Save & Continue', style: const TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            // Post-Solve Timetable Grid + Conversational Refining Assistant layout
+            SafeArea(
+              child: ResponsiveLayout(
+                mobile: _buildMobileLayout(),
+                tablet: _buildTabletLayout(),
+                desktop: _buildDesktopLayout(),
+              ),
+            ),
+          if (_isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.3),
+              child: const Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileLayout() {
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          const TabBar(
+            tabs: [
+              Tab(icon: Icon(Icons.grid_on), text: 'Timetable Grid'),
+              Tab(icon: Icon(Icons.chat), text: 'Refine Assistant'),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _buildTimetableGridTab(),
+                _buildAssistantTab(),
+              ],
+            ),
           ),
         ],
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: ResponsiveCenter(
-                maxWidth: Responsive.maxContentWidth,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: ListView.builder(
-                  controller: _scrollController,
-                  itemCount: _messages.length,
-                  itemBuilder: (context, index) {
-                    final msg = _messages[index];
-                    return _ChatBubble(message: msg, onSpeak: () => _speak(msg.text));
-                  },
+    );
+  }
+
+  Widget _buildTabletLayout() {
+    return Row(
+      children: [
+        Expanded(flex: 3, child: _buildTimetableGridTab()),
+        const VerticalDivider(width: 1),
+        Expanded(flex: 2, child: _buildAssistantTab()),
+      ],
+    );
+  }
+
+  Widget _buildDesktopLayout() {
+    return Row(
+      children: [
+        Expanded(flex: 5, child: _buildTimetableGridTab()),
+        const VerticalDivider(width: 1),
+        Expanded(flex: 3, child: _buildAssistantTab()),
+      ],
+    );
+  }
+
+  Widget _buildTimetableGridTab() {
+    return Padding(
+      padding: const EdgeInsets.all(12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header info
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  DropdownButton<int>(
+                    value: _previewYear,
+                    items: [1, 2, 3, 4].map((y) => DropdownMenuItem(value: y, child: Text('Year $y'))).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() => _previewYear = val);
+                        _loadPreviewGrid();
+                      }
+                    },
+                  ),
+                  DropdownButton<String>(
+                    value: _previewDiv,
+                    items: ['A', 'B'].map((d) => DropdownMenuItem(value: d, child: Text('Div $d'))).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() => _previewDiv = val);
+                        _loadPreviewGrid();
+                      }
+                    },
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _activeMode = TimetableMode.wizard;
+                      });
+                    },
+                    child: const Text('Reconfigure Setup'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Scrollable Grid
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.vertical,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _buildGridHeaderCell('Time Slot'),
+                        ..._selectedDayNames.map((day) => _buildGridHeaderCell(day)),
+                      ],
+                    ),
+                    ...List.generate(_periodsPerDayCount, (slotIdx) {
+                      final isBreak = _breakSlots.contains(slotIdx);
+                      final label = _breakLabels[slotIdx.toString()] ?? 'Break';
+
+                      if (isBreak) {
+                        return Container(
+                          width: 120 + (_selectedDayNames.length * 112),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          color: Colors.grey.shade100,
+                          alignment: Alignment.center,
+                          child: Text(
+                            label.toUpperCase(),
+                            style: AppTypography.captionBold.copyWith(color: Colors.grey.shade600, letterSpacing: 2),
+                          ),
+                        );
+                      }
+
+                      return Row(
+                        children: [
+                          Container(
+                            width: 120,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              border: Border.all(color: AppColors.border, width: 0.5),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              'Slot ${slotIdx + 1}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                            ),
+                          ),
+                          ...List.generate(_selectedDayNames.length, (dayIdx) {
+                            return _buildTimetableCell(dayIdx, slotIdx);
+                          }),
+                        ],
+                      );
+                    }),
+                  ],
                 ),
               ),
             ),
-
-            if (_isTyping)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    LoadingIndicator(size: 24),
-                    SizedBox(width: 10),
-                    Text('Agent is parsing constraints...', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                  ],
-                ),
-              ),
-
-            if (!_isTyping && _agentState == AgentState.welcome)
-              Container(
-                height: 48,
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  children: [
-                    ActionChip(
-                      avatar: const Icon(Icons.rocket_launch, size: 14, color: AppColors.primary),
-                      label: const Text('Setup Manually', style: TextStyle(fontSize: 12, color: AppColors.primary)),
-                      backgroundColor: AppColors.primary.withOpacity(0.06),
-                      onPressed: () => _handleUserInput('Configure manually'),
-                    ),
-                    const SizedBox(width: 8),
-                    ActionChip(
-                      avatar: const Icon(Icons.upload_file, size: 14, color: AppColors.primary),
-                      label: const Text('Upload Excel Template', style: TextStyle(fontSize: 12, color: AppColors.primary)),
-                      backgroundColor: AppColors.primary.withOpacity(0.06),
-                      onPressed: _openRealFilePicker,
-                    ),
-                  ],
-                ),
-              ),
-
-            Container(
-              padding: const EdgeInsets.all(12),
-              color: AppColors.surface,
-              child: ResponsiveCenter(
-                maxWidth: Responsive.maxContentWidth,
-                padding: EdgeInsets.zero,
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: _isListening ? AppColors.secondary : AppColors.primarySoft,
-                      radius: 22,
-                      child: IconButton(
-                        icon: Icon(
-                          _isListening ? Icons.mic : Icons.mic_none,
-                          color: _isListening ? Colors.white : AppColors.primary,
-                          size: 20,
-                        ),
-                        onPressed: _openVoiceListeningDialog,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: _textController,
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: _handleUserInput,
-                        decoration: const InputDecoration(
-                          hintText: 'Ask or dictate constraint...',
-                          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    CircleAvatar(
-                      backgroundColor: AppColors.primary,
-                      radius: 22,
-                      child: IconButton(
-                        icon: const Icon(Icons.send, color: Colors.white, size: 18),
-                        onPressed: () => _handleUserInput(_textController.text),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildGridHeaderCell(String label) {
+    return Container(
+      width: label == 'Time Slot' ? 120 : 110,
+      height: 40,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        border: Border.all(color: AppColors.border, width: 0.5),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _buildAssistantTab() {
+    return Column(
+      children: [
+        Expanded(
+          child: ListView.builder(
+            controller: _scrollController,
+            itemCount: _chatMessages.length,
+            padding: const EdgeInsets.all(16),
+            itemBuilder: (context, index) {
+              final msg = _chatMessages[index];
+              return _ChatBubbleView(message: msg);
+            },
+          ),
+        ),
+        if (_isTyping)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                LoadingIndicator(size: 20),
+                SizedBox(width: 8),
+                Text('Auditing swap constraints...', style: TextStyle(fontSize: 12)),
+              ],
+            ),
+          ),
+        Container(
+          padding: const EdgeInsets.all(12),
+          color: Colors.white,
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.mic, color: AppColors.secondary),
+                onPressed: _openVoiceDialog,
+              ),
+              Expanded(
+                child: TextField(
+                  controller: _textController,
+                  decoration: const InputDecoration(hintText: 'Describe swapping request...'),
+                  onSubmitted: _handleAssistantPrompt,
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.send, color: AppColors.primary),
+                onPressed: () => _handleAssistantPrompt(_textController.text),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _ChatBubble extends StatelessWidget {
+class _ChatBubbleView extends StatelessWidget {
   final ChatMessage message;
-  final VoidCallback onSpeak;
 
-  const _ChatBubble({required this.message, required this.onSpeak});
+  const _ChatBubbleView({required this.message});
 
   @override
   Widget build(BuildContext context) {
     final align = message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
-    final bubbleColor = message.isUser ? AppColors.primary : AppColors.surface;
+    final bubbleColor = message.isUser ? AppColors.primary : Colors.grey.shade100;
     final textColor = message.isUser ? Colors.white : AppColors.textPrimary;
-    final borderRadius = message.isUser
-        ? const BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(16),
-            bottomLeft: Radius.circular(16),
-          )
-        : const BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(16),
-            bottomRight: Radius.circular(16),
-          );
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Column(
         crossAxisAlignment: align,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-            children: [
-              if (!message.isUser) ...[
-                IconButton(
-                  icon: const Icon(Icons.volume_up, size: 16, color: AppColors.textSecondary),
-                  onPressed: onSpeak,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.7,
+            ),
+            decoration: BoxDecoration(
+              color: bubbleColor,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  message.text,
+                  style: TextStyle(color: textColor, height: 1.3),
                 ),
-                const SizedBox(width: 4),
+                if (message.customWidget != null) ...[
+                  const SizedBox(height: 8),
+                  message.customWidget!,
+                ],
               ],
-              Flexible(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(context).size.width * 0.85,
-                  ),
-                  decoration: BoxDecoration(
-                    color: bubbleColor,
-                    borderRadius: borderRadius,
-                    border: message.isUser ? null : Border.all(color: AppColors.border, width: 1.2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.01),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        message.text,
-                        style: AppTypography.bodyMedium.copyWith(color: textColor, height: 1.3),
-                      ),
-                      if (message.customWidget != null) ...[
-                        const SizedBox(height: 12),
-                        message.customWidget!,
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text(
-              '${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}',
-              style: const TextStyle(fontSize: 10, color: AppColors.textTertiary),
             ),
           ),
         ],

@@ -6,7 +6,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_chip.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../copo/presentation/screens/copo_progress_screen.dart';
-import '../../../timetable/presentation/screens/generate_timetable_screen.dart';
+import '../../../timetable/presentation/screens/timetable_generation_mode_screen.dart';
 
 class _PendingRequest {
   final String id;
@@ -151,7 +151,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         AppCard(
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const GenerateTimetableScreen()),
+              MaterialPageRoute(builder: (_) => const TimetableGenerationModeScreen()),
             );
           },
           child: const Row(

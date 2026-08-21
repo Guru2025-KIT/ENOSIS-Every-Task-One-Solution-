@@ -84,6 +84,8 @@ class _Occurrence:
     duration: int          # 1 for lecture; lab_block_size for lab
     is_lab: bool
     room_type_needed: RoomType
+    fixed_room_id: str | None = None
+    required_capacity: int = 0
 
 
 @dataclass
@@ -221,8 +223,100 @@ def generate_timetable(request: TimetableGenerationRequest) -> TimetableGenerati
     unavailable     = {(u.faculty_id, u.day, u.slot) for u in request.unavailability}
     break_set       = set(request.break_slots)
 
+    # Map division code/name to ID
+    div_by_code_or_name = {}
+    for d in request.divisions:
+        code = getattr(d, "division_code", "")
+        if code:
+            div_by_code_or_name[code.upper()] = d.id
+        div_by_code_or_name[d.name.upper()] = d.id
+
+    # 1. Process Institutional Fixed Courses
+    blocked_slots_by_division = defaultdict(set)
+    room_unavailable_slots = set()
+    
+    for ic in request.institutional_courses:
+        # Match divisions by year + code/name
+        ic_divisions = [
+            d.id for d in request.divisions 
+            if getattr(d, "year", 1) == ic.year and (
+                getattr(d, "division_code", "").upper() in [div.upper() for div in ic.divisions] or 
+                d.name.upper() in [div.upper() for div in ic.divisions]
+            )
+        ]
+        for div_id in ic_divisions:
+            for i in range(ic.duration_slots):
+                blocked_slots_by_division[div_id].add((ic.day, ic.start_slot + i))
+                
+        # If faculty is fixed, mark them unavailable during these slots
+        if ic.faculty_id:
+            for i in range(ic.duration_slots):
+                unavailable.add((ic.faculty_id, ic.day, ic.start_slot + i))
+                
+        # If room is fixed, mark it unavailable for other courses
+        if ic.room_id:
+            for i in range(ic.duration_slots):
+                room_unavailable_slots.add((ic.room_id, ic.day, ic.start_slot + i))
+
     # ── Step 1: Expand assignments into concrete occurrences ─────────────────
     occurrences: list[_Occurrence] = []
+    
+    # We will track groups of occurrence indices that must be simultaneous
+    # (same day and start_slot) or same_slot_and_room (same day, slot, and room)
+    simultaneous_groups: list[list[int]] = []
+    same_slot_and_room_groups: list[list[int]] = []
+    
+    # Group shared courses by course_name to handle simultaneous groups (like MDM/PE)
+    shared_by_name = defaultdict(list)
+    for sc in request.shared_courses:
+        shared_by_name[sc.course_name.lower()].append(sc)
+        
+    for course_name_lower, sc_list in shared_by_name.items():
+        # Match weekly sessions
+        max_sessions = max(sc.weekly_sessions for sc in sc_list)
+        for s_idx in range(max_sessions):
+            sim_group_idx = []
+            
+            for sc in sc_list:
+                if s_idx >= sc.weekly_sessions:
+                    continue
+                    
+                sc_divisions = [
+                    d.id for d in request.divisions 
+                    if getattr(d, "year", 1) == sc.year and (
+                        getattr(d, "division_code", "").upper() in [div.upper() for div in sc.divisions] or 
+                        d.name.upper() in [div.upper() for div in sc.divisions]
+                    )
+                ]
+                if not sc_divisions:
+                    continue
+                    
+                combined_strength = sum(divisions_by_id[div_id].strength for div_id in sc_divisions if div_id in divisions_by_id)
+                
+                record_group_idx = []
+                for div_id in sc_divisions:
+                    occ_idx = len(occurrences)
+                    occurrences.append(_Occurrence(
+                        division_id=div_id,
+                        subject_id=sc.course_code or sc.course_name,
+                        subject_name=sc.course_name,
+                        faculty_id=sc.faculty_id,
+                        duration=sc.duration_slots,
+                        is_lab=(sc.session_type.lower() == "lab"),
+                        room_type_needed=RoomType.LAB if sc.session_type.lower() == "lab" else RoomType.LECTURE,
+                        fixed_room_id=sc.room_id,
+                        required_capacity=combined_strength
+                    ))
+                    record_group_idx.append(occ_idx)
+                    sim_group_idx.append(occ_idx)
+                
+                if len(record_group_idx) > 1:
+                    same_slot_and_room_groups.append(record_group_idx)
+                    
+            if len(sim_group_idx) > 1:
+                simultaneous_groups.append(sim_group_idx)
+
+    # Now add standard teaching assignments
     for assignment in request.assignments:
         subject = subjects_by_id.get(assignment.subject_id)
         if subject is None:
@@ -280,10 +374,15 @@ def generate_timetable(request: TimetableGenerationRequest) -> TimetableGenerati
             all_options.append(options)
             continue
 
-        candidate_rooms = [
-            r for r in rooms
-            if r.type == occ.room_type_needed and r.capacity >= division.strength
-        ]
+        req_cap = occ.required_capacity if occ.required_capacity > 0 else division.strength
+
+        if occ.fixed_room_id:
+            candidate_rooms = [r for r in rooms if r.id == occ.fixed_room_id]
+        else:
+            candidate_rooms = [
+                r for r in rooms
+                if r.type == occ.room_type_needed and r.capacity >= req_cap
+            ]
 
         for day in range(request.working_days):
             for start_slot in range(request.periods_per_day - occ.duration + 1):
@@ -293,11 +392,20 @@ def generate_timetable(request: TimetableGenerationRequest) -> TimetableGenerati
                 if any(s in break_set for _, s in slots):
                     continue
 
+                # Hard: no slot in blocked institutional slots for this division
+                division_blocked = blocked_slots_by_division[occ.division_id]
+                if any(slot in division_blocked for slot in slots):
+                    continue
+
                 # Hard: faculty must be available for every slot
                 if any((occ.faculty_id, d, s) in unavailable for d, s in slots):
                     continue
 
                 for room in candidate_rooms:
+                    # Hard: room must not be blocked by institutional courses
+                    if any((room.id, d, s) in room_unavailable_slots for d, s in slots):
+                        continue
+
                     options.append(_Option(
                         day=day,
                         start_slot=start_slot,
@@ -358,13 +466,33 @@ def generate_timetable(request: TimetableGenerationRequest) -> TimetableGenerati
     division_cells: dict[tuple, list] = defaultdict(list)
     room_cells:     dict[tuple, list] = defaultdict(list)
 
+    # Build maps to find representative occurrences for shared bookings
+    shared_room_rep = {}
+    for group in same_slot_and_room_groups:
+        rep = group[0]
+        for idx in group:
+            shared_room_rep[idx] = rep
+
+    shared_fac_rep = {}
+    for group in simultaneous_groups:
+        rep = group[0]
+        for idx in group:
+            shared_fac_rep[idx] = rep
+
     for i, (occ, options) in enumerate(zip(occurrences, all_options)):
+        is_room_rep = (shared_room_rep.get(i, i) == i)
+        is_fac_rep = (shared_fac_rep.get(i, i) == i)
+
         for j, option in enumerate(options):
             var = choice_vars[i][j]
             for day, slot in option.slots:
-                faculty_cells[(occ.faculty_id, day, slot)].append(var)
+                if is_fac_rep:
+                    faculty_cells[(occ.faculty_id, day, slot)].append(var)
+                if is_room_rep:
+                    room_cells[(option.room_id, day, slot)].append(var)
+                
+                # Divisions are never shared
                 division_cells[(occ.division_id, day, slot)].append(var)
-                room_cells[(option.room_id, day, slot)].append(var)
 
     # Hard: at most one user of each (resource, day, slot)
     for cell_vars in faculty_cells.values():
@@ -416,6 +544,45 @@ def generate_timetable(request: TimetableGenerationRequest) -> TimetableGenerati
                 ]
                 if day_vars:
                     model.Add(sum(day_vars) <= request.max_lectures_per_day_per_faculty)
+
+    # Hard: simultaneous groups (e.g. electives running at same day/slot)
+    for group in simultaneous_groups:
+        ref_idx = group[0]
+        for other_idx in group[1:]:
+            for day in range(request.working_days):
+                for start_slot in range(request.periods_per_day):
+                    ref_vars = [
+                        choice_vars[ref_idx][j] 
+                        for j, opt in enumerate(all_options[ref_idx])
+                        if opt.day == day and opt.start_slot == start_slot
+                    ]
+                    other_vars = [
+                        choice_vars[other_idx][k]
+                        for k, opt in enumerate(all_options[other_idx])
+                        if opt.day == day and opt.start_slot == start_slot
+                    ]
+                    if ref_vars or other_vars:
+                        model.Add(sum(ref_vars) == sum(other_vars))
+
+    # Hard: same slot and room groups (e.g. shared lectures)
+    for group in same_slot_and_room_groups:
+        ref_idx = group[0]
+        for other_idx in group[1:]:
+            for day in range(request.working_days):
+                for start_slot in range(request.periods_per_day):
+                    for room in rooms:
+                        ref_vars = [
+                            choice_vars[ref_idx][j]
+                            for j, opt in enumerate(all_options[ref_idx])
+                            if opt.day == day and opt.start_slot == start_slot and opt.room_id == room.id
+                        ]
+                        other_vars = [
+                            choice_vars[other_idx][k]
+                            for k, opt in enumerate(all_options[other_idx])
+                            if opt.day == day and opt.start_slot == start_slot and opt.room_id == room.id
+                        ]
+                        if ref_vars or other_vars:
+                            model.Add(sum(ref_vars) == sum(other_vars))
 
     # ── Step 4: Soft constraints + objective ─────────────────────────────────
     objective_terms: list[cp_model.IntVar] = []
@@ -573,6 +740,40 @@ def generate_timetable(request: TimetableGenerationRequest) -> TimetableGenerati
                         is_lab_block=occ.is_lab,
                     ))
                 break
+
+    # Add institutional fixed course entries to the results
+    for ic in request.institutional_courses:
+        ic_divisions = [
+            d.id for d in request.divisions 
+            if d.year == ic.year and (
+                d.division_code.upper() in [div.upper() for div in ic.divisions] or 
+                d.name.upper() in [div.upper() for div in ic.divisions]
+            )
+        ]
+        
+        # Resolve Subject ID
+        sub_id = None
+        for s in request.subjects:
+            if s.name.lower() == ic.course_name.lower():
+                sub_id = s.id
+                break
+        if not sub_id and request.subjects:
+            sub_id = request.subjects[0].id
+            
+        fac_id = ic.faculty_id or (request.assignments[0].faculty_id if request.assignments else "default_fac")
+        rm_id = ic.room_id or (request.rooms[0].id if request.rooms else "default_room")
+        
+        for div_id in ic_divisions:
+            for i in range(ic.duration_slots):
+                entries.append(TimetableEntryResult(
+                    division_id=div_id,
+                    subject_id=sub_id or "fixed_sub",
+                    faculty_id=fac_id,
+                    room_id=rm_id,
+                    day=ic.day,
+                    slot=ic.start_slot + i,
+                    is_lab_block=False
+                ))
 
     log(f"  entries_generated={len(entries)}")
     log("TIMETABLE GENERATION COMPLETE")
