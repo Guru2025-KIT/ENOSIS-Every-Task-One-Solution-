@@ -91,6 +91,9 @@ class ScheduleConfigCreate(BaseModel):
     day_names: list[str] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     periods_per_day: int = Field(ge=1, le=20, default=8)
     period_duration_minutes: int = Field(ge=15, le=180, default=60)
+    lecture_duration_minutes: int = Field(ge=15, le=180, default=60)
+    lab_duration_minutes: int = Field(ge=15, le=240, default=120)
+    tutorial_duration_minutes: int = Field(ge=15, le=180, default=60)
     start_time: str = "09:00"
     break_slots: list[int] = []
     break_labels: dict[str, str] = {}
@@ -99,6 +102,7 @@ class ScheduleConfigCreate(BaseModel):
     department_name: str | None = None
     academic_year: str | None = None
     semester: str | None = None
+    hod_name: str | None = None
     time_limit_seconds: int = Field(ge=5, le=300, default=30)
 
 
@@ -109,6 +113,9 @@ class ScheduleConfigOut(BaseModel):
     day_names: list[str]
     periods_per_day: int
     period_duration_minutes: int
+    lecture_duration_minutes: int
+    lab_duration_minutes: int
+    tutorial_duration_minutes: int
     start_time: str
     break_slots: list[int]
     break_labels: dict[str, str]
@@ -117,6 +124,7 @@ class ScheduleConfigOut(BaseModel):
     department_name: str | None
     academic_year: str | None
     semester: str | None
+    hod_name: str | None
     time_limit_seconds: int
 
 
@@ -178,6 +186,8 @@ class ConstraintOut(BaseModel):
 class SolverDivision(BaseModel):
     id: str
     name: str
+    division_code: str = "A"
+    year: int = 1
     strength: int
 
 
@@ -215,6 +225,31 @@ class SolverSoftConstraint(BaseModel):
     payload: dict[str, Any] = {}
 
 
+class SolverInstitutionalCourse(BaseModel):
+    course_name: str
+    course_code: str | None = None
+    year: int
+    divisions: list[str]
+    day: int
+    start_slot: int
+    duration_slots: int
+    faculty_id: str | None = None
+    room_id: str | None = None
+
+
+class SolverSharedCourse(BaseModel):
+    id: str
+    course_name: str
+    course_code: str | None = None
+    year: int
+    divisions: list[str]
+    faculty_id: str
+    room_id: str | None = None
+    duration_slots: int
+    weekly_sessions: int
+    session_type: str
+
+
 class TimetableGenerationRequest(BaseModel):
     """Everything the solver needs, and nothing it doesn't."""
     divisions: list[SolverDivision]
@@ -222,6 +257,8 @@ class TimetableGenerationRequest(BaseModel):
     rooms: list[SolverRoom]
     assignments: list[SolverAssignment]
     unavailability: list[SolverUnavailability] = []
+    institutional_courses: list[SolverInstitutionalCourse] = []
+    shared_courses: list[SolverSharedCourse] = []
     working_days: int = 6          # Mon-Sat
     periods_per_day: int = 8
     break_slots: list[int] = []    # period indices with NO classes (breaks/lunch)
@@ -312,6 +349,62 @@ class TimetableEntryOut(BaseModel):
 
 class CollegeInfo(BaseModel):
     college_name: str
+
+
+# ---------------------------------------------------------------------------
+# Institutional and Shared Course schemas
+# ---------------------------------------------------------------------------
+
+class InstitutionalCourseCreate(BaseModel):
+    course_name: str
+    course_code: str | None = None
+    year: int = Field(ge=1, le=4, default=1)
+    divisions: list[str] = []
+    day: int = Field(ge=0, le=6)
+    start_slot: int = Field(ge=0)
+    duration_slots: int = Field(ge=1, default=1)
+    faculty_id: str | None = None
+    room_id: str | None = None
+
+
+class InstitutionalCourseOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    course_name: str
+    course_code: str | None
+    year: int
+    divisions: list[str]
+    day: int
+    start_slot: int
+    duration_slots: int
+    faculty_id: str | None
+    room_id: str | None
+
+
+class SharedCourseCreate(BaseModel):
+    course_name: str
+    course_code: str | None = None
+    year: int = Field(ge=1, le=4, default=1)
+    divisions: list[str] = []
+    faculty_id: str
+    room_id: str | None = None
+    duration_slots: int = Field(ge=1, default=1)
+    weekly_sessions: int = Field(ge=1, default=1)
+    session_type: str = "lecture"  # "lecture" or "lab"
+
+
+class SharedCourseOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    course_name: str
+    course_code: str | None
+    year: int
+    divisions: list[str]
+    faculty_id: str
+    room_id: str | None
+    duration_slots: int
+    weekly_sessions: int
+    session_type: str
 
 
 # ---------------------------------------------------------------------------

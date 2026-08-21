@@ -195,3 +195,91 @@ def test_voice_parse_constraint_endpoint(faculty_user):
     assert response.status_code == 200
     assert response.json()["parsed_successfully"] is True
     assert "unavailable" in response.json()["confirmation_message"]
+
+
+def test_institutional_course_crud_endpoints(admin_token):
+    headers = _auth_headers(admin_token)
+    
+    # 1. Create institutional course
+    payload = {
+        "course_name": "Professional Ethics",
+        "course_code": "PE101",
+        "year": 1,
+        "divisions": ["TE-A", "TE-B"],
+        "day": 1,
+        "start_slot": 2,
+        "duration_slots": 1
+    }
+    response = client.post("/timetable/institutional-courses", json=payload, headers=headers)
+    assert response.status_code == 201
+    course_id = response.json()["id"]
+    assert response.json()["course_name"] == "Professional Ethics"
+    assert response.json()["divisions"] == ["TE-A", "TE-B"]
+
+    # 2. List institutional courses
+    response = client.get("/timetable/institutional-courses", headers=headers)
+    assert response.status_code == 200
+    assert any(c["id"] == course_id for c in response.json())
+
+    # 3. Delete institutional course
+    response = client.delete(f"/timetable/institutional-courses/{course_id}", headers=headers)
+    assert response.status_code == 200
+    
+    # Verify deleted
+    response = client.get("/timetable/institutional-courses", headers=headers)
+    assert not any(c["id"] == course_id for c in response.json())
+
+
+def test_shared_course_crud_endpoints(admin_token):
+    headers = _auth_headers(admin_token)
+    
+    # First, let's get or create a mock faculty to associate with the shared course
+    # (Since shared course creation checks if faculty_id is valid in db)
+    # Using current admin user's ID
+    me_resp = client.get("/auth/me", headers=headers)
+    assert me_resp.status_code == 200
+    my_id = me_resp.json()["id"]
+
+    # 1. Create shared course
+    payload = {
+        "course_name": "Advanced AI",
+        "course_code": "CS401",
+        "year": 1,
+        "divisions": ["TE-A", "TE-B"],
+        "faculty_id": my_id,
+        "duration_slots": 1,
+        "weekly_sessions": 2,
+        "session_type": "lecture"
+    }
+    response = client.post("/timetable/shared-courses", json=payload, headers=headers)
+    assert response.status_code == 201
+    course_id = response.json()["id"]
+    assert response.json()["course_name"] == "Advanced AI"
+
+    # 2. List shared courses
+    response = client.get("/timetable/shared-courses", headers=headers)
+    assert response.status_code == 200
+    assert any(c["id"] == course_id for c in response.json())
+
+    # 3. Delete shared course
+    response = client.delete(f"/timetable/shared-courses/{course_id}", headers=headers)
+    assert response.status_code == 200
+    
+    # Verify deleted
+    response = client.get("/timetable/shared-courses", headers=headers)
+    assert not any(c["id"] == course_id for c in response.json())
+
+
+def test_excel_upload_validation_rejection(admin_token):
+    headers = _auth_headers(admin_token)
+    
+    # Try uploading a completely garbage file as excel, it should raise a 400 rejection
+    import io
+    fake_file = io.BytesIO(b"garbage content")
+    response = client.post(
+        "/timetable/upload-excel",
+        files={"file": ("test.xlsx", fake_file, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        headers=headers
+    )
+    assert response.status_code == 400
+    assert "Failed to parse" in response.json()["detail"]

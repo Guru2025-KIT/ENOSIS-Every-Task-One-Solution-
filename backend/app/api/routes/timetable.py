@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_timetable_manager
 from app.core.config import settings
 from app.db.base import get_db
-from app.models.academic import Division, Subject, Room, TeachingAssignment, FacultyUnavailability
+from app.models.academic import (
+    Division, Subject, Room, TeachingAssignment, FacultyUnavailability,
+    InstitutionalCourse, SharedCourse
+)
 from app.models.timetable import TimetableEntry
 from app.models.user import User
 from app.models.schedule_config import ScheduleConfig
@@ -25,7 +28,9 @@ from app.schemas.timetable import (
     TimetableGenerationRequest, SolverDivision, SolverSubject, SolverRoom,
     SolverAssignment, SolverUnavailability, SolverSoftConstraint,
     TimetableEntryOut, CollegeInfo, GenerationRunOut, ValidationResponse,
-    ConflictDetail
+    ConflictDetail,
+    InstitutionalCourseCreate, InstitutionalCourseOut,
+    SharedCourseCreate, SharedCourseOut
 )
 from app.services.timetable_solver import generate_timetable, validate_request
 from app.services.timetable_validator import validate_generated_timetable
@@ -72,11 +77,18 @@ def get_schedule_config(db: Session = Depends(get_db), _: User = Depends(get_cur
             day_names=["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
             periods_per_day=8,
             period_duration_minutes=60,
+            lecture_duration_minutes=60,
+            lab_duration_minutes=120,
+            tutorial_duration_minutes=60,
             start_time="09:00",
             break_slots=[],
             break_labels={},
             max_lectures_per_day_per_faculty=None,
             college_name=settings.COLLEGE_NAME,
+            department_name="Computer Science & Engineering",
+            academic_year="2026-2027",
+            semester="Odd",
+            hod_name="Dr. Uma Gurav",
             time_limit_seconds=30
         )
         db.add(config)
@@ -228,6 +240,88 @@ def create_unavailability(payload: FacultyUnavailabilityCreate, db: Session = De
 
 
 # ---------------------------------------------------------------------------
+# Institutional Course CRUD
+# ---------------------------------------------------------------------------
+
+@router.post("/institutional-courses", response_model=InstitutionalCourseOut, status_code=status.HTTP_201_CREATED)
+def create_institutional_course(
+    payload: InstitutionalCourseCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_timetable_manager)
+):
+    if payload.faculty_id and db.query(User).filter(User.id == payload.faculty_id).first() is None:
+        raise HTTPException(status_code=404, detail=f"No faculty found with id {payload.faculty_id}")
+    if payload.room_id and db.query(Room).filter(Room.id == payload.room_id).first() is None:
+        raise HTTPException(status_code=404, detail=f"No room found with id {payload.room_id}")
+
+    course = InstitutionalCourse(**payload.model_dump())
+    db.add(course)
+    db.commit()
+    db.refresh(course)
+    return course
+
+
+@router.get("/institutional-courses", response_model=list[InstitutionalCourseOut])
+def list_institutional_courses(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    return db.query(InstitutionalCourse).all()
+
+
+@router.delete("/institutional-courses/{course_id}")
+def delete_institutional_course(
+    course_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_timetable_manager)
+):
+    course = db.query(InstitutionalCourse).filter(InstitutionalCourse.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Institutional course not found")
+    db.delete(course)
+    db.commit()
+    return {"status": "deleted"}
+
+
+# ---------------------------------------------------------------------------
+# Shared Course CRUD
+# ---------------------------------------------------------------------------
+
+@router.post("/shared-courses", response_model=SharedCourseOut, status_code=status.HTTP_201_CREATED)
+def create_shared_course(
+    payload: SharedCourseCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_timetable_manager)
+):
+    if db.query(User).filter(User.id == payload.faculty_id).first() is None:
+        raise HTTPException(status_code=404, detail=f"No faculty found with id {payload.faculty_id}")
+    if payload.room_id and db.query(Room).filter(Room.id == payload.room_id).first() is None:
+        raise HTTPException(status_code=404, detail=f"No room found with id {payload.room_id}")
+
+    course = SharedCourse(**payload.model_dump())
+    db.add(course)
+    db.commit()
+    db.refresh(course)
+    return course
+
+
+@router.get("/shared-courses", response_model=list[SharedCourseOut])
+def list_shared_courses(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    return db.query(SharedCourse).all()
+
+
+@router.delete("/shared-courses/{course_id}")
+def delete_shared_course(
+    course_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_timetable_manager)
+):
+    course = db.query(SharedCourse).filter(SharedCourse.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Shared course not found")
+    db.delete(course)
+    db.commit()
+    return {"status": "deleted"}
+
+
+# ---------------------------------------------------------------------------
 # Pre-flight validation & Solve endpoint
 # ---------------------------------------------------------------------------
 
@@ -271,8 +365,41 @@ def _build_generation_request(db: Session) -> TimetableGenerationRequest:
                 payload=payload
             ))
 
+    # Gather institutional fixed courses and shared courses
+    institutional_db = db.query(InstitutionalCourse).all()
+    shared_db = db.query(SharedCourse).all()
+
+    solver_institutional = [
+        SolverInstitutionalCourse(
+            course_name=ic.course_name,
+            course_code=ic.course_code,
+            year=ic.year,
+            divisions=ic.divisions,
+            day=ic.day,
+            start_slot=ic.start_slot,
+            duration_slots=ic.duration_slots,
+            faculty_id=ic.faculty_id,
+            room_id=ic.room_id
+        ) for ic in institutional_db
+    ]
+
+    solver_shared = [
+        SolverSharedCourse(
+            id=sc.id,
+            course_name=sc.course_name,
+            course_code=sc.course_code,
+            year=sc.year,
+            divisions=sc.divisions,
+            faculty_id=sc.faculty_id,
+            room_id=sc.room_id,
+            duration_slots=sc.duration_slots,
+            weekly_sessions=sc.weekly_sessions,
+            session_type=sc.session_type
+        ) for sc in shared_db
+    ]
+
     return TimetableGenerationRequest(
-        divisions=[SolverDivision(id=d.id, name=d.name, strength=d.strength) for d in divisions],
+        divisions=[SolverDivision(id=d.id, name=d.name, division_code=d.division_code, year=d.year, strength=d.strength) for d in divisions],
         subjects=[
             SolverSubject(
                 id=s.id, name=s.name, weekly_lectures=s.weekly_lectures,
@@ -286,6 +413,8 @@ def _build_generation_request(db: Session) -> TimetableGenerationRequest:
             for a in assignments
         ],
         unavailability=unavail_list,
+        institutional_courses=solver_institutional,
+        shared_courses=solver_shared,
         working_days=config.working_days or 6,
         periods_per_day=config.periods_per_day or 8,
         break_slots=config.break_slots or [],
@@ -547,6 +676,42 @@ def clear_all(
     return {"message": "All setup data, constraints, and timetable entries cleared successfully."}
 
 
+def _ensure_placeholder_entities(db: Session, course_name: str, course_code: str | None, faculty_id: str | None, room_id: str | None):
+    # 1. Subject
+    subject = db.query(Subject).filter(Subject.name == course_name).first()
+    if not subject:
+        subject = Subject(id=str(uuid.uuid4()), name=course_name, code=course_code or "FIXED")
+        db.add(subject)
+        db.flush()
+    
+    # 2. Faculty
+    if not faculty_id:
+        faculty = db.query(User).first()
+        if not faculty:
+            # Create a default guest placeholder user
+            faculty = User(
+                id=str(uuid.uuid4()), 
+                email="placeholder@enosis.edu", 
+                full_name="Staff / Guest", 
+                hashed_password="",
+                role="faculty"
+            )
+            db.add(faculty)
+            db.flush()
+        faculty_id = faculty.id
+        
+    # 3. Room
+    if not room_id:
+        room = db.query(Room).filter(Room.name == "TBA Classroom").first()
+        if not room:
+            room = Room(id=str(uuid.uuid4()), name="TBA Classroom", type="lecture", capacity=100)
+            db.add(room)
+            db.flush()
+        room_id = room.id
+        
+    return subject.id, faculty_id, room_id
+
+
 @router.post("/upload-excel")
 async def upload_excel(
     file: UploadFile = File(...),
@@ -555,14 +720,18 @@ async def upload_excel(
 ):
     import io
     import csv
+    from collections import defaultdict
 
     filename = file.filename or ""
     content = await file.read()
 
+    # Clear previous database state
     db.query(TimetableEntry).delete()
     db.query(FacultyUnavailability).delete()
     db.query(TimetableConstraint).delete()
     db.query(TeachingAssignment).delete()
+    db.query(InstitutionalCourse).delete()
+    db.query(SharedCourse).delete()
     db.query(Division).delete()
     db.query(Subject).delete()
     db.query(Room).delete()
@@ -576,6 +745,9 @@ async def upload_excel(
         day_names=["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
         periods_per_day=8,
         period_duration_minutes=60,
+        lecture_duration_minutes=60,
+        lab_duration_minutes=120,
+        tutorial_duration_minutes=60,
         start_time="09:00"
     )
     db.add(config)
@@ -583,6 +755,11 @@ async def upload_excel(
     created_divisions = []
     created_subjects = []
     created_rooms = []
+    created_assignments = []
+    created_fixed = []
+    created_shared = []
+
+    errors = []
 
     if filename.lower().endswith(".xlsx"):
         try:
@@ -593,69 +770,234 @@ async def upload_excel(
                 detail="openpyxl is required for .xlsx parsing. Install it with: pip install openpyxl",
             )
 
-        wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to parse Excel file: {str(e)}")
 
+        # 1. Parse Divisions
         if "Divisions" in wb.sheetnames:
             ws = wb["Divisions"]
-            headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
-            for row in ws.iter_rows(min_row=2, values_only=True):
-                if not row or not row[0]:
+            headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1)) if cell.value]
+            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+                if not row or not any(row):
                     continue
                 row_dict = dict(zip(headers, row))
-                div = Division(
-                    id=str(uuid.uuid4()),
-                    name=str(row_dict.get("name", "")),
-                    year=int(row_dict.get("year", 2)),
-                    division_code=str(row_dict.get("division_code", "A")),
-                    strength=int(row_dict.get("strength", 60)),
-                )
-                db.add(div)
-                created_divisions.append(div)
+                try:
+                    div = Division(
+                        id=str(uuid.uuid4()),
+                        name=str(row_dict.get("name", "")).strip(),
+                        year=int(row_dict.get("year", 1)),
+                        division_code=str(row_dict.get("division_code", "A")).strip(),
+                        strength=int(row_dict.get("strength", 60)),
+                    )
+                    db.add(div)
+                    created_divisions.append(div)
+                except Exception as e:
+                    errors.append(f"Divisions Sheet Row {row_idx}: {str(e)}")
 
+        # 2. Parse Subjects
         if "Subjects" in wb.sheetnames:
             ws = wb["Subjects"]
-            headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
-            for row in ws.iter_rows(min_row=2, values_only=True):
-                if not row or not row[0]:
+            headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1)) if cell.value]
+            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+                if not row or not any(row):
                     continue
                 row_dict = dict(zip(headers, row))
-                sub = Subject(
-                    id=str(uuid.uuid4()),
-                    name=str(row_dict.get("name", "")),
-                    code=str(row_dict.get("code", "")),
-                    weekly_lectures=int(row_dict.get("weekly_lectures", 3)),
-                    is_lab=bool(row_dict.get("is_lab", False)),
-                    lab_sessions_per_week=int(row_dict.get("lab_sessions_per_week", 0)),
-                    lab_block_size=int(row_dict.get("lab_block_size", 1)),
-                )
-                db.add(sub)
-                created_subjects.append(sub)
+                try:
+                    sub = Subject(
+                        id=str(uuid.uuid4()),
+                        name=str(row_dict.get("name", "")).strip(),
+                        code=str(row_dict.get("code", "")).strip(),
+                        weekly_lectures=int(row_dict.get("weekly_lectures", 3)),
+                        is_lab=bool(row_dict.get("is_lab", False)),
+                        lab_sessions_per_week=int(row_dict.get("lab_sessions_per_week", 0)),
+                        lab_block_size=int(row_dict.get("lab_block_size", 2)),
+                    )
+                    db.add(sub)
+                    created_subjects.append(sub)
+                except Exception as e:
+                    errors.append(f"Subjects Sheet Row {row_idx}: {str(e)}")
 
+        # 3. Parse Rooms
         if "Rooms" in wb.sheetnames:
             ws = wb["Rooms"]
-            headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
-            for row in ws.iter_rows(min_row=2, values_only=True):
-                if not row or not row[0]:
+            headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1)) if cell.value]
+            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+                if not row or not any(row):
                     continue
                 row_dict = dict(zip(headers, row))
-                room = Room(
-                    id=str(uuid.uuid4()),
-                    name=str(row_dict.get("name", "")),
-                    type=str(row_dict.get("type", "lecture")),
-                    capacity=int(row_dict.get("capacity", 60)),
-                )
-                db.add(room)
-                created_rooms.append(room)
+                try:
+                    room = Room(
+                        id=str(uuid.uuid4()),
+                        name=str(row_dict.get("name", "")).strip(),
+                        type=str(row_dict.get("type", "lecture")).strip().lower(),
+                        capacity=int(row_dict.get("capacity", 60)),
+                    )
+                    db.add(room)
+                    created_rooms.append(room)
+                except Exception as e:
+                    errors.append(f"Rooms Sheet Row {row_idx}: {str(e)}")
+
+        # Flush to generate IDs
+        db.flush()
+
+        # Maps for quick lookups
+        div_by_name = {d.name.upper(): d.id for d in created_divisions}
+        sub_by_code = {s.code.upper(): s.id for s in created_subjects}
+        room_by_name = {r.name.upper(): r.id for r in created_rooms}
+        faculty_by_email = {u.email.lower(): u.id for u in db.query(User).all()}
+
+        # 4. Parse Assignments
+        if "Assignments" in wb.sheetnames:
+            ws = wb["Assignments"]
+            headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1)) if cell.value]
+            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+                if not row or not any(row):
+                    continue
+                row_dict = dict(zip(headers, row))
+                try:
+                    fac_email = str(row_dict.get("faculty_email", "")).strip().lower()
+                    sub_code = str(row_dict.get("subject_code", "")).strip().upper()
+                    div_name = str(row_dict.get("division_name", "")).strip().upper()
+
+                    fac_id = faculty_by_email.get(fac_email)
+                    sub_id = sub_by_code.get(sub_code)
+                    div_id = div_by_name.get(div_name)
+
+                    if not fac_id:
+                        errors.append(f"Assignments Row {row_idx}: Faculty email '{fac_email}' not found.")
+                        continue
+                    if not sub_id:
+                        errors.append(f"Assignments Row {row_idx}: Subject code '{sub_code}' not found.")
+                        continue
+                    if not div_id:
+                        errors.append(f"Assignments Row {row_idx}: Division name '{div_name}' not found.")
+                        continue
+
+                    assignment = TeachingAssignment(
+                        id=str(uuid.uuid4()),
+                        faculty_id=fac_id,
+                        subject_id=sub_id,
+                        division_id=div_id,
+                    )
+                    db.add(assignment)
+                    created_assignments.append(assignment)
+                except Exception as e:
+                    errors.append(f"Assignments Row {row_idx}: {str(e)}")
+
+        # 5. Parse Fixed Courses
+        if "FixedCourses" in wb.sheetnames:
+            ws = wb["FixedCourses"]
+            headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1)) if cell.value]
+            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+                if not row or not any(row):
+                    continue
+                row_dict = dict(zip(headers, row))
+                try:
+                    divisions_str = str(row_dict.get("divisions", ""))
+                    div_list = [d.strip() for d in divisions_str.split(",") if d.strip()]
+
+                    fac_email = str(row_dict.get("faculty_email", "")).strip().lower() if row_dict.get("faculty_email") else None
+                    rm_name = str(row_dict.get("room_name", "")).strip().upper() if row_dict.get("room_name") else None
+
+                    fac_id = faculty_by_email.get(fac_email) if fac_email else None
+                    rm_id = room_by_name.get(rm_name) if rm_name else None
+
+                    if fac_email and not fac_id:
+                        errors.append(f"FixedCourses Row {row_idx}: Faculty email '{fac_email}' not found.")
+                        continue
+                    if rm_name and not rm_id:
+                        errors.append(f"FixedCourses Row {row_idx}: Room '{rm_name}' not found.")
+                        continue
+
+                    course = InstitutionalCourse(
+                        id=str(uuid.uuid4()),
+                        course_name=str(row_dict.get("course_name", "")).strip(),
+                        course_code=str(row_dict.get("course_code", "")) or None,
+                        year=int(row_dict.get("year", 1)),
+                        divisions=div_list,
+                        day=int(row_dict.get("day", 0)),
+                        start_slot=int(row_dict.get("start_slot", 0)),
+                        duration_slots=int(row_dict.get("duration_slots", 1)),
+                        faculty_id=fac_id,
+                        room_id=rm_id
+                    )
+                    
+                    # Ensure placeholder entities if they are Null so timetable foreign keys pass
+                    resolved_sub, resolved_fac, resolved_room = _ensure_placeholder_entities(
+                        db, course.course_name, course.course_code, course.faculty_id, course.room_id
+                    )
+                    course.faculty_id = resolved_fac
+                    course.room_id = resolved_room
+
+                    db.add(course)
+                    created_fixed.append(course)
+                except Exception as e:
+                    errors.append(f"FixedCourses Row {row_idx}: {str(e)}")
+
+        # 6. Parse Shared Courses
+        if "SharedCourses" in wb.sheetnames:
+            ws = wb["SharedCourses"]
+            headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1)) if cell.value]
+            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+                if not row or not any(row):
+                    continue
+                row_dict = dict(zip(headers, row))
+                try:
+                    divisions_str = str(row_dict.get("divisions", ""))
+                    div_list = [d.strip() for d in divisions_str.split(",") if d.strip()]
+
+                    fac_email = str(row_dict.get("faculty_email", "")).strip().lower()
+                    rm_name = str(row_dict.get("room_name", "")).strip().upper() if row_dict.get("room_name") else None
+
+                    fac_id = faculty_by_email.get(fac_email)
+                    rm_id = room_by_name.get(rm_name) if rm_name else None
+
+                    if not fac_id:
+                        errors.append(f"SharedCourses Row {row_idx}: Faculty email '{fac_email}' not found.")
+                        continue
+                    if rm_name and not rm_id:
+                        errors.append(f"SharedCourses Row {row_idx}: Room '{rm_name}' not found.")
+                        continue
+
+                    course = SharedCourse(
+                        id=str(uuid.uuid4()),
+                        course_name=str(row_dict.get("course_name", "")).strip(),
+                        course_code=str(row_dict.get("course_code", "")) or None,
+                        year=int(row_dict.get("year", 1)),
+                        divisions=div_list,
+                        faculty_id=fac_id,
+                        room_id=rm_id,
+                        duration_slots=int(row_dict.get("duration_slots", 1)),
+                        weekly_sessions=int(row_dict.get("weekly_sessions", 1)),
+                        session_type=str(row_dict.get("session_type", "lecture")).strip().lower()
+                    )
+                    
+                    # Ensure placeholder subject exists so we can map it
+                    resolved_sub, _, _ = _ensure_placeholder_entities(
+                        db, course.course_name, course.course_code, course.faculty_id, course.room_id
+                    )
+
+                    db.add(course)
+                    created_shared.append(course)
+                except Exception as e:
+                    errors.append(f"SharedCourses Row {row_idx}: {str(e)}")
+
+        if errors:
+            db.rollback()
+            raise HTTPException(status_code=400, detail={"message": "Validation errors found in Excel sheets.", "errors": errors})
 
     elif filename.lower().endswith(".csv"):
+        # Legacy CSV parser for backwards compatibility
         text = content.decode("utf-8")
         reader = csv.DictReader(io.StringIO(text))
         for row_dict in reader:
             if "name" in row_dict:
                 sub = Subject(
                     id=str(uuid.uuid4()),
-                    name=row_dict["name"],
-                    code=row_dict.get("code", ""),
+                    name=row_dict["name"].strip(),
+                    code=row_dict.get("code", "").strip(),
                     weekly_lectures=int(row_dict.get("weekly_lectures", 3)),
                     is_lab=row_dict.get("is_lab", "").lower() in ("true", "1", "yes"),
                     lab_sessions_per_week=int(row_dict.get("lab_sessions_per_week", 0)),
@@ -666,17 +1008,6 @@ async def upload_excel(
     else:
         raise HTTPException(status_code=400, detail="Only .xlsx and .csv files are supported.")
 
-    db.flush()
-    for div in created_divisions:
-        for sub in created_subjects:
-            assignment = TeachingAssignment(
-                id=str(uuid.uuid4()),
-                faculty_id=current_user.id,
-                subject_id=sub.id,
-                division_id=div.id,
-            )
-            db.add(assignment)
-
     db.commit()
 
     return {
@@ -684,6 +1015,9 @@ async def upload_excel(
         "divisions_created": len(created_divisions),
         "subjects_created": len(created_subjects),
         "rooms_created": len(created_rooms),
+        "assignments_created": len(created_assignments),
+        "fixed_courses_created": len(created_fixed),
+        "shared_courses_created": len(created_shared)
     }
 
 
@@ -716,6 +1050,10 @@ def my_timetable(db: Session = Depends(get_db), current_user: User = Depends(get
 
 @router.get("/division/{division_id}", response_model=list[TimetableEntryOut])
 def division_timetable(division_id: str, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    if division_id == "all":
+        entries = db.query(TimetableEntry).all()
+        return [_to_entry_out(e) for e in entries]
+
     division = db.query(Division).filter(Division.id == division_id).first()
     if division is None:
         raise HTTPException(status_code=404, detail="Division not found")

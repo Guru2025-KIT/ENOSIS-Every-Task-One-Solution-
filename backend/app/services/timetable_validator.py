@@ -28,10 +28,14 @@ def validate_generated_timetable(
     break_slots_set = set(request.break_slots)
 
     # 1. Resource double-booking tracking
-    # Key: (resource_id, day, slot) -> Entry
+    # Key: (resource_id, day, slot) -> Entry info dict
     faculty_slots = {}
     division_slots = {}
     room_slots = {}
+
+    # Accumulate division strengths per room-slot to check combined capacity
+    room_strengths = {}  # Key: (room_id, day, slot) -> total_strength
+    room_divs = {}       # Key: (room_id, day, slot) -> list of division names
 
     # Subject session counters: (division_id, subject_id) -> count of slots
     subject_counts = {}
@@ -49,11 +53,21 @@ def validate_generated_timetable(
             ))
             continue
         if not subject:
-            conflicts.append(ConflictDetail(
-                type="validation_missing_subject",
-                details=f"Entry {index} references non-existent subject {entry.subject_id}"
-            ))
-            continue
+            # Check if this subject is a shared/fixed course code that isn't a primary subject ID
+            # If so, mock a temporary subject metadata structure so we don't crash
+            mock_sub = None
+            for s in request.subjects:
+                if s.name.lower() == entry.subject_id.lower() or s.id == entry.subject_id:
+                    mock_sub = s
+                    break
+            if mock_sub:
+                subject = mock_sub
+            else:
+                conflicts.append(ConflictDetail(
+                    type="validation_missing_subject",
+                    details=f"Entry {index} references non-existent subject {entry.subject_id}"
+                ))
+                continue
         if not room:
             conflicts.append(ConflictDetail(
                 type="validation_missing_room",
@@ -86,17 +100,26 @@ def validate_generated_timetable(
             ))
 
         # 4. Double booking checks
+        is_shared_course = any(
+            sc.course_name.lower() == sub_name.lower() or sc.course_code == entry.subject_id
+            for sc in getattr(request, "shared_courses", [])
+        )
+
         fac_key = (entry.faculty_id, entry.day, entry.slot)
         if fac_key in faculty_slots:
             prev = faculty_slots[fac_key]
-            conflicts.append(ConflictDetail(
-                type="validation_faculty_double_booked",
-                subject=sub_name,
-                division=div_name,
-                faculty=entry.faculty_id,
-                details=f"Faculty is scheduled for both '{sub_name}' (Div: {div_name}) and '{prev.get('subject')}' (Div: {prev.get('division')}) at Day {entry.day}, Slot {entry.slot}"
-            ))
-        faculty_slots[fac_key] = {"subject": sub_name, "division": div_name}
+            # Allowed if teaching the exact same shared course in the same room
+            if is_shared_course and prev["subject_id"] == entry.subject_id and prev["room_id"] == entry.room_id:
+                pass
+            else:
+                conflicts.append(ConflictDetail(
+                    type="validation_faculty_double_booked",
+                    subject=sub_name,
+                    division=div_name,
+                    faculty=entry.faculty_id,
+                    details=f"Faculty is scheduled for both '{sub_name}' (Div: {div_name}) and '{prev.get('subject')}' (Div: {prev.get('division')}) at Day {entry.day}, Slot {entry.slot}"
+                ))
+        faculty_slots[fac_key] = {"subject": sub_name, "division": div_name, "subject_id": entry.subject_id, "room_id": entry.room_id}
 
         div_key = (entry.division_id, entry.day, entry.slot)
         if div_key in division_slots:
@@ -112,24 +135,22 @@ def validate_generated_timetable(
         room_key = (entry.room_id, entry.day, entry.slot)
         if room_key in room_slots:
             prev = room_slots[room_key]
-            conflicts.append(ConflictDetail(
-                type="validation_room_double_booked",
-                subject=sub_name,
-                division=div_name,
-                room=room_name,
-                details=f"Room {room_name} is occupied by both '{sub_name}' (Div: {div_name}) and '{prev.get('subject')}' (Div: {prev.get('division')}) at Day {entry.day}, Slot {entry.slot}"
-            ))
-        room_slots[room_key] = {"subject": sub_name, "division": div_name}
+            # Allowed if it's the exact same shared course and faculty
+            if is_shared_course and prev["subject_id"] == entry.subject_id and prev["faculty_id"] == entry.faculty_id:
+                pass
+            else:
+                conflicts.append(ConflictDetail(
+                    type="validation_room_double_booked",
+                    subject=sub_name,
+                    division=div_name,
+                    room=room_name,
+                    details=f"Room {room_name} is occupied by both '{sub_name}' (Div: {div_name}) and '{prev.get('subject')}' (Div: {prev.get('division')}) at Day {entry.day}, Slot {entry.slot}"
+                ))
+        room_slots[room_key] = {"subject": sub_name, "division": div_name, "subject_id": entry.subject_id, "faculty_id": entry.faculty_id}
 
-        # 5. Room capacity check
-        if room.capacity < division.strength:
-            conflicts.append(ConflictDetail(
-                type="validation_capacity_mismatch",
-                subject=sub_name,
-                division=div_name,
-                room=room_name,
-                details=f"Room {room_name} capacity ({room.capacity}) is smaller than division strength ({division.strength})"
-            ))
+        # Accumulate strengths for combined capacity check
+        room_strengths[room_key] = room_strengths.get(room_key, 0) + division.strength
+        room_divs.setdefault(room_key, []).append(div_name)
 
         # 6. Room type check
         required_type = RoomType.LAB if entry.is_lab_block else RoomType.LECTURE
@@ -142,10 +163,21 @@ def validate_generated_timetable(
                 details=f"Subject '{sub_name}' requires room type {required_type.value} but was placed in {room.type.value}"
             ))
 
-
         # Count session slots
         count_key = (entry.division_id, entry.subject_id)
         subject_counts[count_key] = subject_counts.get(count_key, 0) + 1
+
+    # 5. Combined Room Capacity Check
+    for room_key, total_strength in room_strengths.items():
+        room_id, day, slot = room_key
+        room = rooms_by_id.get(room_id)
+        if room and room.capacity < total_strength:
+            div_list = ", ".join(room_divs[room_key])
+            conflicts.append(ConflictDetail(
+                type="validation_capacity_mismatch",
+                room=room.name,
+                details=f"Room {room.name} capacity ({room.capacity}) is smaller than combined division strengths ({total_strength}) for divisions: {div_list} at Day {day}, Slot {slot}"
+            ))
 
     # 7. Total weekly lectures check
     for assignment in request.assignments:
@@ -166,6 +198,70 @@ def validate_generated_timetable(
                 division=division.name,
                 details=f"Expected {expected} slots for subject '{subject.name}' (Div: {division.name}) but actually scheduled {actual} slots"
             ))
+
+    # 8. Institutional fixed course presence audit
+    for ic in request.institutional_courses:
+        ic_divisions = [
+            d.id for d in request.divisions 
+            if d.year == ic.year and (
+                d.division_code.upper() in [div.upper() for div in ic.divisions] or 
+                d.name.upper() in [div.upper() for div in ic.divisions]
+            )
+        ]
+        for div_id in ic_divisions:
+            for i in range(ic.duration_slots):
+                slot = ic.start_slot + i
+                entry = next((e for e in entries if e.division_id == div_id and e.day == ic.day and e.slot == slot), None)
+                if not entry:
+                    div_name = divisions_by_id[div_id].name
+                    conflicts.append(ConflictDetail(
+                        type="validation_institutional_course_missing",
+                        details=f"Institutional fixed course '{ic.course_name}' is missing for Division {div_name} at Day {ic.day}, Slot {slot}"
+                    ))
+
+    # 9. Shared course synchronization audit
+    for sc in request.shared_courses:
+        sc_divisions = [
+            d.id for d in request.divisions 
+            if d.year == sc.year and (
+                d.division_code.upper() in [div.upper() for div in sc.divisions] or 
+                d.name.upper() in [div.upper() for div in sc.divisions]
+            )
+        ]
+        if len(sc_divisions) <= 1:
+            continue
+
+        # Find all entries matching this shared course
+        sc_entries = [
+            e for e in entries 
+            if e.subject_id == (sc.course_code or sc.course_name) or e.subject_id in [s.id for s in request.subjects if s.name.lower() == sc.course_name.lower()]
+        ]
+        unique_slots = {(e.day, e.slot) for e in sc_entries}
+
+        for d, s in unique_slots:
+            slot_entries = [e for e in sc_entries if e.day == d and e.slot == s]
+            present_divs = {e.division_id for e in slot_entries}
+            missing_divs = set(sc_divisions) - present_divs
+            if missing_divs:
+                missing_names = [divisions_by_id[did].name for did in missing_divs]
+                conflicts.append(ConflictDetail(
+                    type="validation_shared_course_unsynced",
+                    details=f"Shared course '{sc.course_name}' at Day {d}, Slot {s} is missing divisions: {', '.join(missing_names)}"
+                ))
+            
+            rooms_used = {e.room_id for e in slot_entries}
+            facs_used = {e.faculty_id for e in slot_entries}
+            if len(rooms_used) > 1:
+                room_names = [rooms_by_id[rid].name for rid in rooms_used]
+                conflicts.append(ConflictDetail(
+                    type="validation_shared_course_different_rooms",
+                    details=f"Shared course '{sc.course_name}' at Day {d}, Slot {s} is scheduled in different rooms: {', '.join(room_names)}"
+                ))
+            if len(facs_used) > 1:
+                conflicts.append(ConflictDetail(
+                    type="validation_shared_course_different_faculties",
+                    details=f"Shared course '{sc.course_name}' at Day {d}, Slot {s} is scheduled with different faculties"
+                ))
 
     passed = len(conflicts) == 0
     return passed, conflicts

@@ -13,6 +13,8 @@ from app.schemas.timetable import (
     SolverRoom,
     SolverAssignment,
     SolverUnavailability,
+    SolverInstitutionalCourse,
+    SolverSharedCourse,
 )
 from app.services.timetable_solver import generate_timetable
 
@@ -220,3 +222,147 @@ def test_spread_constraint_applies_per_division_independently():
     for division_id in ("div-A", "div-B"):
         days_used = [e.day for e in result.entries if e.division_id == division_id]
         assert len(set(days_used)) == 3, f"{division_id}: expected 3 distinct days, got {days_used}"
+
+
+def test_institutional_fixed_course_constraint():
+    request = TimetableGenerationRequest(
+        divisions=[SolverDivision(id="div-A", name="TE-A", strength=60)],
+        subjects=[SolverSubject(id="sub-daa", name="DAA", weekly_lectures=1, is_lab=False, lab_sessions_per_week=0, lab_block_size=1)],
+        rooms=[SolverRoom(id="room-301", name="Room 301", type=RoomType.LECTURE, capacity=70)],
+        assignments=[SolverAssignment(faculty_id="fac-sharma", subject_id="sub-daa", division_id="div-A")],
+        institutional_courses=[
+            SolverInstitutionalCourse(
+                course_name="Professional Ethics",
+                course_code="PE101",
+                year=1,
+                divisions=["TE-A"],
+                day=1,          # Tuesday
+                start_slot=2,   # Period 2
+                duration_slots=1,
+                faculty_id="fac-guest",
+                room_id="room-301"
+            )
+        ],
+        working_days=5,
+        periods_per_day=4,
+    )
+    result = generate_timetable(request)
+    assert result.status in ("OPTIMAL", "FEASIBLE")
+    
+    # Verify professional ethics is in the output entries
+    ethics_entries = [e for e in result.entries if e.day == 1 and e.slot == 2]
+    assert len(ethics_entries) == 1
+    # Verify no other course is scheduled in Division A at Day 1, Slot 2
+    div_a_ethics = [e for e in result.entries if e.division_id == "div-a" and e.day == 1 and e.slot == 2]
+    # (Pydantic models lower-case the ID or keep div-A, let's check case-insensitive)
+    div_a_ethics = [e for e in result.entries if e.division_id.lower() == "div-a" and e.day == 1 and e.slot == 2]
+    assert len(div_a_ethics) == 1
+
+
+def test_shared_course_constraint():
+    # Two divisions attend same lecture together (same day, same slot, same room)
+    request = TimetableGenerationRequest(
+        divisions=[
+            SolverDivision(id="div-A", name="TE-A", strength=30),
+            SolverDivision(id="div-B", name="TE-B", strength=30),
+        ],
+        subjects=[],
+        rooms=[SolverRoom(id="room-large", name="Large Room", type=RoomType.LECTURE, capacity=70)],
+        assignments=[],
+        shared_courses=[
+            SolverSharedCourse(
+                id="sc-ai",
+                course_name="Advanced AI",
+                course_code="CS401",
+                year=1,
+                divisions=["TE-A", "TE-B"],
+                faculty_id="fac-kumar",
+                room_id="room-large",
+                duration_slots=1,
+                weekly_sessions=2,
+                session_type="lecture"
+            )
+        ],
+        working_days=5,
+        periods_per_day=4,
+    )
+    result = generate_timetable(request)
+    assert result.status in ("OPTIMAL", "FEASIBLE")
+    
+    # We expect 4 entries total (2 sessions * 2 divisions)
+    assert len(result.entries) == 4
+    
+    # Verify they run simultaneously in the same room
+    slots = {}
+    for entry in result.entries:
+        # Group by division or day-slot
+        slots.setdefault((entry.day, entry.slot), []).append(entry)
+        
+    # There should be exactly 2 occupied time slots
+    assert len(slots) == 2
+    for slot_entries in slots.values():
+        assert len(slot_entries) == 2
+        # Both must use large room
+        assert slot_entries[0].room_id == "room-large"
+        assert slot_entries[1].room_id == "room-large"
+        # They must belong to TE-A and TE-B respectively
+        div_ids = {e.division_id.lower() for e in slot_entries}
+        assert "div-a" in div_ids
+        assert "div-b" in div_ids
+
+
+def test_simultaneous_course_group_constraint():
+    # Two electives under same main name "MDM" run at the same time but in different rooms
+    request = TimetableGenerationRequest(
+        divisions=[
+            SolverDivision(id="div-A", name="TE-A", strength=30),
+            SolverDivision(id="div-B", name="TE-B", strength=30),
+        ],
+        subjects=[],
+        rooms=[
+            SolverRoom(id="room-1", name="R101", type=RoomType.LECTURE, capacity=40),
+            SolverRoom(id="room-2", name="R102", type=RoomType.LECTURE, capacity=40),
+        ],
+        assignments=[],
+        shared_courses=[
+            # MDM elective 1 for division A
+            SolverSharedCourse(
+                id="sc-mdm1",
+                course_name="MDM",
+                course_code="MDM-1",
+                year=1,
+                divisions=["TE-A"],
+                faculty_id="fac-x",
+                room_id="room-1",
+                duration_slots=1,
+                weekly_sessions=1,
+                session_type="lecture"
+            ),
+            # MDM elective 2 for division B
+            SolverSharedCourse(
+                id="sc-mdm2",
+                course_name="MDM",
+                course_code="MDM-2",
+                year=1,
+                divisions=["TE-B"],
+                faculty_id="fac-y",
+                room_id="room-2",
+                duration_slots=1,
+                weekly_sessions=1,
+                session_type="lecture"
+            ),
+        ],
+        working_days=5,
+        periods_per_day=4,
+    )
+    result = generate_timetable(request)
+    assert result.status in ("OPTIMAL", "FEASIBLE")
+    
+    # We expect 2 entries total
+    assert len(result.entries) == 2
+    # Verify they run at the exact same day and slot
+    assert result.entries[0].day == result.entries[1].day
+    assert result.entries[0].slot == result.entries[1].slot
+    # They should use different rooms and divisions
+    assert result.entries[0].room_id != result.entries[1].room_id
+    assert result.entries[0].division_id != result.entries[1].division_id
