@@ -197,7 +197,7 @@ class _AddRoomSheetState extends State<_AddRoomSheet> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _type,
+                    initialValue: _type,
                     decoration: const InputDecoration(labelText: 'Type'),
                     items: const [
                       DropdownMenuItem(value: 'lecture', child: Text('Lecture Room')),
@@ -521,21 +521,21 @@ class _AssignmentsTabState extends State<_AssignmentsTab> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<FacultyOption>(
-                value: _selectedFaculty,
+                initialValue: _selectedFaculty,
                 decoration: const InputDecoration(labelText: 'Faculty'),
                 items: faculty.map((f) => DropdownMenuItem(value: f, child: Text(f.fullName))).toList(),
                 onChanged: (v) => setState(() => _selectedFaculty = v),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<SubjectModel>(
-                value: _selectedSubject,
+                initialValue: _selectedSubject,
                 decoration: const InputDecoration(labelText: 'Subject'),
                 items: subjects.map((s) => DropdownMenuItem(value: s, child: Text(s.name))).toList(),
                 onChanged: (v) => setState(() => _selectedSubject = v),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<DivisionModel>(
-                value: _selectedDivision,
+                initialValue: _selectedDivision,
                 decoration: const InputDecoration(labelText: 'Division'),
                 items: divisions.map((d) => DropdownMenuItem(value: d, child: Text(d.displayLabel))).toList(),
                 onChanged: (v) => setState(() => _selectedDivision = v),
@@ -547,9 +547,9 @@ class _AssignmentsTabState extends State<_AssignmentsTab> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.success.withOpacity(0.08),
+                    color: AppColors.success.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.success.withOpacity(0.3)),
+                    border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [

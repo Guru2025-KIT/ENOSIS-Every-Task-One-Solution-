@@ -1,6 +1,4 @@
-import 'dart:convert';
 import '../../../core/auth/auth_session.dart';
-import '../../../core/network/api_client.dart';
 
 class AttendanceRecordModel {
   final String id;

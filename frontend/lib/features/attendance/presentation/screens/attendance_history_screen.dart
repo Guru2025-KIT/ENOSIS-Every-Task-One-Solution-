@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/app_chip.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../data/attendance_repository.dart';

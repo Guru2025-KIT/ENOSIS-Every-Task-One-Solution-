@@ -233,7 +233,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextSpan(
                             text: "Don't have an account? ",
                             style: AppTypography.bodySecondary,
-                            children: [
+                            children: const [
                               TextSpan(
                                 text: 'Sign Up',
                                 style: TextStyle(

@@ -210,9 +210,9 @@ class _CopoAttainmentScreenState extends State<CopoAttainmentScreen>
                           Container(
                             width: 24,
                             height: max(height, 2.0),
-                            decoration: BoxDecoration(
+                            decoration: const BoxDecoration(
                               color: AppColors.primary,
-                              borderRadius: const BorderRadius.vertical(
+                              borderRadius: BorderRadius.vertical(
                                 top: Radius.circular(6),
                               ),
                             ),

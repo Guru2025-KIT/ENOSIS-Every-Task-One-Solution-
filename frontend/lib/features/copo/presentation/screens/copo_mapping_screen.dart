@@ -132,7 +132,7 @@ class _CopoMappingScreenState extends State<CopoMappingScreen> {
                         children: [
                           Expanded(
                             child: DropdownButtonFormField<String>(
-                              value: _selectedCourse,
+                              initialValue: _selectedCourse,
                               decoration: const InputDecoration(labelText: 'Select Course'),
                               items: const [
                                 DropdownMenuItem(value: 'CS201', child: Text('CS201 - Data Structures')),
@@ -149,7 +149,7 @@ class _CopoMappingScreenState extends State<CopoMappingScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: DropdownButtonFormField<String>(
-                              value: _selectedSemester,
+                              initialValue: _selectedSemester,
                               decoration: const InputDecoration(labelText: 'Semester'),
                               items: const [
                                 DropdownMenuItem(value: 'Semester V', child: Text('Semester V')),
@@ -233,7 +233,7 @@ class _CopoMappingScreenState extends State<CopoMappingScreen> {
                                               height: 52,
                                               alignment: Alignment.center,
                                               color: val > 0
-                                                  ? AppColors.primary.withOpacity(val * 0.08)
+                                                  ? AppColors.primary.withValues(alpha: val * 0.08)
                                                   : Colors.transparent,
                                               child: Text(
                                                 '$val',

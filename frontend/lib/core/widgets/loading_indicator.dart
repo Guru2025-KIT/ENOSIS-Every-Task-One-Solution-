@@ -111,7 +111,7 @@ class _DottedCirclePainter extends CustomPainter {
       final opacity = (i / dotCount).clamp(0.15, 1.0);
 
       final paint = Paint()
-        ..color = color.withOpacity(opacity)
+        ..color = color.withValues(alpha: opacity)
         ..style = PaintingStyle.fill;
 
       final dotCenter = Offset(

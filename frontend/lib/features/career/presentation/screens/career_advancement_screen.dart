@@ -116,7 +116,7 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                     alignment: Alignment.centerRight,
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     decoration: BoxDecoration(
-                      color: AppColors.error.withOpacity(0.1),
+                      color: AppColors.error.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.delete_outline, color: AppColors.error),
@@ -165,7 +165,7 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                                   Container(
                                     padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
-                                      color: AppColors.primary.withOpacity(0.08),
+                                      color: AppColors.primary.withValues(alpha: 0.08),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: const Icon(Icons.workspace_premium_outlined, color: AppColors.primary),
@@ -293,7 +293,7 @@ class _AddAchievementSheetState extends State<_AddAchievementSheet> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _category,
+              initialValue: _category,
               decoration: const InputDecoration(labelText: 'Category'),
               items: achievementCategories
                   .map((c) => DropdownMenuItem(value: c.$1, child: Text(c.$2)))

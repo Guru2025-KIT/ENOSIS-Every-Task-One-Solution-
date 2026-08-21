@@ -200,7 +200,7 @@ class _TaskList extends StatelessWidget {
                 alignment: Alignment.centerRight,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 decoration: BoxDecoration(
-                  color: AppColors.error.withOpacity(0.1),
+                  color: AppColors.error.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.delete_outline, color: AppColors.error),
@@ -391,7 +391,7 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _priority,
+                    initialValue: _priority,
                     decoration: const InputDecoration(labelText: 'Priority'),
                     items: const [
                       DropdownMenuItem(value: 'low', child: Text('Low')),

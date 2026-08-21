@@ -67,8 +67,8 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final greetingName = AuthSession.fullName ?? 'Faculty Member';
-    final schedule = MockDashboardData.todaysSchedule;
-    final overview = MockDashboardData.overviewStats;
+    const schedule = MockDashboardData.todaysSchedule;
+    const overview = MockDashboardData.overviewStats;
 
     // Faculty Constraint Submission Rights: Give all faculty the "My Constraints" tile
     final quickAccessItems = [
@@ -111,7 +111,7 @@ class DashboardScreen extends StatelessWidget {
                   Text(
                     'Good Morning!',
                     style: AppTypography.bodySecondary.copyWith(
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withValues(alpha: 0.9),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -176,7 +176,7 @@ class DashboardScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.08),
+                            color: AppColors.primary.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(Icons.schedule, color: AppColors.primary, size: 24),
@@ -282,7 +282,7 @@ class DashboardScreen extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.08),
+                          color: AppColors.primary.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Text(
@@ -382,7 +382,7 @@ class _QuickAccessTile extends StatelessWidget {
           border: Border.all(color: AppColors.border, width: 1.2),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),

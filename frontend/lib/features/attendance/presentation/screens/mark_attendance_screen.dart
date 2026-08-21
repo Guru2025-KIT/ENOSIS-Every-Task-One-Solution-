@@ -184,7 +184,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
                           color: Colors.white,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.04),
+                              color: Colors.black.withValues(alpha: 0.04),
                               blurRadius: 10,
                               spreadRadius: 2,
                             )
@@ -215,7 +215,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
                                         color: AppColors.secondary,
                                         boxShadow: [
                                           BoxShadow(
-                                            color: AppColors.secondary.withOpacity(0.5),
+                                            color: AppColors.secondary.withValues(alpha: 0.5),
                                             blurRadius: 6,
                                             spreadRadius: 2,
                                           )
@@ -257,9 +257,9 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
                   Container(
                     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
                     decoration: BoxDecoration(
-                      color: AppColors.success.withOpacity(0.1),
+                      color: AppColors.success.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.success.withOpacity(0.2)),
+                      border: Border.all(color: AppColors.success.withValues(alpha: 0.2)),
                     ),
                     child: Column(
                       children: [

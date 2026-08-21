@@ -185,7 +185,7 @@ class _DivisionTimetableScreenState extends State<DivisionTimetableScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: AppColors.secondary.withOpacity(0.12),
+                                  color: AppColors.secondary.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: const Text(
@@ -290,9 +290,9 @@ class _DivisionTimetableScreenState extends State<DivisionTimetableScreen> {
                             height: 70,
                             margin: const EdgeInsets.all(4),
                             decoration: BoxDecoration(
-                              color: subjectColor.withOpacity(0.08),
+                              color: subjectColor.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: subjectColor.withOpacity(0.2)),
+                              border: Border.all(color: subjectColor.withValues(alpha: 0.2)),
                             ),
                             padding: const EdgeInsets.all(8),
                             child: Column(

@@ -84,8 +84,8 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
   String _deptName = '';
   int _totalYears = 4;
   int _divisionsPerYear = 2;
-  List<Map<String, dynamic>> _parsedSubjects = [];
-  List<Map<String, dynamic>> _parsedRooms = [];
+  final List<Map<String, dynamic>> _parsedSubjects = [];
+  final List<Map<String, dynamic>> _parsedRooms = [];
   List<String> _userConstraints = [];
 
   // Solver Preview Grid states
@@ -1252,7 +1252,7 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
       height: 52,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         border: Border.all(color: AppColors.border, width: 0.5),
       ),
       child: Column(
@@ -1287,7 +1287,7 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
+                color: Colors.white.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.smart_toy_outlined, color: Colors.white, size: 20),
@@ -1357,14 +1357,14 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
                     ActionChip(
                       avatar: const Icon(Icons.rocket_launch, size: 14, color: AppColors.primary),
                       label: const Text('Setup Manually', style: TextStyle(fontSize: 12, color: AppColors.primary)),
-                      backgroundColor: AppColors.primary.withOpacity(0.06),
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.06),
                       onPressed: () => _handleUserInput('Configure manually'),
                     ),
                     const SizedBox(width: 8),
                     ActionChip(
                       avatar: const Icon(Icons.upload_file, size: 14, color: AppColors.primary),
                       label: const Text('Upload Excel Template', style: TextStyle(fontSize: 12, color: AppColors.primary)),
-                      backgroundColor: AppColors.primary.withOpacity(0.06),
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.06),
                       onPressed: _openRealFilePicker,
                     ),
                   ],
@@ -1474,7 +1474,7 @@ class _ChatBubble extends StatelessWidget {
                     border: message.isUser ? null : Border.all(color: AppColors.border, width: 1.2),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.01),
+                        color: Colors.black.withValues(alpha: 0.01),
                         blurRadius: 4,
                         offset: const Offset(0, 2),
                       ),
