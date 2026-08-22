@@ -675,4 +675,122 @@ class TimetableRepository {
       throw TimetableException('Could not save (${response.statusCode}).');
     }
   }
+
+
+  // ─── Delete Entity Methods ─────────────────────────────────────────
+
+  Future<void> deleteSubject(String id) async {
+    final response = await ApiClient.delete('/timetable/subjects/$id', token: AuthSession.token);
+    if (response.statusCode != 200) {
+      throw TimetableException('Failed to delete subject.');
+    }
+  }
+
+  Future<void> deleteRoom(String id) async {
+    final response = await ApiClient.delete('/timetable/rooms/$id', token: AuthSession.token);
+    if (response.statusCode != 200) {
+      throw TimetableException('Failed to delete room.');
+    }
+  }
+
+  Future<void> deleteDivision(String id) async {
+    final response = await ApiClient.delete('/timetable/divisions/$id', token: AuthSession.token);
+    if (response.statusCode != 200) {
+      throw TimetableException('Failed to delete division.');
+    }
+  }
+
+  Future<void> deleteAssignment(String id) async {
+    final response = await ApiClient.delete('/timetable/assignments/$id', token: AuthSession.token);
+    if (response.statusCode != 200) {
+      throw TimetableException('Failed to delete assignment.');
+    }
+  }
+
+  // ─── Update Entity Methods ─────────────────────────────────────────
+
+  Future<SubjectModel> updateSubject(String id, {
+    required String name,
+    String? code,
+    int weeklyLectures = 0,
+    bool isLab = false,
+    int labSessionsPerWeek = 0,
+    int labBlockSize = 2,
+  }) async {
+    final response = await ApiClient.putJson('/timetable/subjects/$id', {
+      'name': name,
+      if (code != null && code.isNotEmpty) 'code': code,
+      'weekly_lectures': weeklyLectures,
+      'is_lab': isLab,
+      'lab_sessions_per_week': labSessionsPerWeek,
+      'lab_block_size': labBlockSize,
+    }, token: AuthSession.token);
+    if (response.statusCode != 200) {
+      throw TimetableException('Failed to update subject (${response.statusCode}).');
+    }
+    return SubjectModel.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<RoomModel> updateRoom(String id, {
+    required String name,
+    required String type,
+    int capacity = 60,
+  }) async {
+    final response = await ApiClient.putJson('/timetable/rooms/$id', {
+      'name': name,
+      'type': type,
+      'capacity': capacity,
+    }, token: AuthSession.token);
+    if (response.statusCode != 200) {
+      throw TimetableException('Failed to update room (${response.statusCode}).');
+    }
+    return RoomModel.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<DivisionModel> updateDivision(String id, {
+    required String name,
+    required int year,
+    required String divisionCode,
+    int strength = 60,
+  }) async {
+    final response = await ApiClient.putJson('/timetable/divisions/$id', {
+      'name': name,
+      'year': year,
+      'division_code': divisionCode,
+      'strength': strength,
+    }, token: AuthSession.token);
+    if (response.statusCode != 200) {
+      throw TimetableException('Failed to update division (${response.statusCode}).');
+    }
+    return DivisionModel.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  // ─── Detailed Assignments (with names) ────────────────────────────
+
+  Future<List<Map<String, dynamic>>> fetchAssignmentsDetailed() async {
+    final response = await ApiClient.get('/timetable/assignments-detailed', token: AuthSession.token);
+    if (response.statusCode != 200) {
+      throw TimetableException('Could not load assignments (${response.statusCode}).');
+    }
+    final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  // ─── AI Config Chat ───────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> sendAiConfigChat(
+    String message, {
+    List<Map<String, String>> conversationHistory = const [],
+  }) async {
+    final response = await ApiClient.postJson('/ai/timetable-config-chat', {
+      'message': message,
+      'conversation_history': conversationHistory,
+    }, token: AuthSession.token);
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode != 200) {
+      throw TimetableException(data['detail'] as String? ?? 'AI request failed.');
+    }
+    return data;
+  }
 }
+

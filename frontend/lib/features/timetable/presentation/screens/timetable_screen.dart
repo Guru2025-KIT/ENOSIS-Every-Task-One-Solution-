@@ -7,6 +7,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../data/timetable_repository.dart';
 import 'constraint_builder_screen.dart';
+import 'timetable_generation_mode_screen.dart';
 
 /// Screen 4 — Timetable Dashboard screen with active calendar week dates,
 /// dynamic orange color active day highlights, and functional tabs.
@@ -160,6 +161,17 @@ class _TimetableScreenState extends State<TimetableScreen> {
         backgroundColor: AppColors.background,
         appBar: AppBar(
           title: const Text('Timetable Dashboard'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.tune, color: Colors.white),
+              tooltip: 'Planning Hub / Generator',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const TimetableGenerationModeScreen()),
+                ).then((_) => _loadInitialData());
+              },
+            ),
+          ],
           bottom: TabBar(
             isScrollable: true,
             labelColor: Colors.white,

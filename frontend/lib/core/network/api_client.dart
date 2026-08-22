@@ -20,7 +20,7 @@ class ApiClient {
   /// Change this to match how you're running the app right now — see the
   /// table in docs/CONNECTING_FRONTEND_BACKEND.md for the exact value per
   /// platform (Android emulator / physical device / Flutter Web).
-  static const String baseUrl = 'http://172.16.90.252:8000';
+  static const String baseUrl = 'http://127.0.0.1:8000';
 
   static Uri _uri(String path) => Uri.parse('$baseUrl$path');
 
@@ -83,6 +83,24 @@ class ApiClient {
       body: jsonEncode(body),
     );
   }
+
+  /// PUT with a JSON body — used for full-object replacement updates
+  /// (e.g. updating a subject, room, or division).
+  static Future<http.Response> putJson(
+    String path,
+    Map<String, dynamic> body, {
+    String? token,
+  }) {
+    return http.put(
+      _uri(path),
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(body),
+    );
+  }
+
 
   static Future<http.Response> delete(String path, {String? token}) {
     return http.delete(

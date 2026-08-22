@@ -1,6 +1,10 @@
 import uuid
+import io
+import csv
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
+import openpyxl
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
@@ -181,6 +185,42 @@ def list_divisions(
     return query.order_by(Division.year, Division.division_code).all()
 
 
+@router.put("/divisions/{division_id}", response_model=DivisionOut)
+def update_division(
+    division_id: str,
+    payload: DivisionCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_timetable_manager)
+):
+    """Updates an existing division by ID."""
+    division = db.query(Division).filter(Division.id == division_id).first()
+    if not division:
+        raise HTTPException(status_code=404, detail="Division not found")
+    for field, value in payload.model_dump().items():
+        setattr(division, field, value)
+    db.commit()
+    db.refresh(division)
+    return division
+
+
+@router.delete("/divisions/{division_id}")
+def delete_division(
+    division_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_timetable_manager)
+):
+    """Deletes a division and its associated teaching assignments."""
+    division = db.query(Division).filter(Division.id == division_id).first()
+    if not division:
+        raise HTTPException(status_code=404, detail="Division not found")
+    # Cascade-delete assignments and timetable entries for this division
+    db.query(TeachingAssignment).filter(TeachingAssignment.division_id == division_id).delete()
+    db.query(TimetableEntry).filter(TimetableEntry.division_id == division_id).delete()
+    db.delete(division)
+    db.commit()
+    return {"status": "deleted"}
+
+
 @router.post("/subjects", response_model=SubjectOut, status_code=status.HTTP_201_CREATED)
 def create_subject(payload: SubjectCreate, db: Session = Depends(get_db), _: User = Depends(require_timetable_manager)):
     subject = Subject(**payload.model_dump())
@@ -195,6 +235,41 @@ def list_subjects(db: Session = Depends(get_db), _: User = Depends(get_current_u
     return db.query(Subject).all()
 
 
+@router.put("/subjects/{subject_id}", response_model=SubjectOut)
+def update_subject(
+    subject_id: str,
+    payload: SubjectCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_timetable_manager)
+):
+    """Updates an existing subject."""
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    for field, value in payload.model_dump().items():
+        setattr(subject, field, value)
+    db.commit()
+    db.refresh(subject)
+    return subject
+
+
+@router.delete("/subjects/{subject_id}")
+def delete_subject(
+    subject_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_timetable_manager)
+):
+    """Deletes a subject and its associated teaching assignments."""
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    db.query(TeachingAssignment).filter(TeachingAssignment.subject_id == subject_id).delete()
+    db.query(TimetableEntry).filter(TimetableEntry.subject_id == subject_id).delete()
+    db.delete(subject)
+    db.commit()
+    return {"status": "deleted"}
+
+
 @router.post("/rooms", response_model=RoomOut, status_code=status.HTTP_201_CREATED)
 def create_room(payload: RoomCreate, db: Session = Depends(get_db), _: User = Depends(require_timetable_manager)):
     room = Room(**payload.model_dump())
@@ -207,6 +282,39 @@ def create_room(payload: RoomCreate, db: Session = Depends(get_db), _: User = De
 @router.get("/rooms", response_model=list[RoomOut])
 def list_rooms(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     return db.query(Room).all()
+
+
+@router.put("/rooms/{room_id}", response_model=RoomOut)
+def update_room(
+    room_id: str,
+    payload: RoomCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_timetable_manager)
+):
+    """Updates an existing room."""
+    room = db.query(Room).filter(Room.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    for field, value in payload.model_dump().items():
+        setattr(room, field, value)
+    db.commit()
+    db.refresh(room)
+    return room
+
+
+@router.delete("/rooms/{room_id}")
+def delete_room(
+    room_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_timetable_manager)
+):
+    """Deletes a room."""
+    room = db.query(Room).filter(Room.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    db.delete(room)
+    db.commit()
+    return {"status": "deleted"}
 
 
 @router.post("/assignments", response_model=TeachingAssignmentOut, status_code=status.HTTP_201_CREATED)
@@ -229,6 +337,39 @@ def create_assignment(payload: TeachingAssignmentCreate, db: Session = Depends(g
 @router.get("/assignments", response_model=list[TeachingAssignmentOut])
 def list_assignments(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     return db.query(TeachingAssignment).all()
+
+
+@router.get("/assignments-detailed")
+def list_assignments_detailed(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    """Returns assignments with resolved faculty name, subject name, and division name for display."""
+    assignments = db.query(TeachingAssignment).all()
+    result = []
+    for a in assignments:
+        result.append({
+            "id": a.id,
+            "faculty_id": a.faculty_id,
+            "faculty_name": a.faculty.full_name if a.faculty else "Unknown",
+            "subject_id": a.subject_id,
+            "subject_name": a.subject.name if a.subject else "Unknown",
+            "division_id": a.division_id,
+            "division_name": f"Year {a.division.year} - Div {a.division.division_code}" if a.division else "Unknown",
+        })
+    return result
+
+
+@router.delete("/assignments/{assignment_id}")
+def delete_assignment(
+    assignment_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_timetable_manager)
+):
+    """Deletes a teaching assignment by ID."""
+    assignment = db.query(TeachingAssignment).filter(TeachingAssignment.id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    db.delete(assignment)
+    db.commit()
+    return {"status": "deleted"}
 
 
 @router.post("/unavailability", status_code=status.HTTP_201_CREATED)
@@ -718,10 +859,6 @@ async def upload_excel(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_timetable_manager),
 ):
-    import io
-    import csv
-    from collections import defaultdict
-
     filename = file.filename or ""
     content = await file.read()
 
@@ -762,14 +899,6 @@ async def upload_excel(
     errors = []
 
     if filename.lower().endswith(".xlsx"):
-        try:
-            import openpyxl
-        except ImportError:
-            raise HTTPException(
-                status_code=400,
-                detail="openpyxl is required for .xlsx parsing. Install it with: pip install openpyxl",
-            )
-
         try:
             wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
         except Exception as e:

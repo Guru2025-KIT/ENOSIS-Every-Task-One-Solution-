@@ -1538,11 +1538,13 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
             )
           else
             // Post-Solve Timetable Grid + Conversational Refining Assistant layout
-            SafeArea(
-              child: ResponsiveLayout(
-                mobile: _buildMobileLayout(),
-                tablet: _buildTabletLayout(),
-                desktop: _buildDesktopLayout(),
+            Positioned.fill(
+              child: SafeArea(
+                child: ResponsiveLayout(
+                  mobile: _buildMobileLayout(),
+                  tablet: _buildTabletLayout(),
+                  desktop: _buildDesktopLayout(),
+                ),
               ),
             ),
           if (_isLoading)
@@ -1562,11 +1564,17 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
       length: 2,
       child: Column(
         children: [
-          const TabBar(
-            tabs: [
-              Tab(icon: Icon(Icons.grid_on), text: 'Timetable Grid'),
-              Tab(icon: Icon(Icons.chat), text: 'Refine Assistant'),
-            ],
+          Container(
+            color: AppColors.primary,
+            child: const TabBar(
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white70,
+              indicatorColor: AppColors.secondary,
+              tabs: [
+                Tab(icon: Icon(Icons.grid_on), text: 'Timetable Grid'),
+                Tab(icon: Icon(Icons.chat), text: 'Refine Assistant'),
+              ],
+            ),
           ),
           Expanded(
             child: TabBarView(
@@ -1615,7 +1623,7 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   DropdownButton<int>(
-                    value: _previewYear,
+                    value: [1, 2, 3, 4].contains(_previewYear) ? _previewYear : 1,
                     items: [1, 2, 3, 4].map((y) => DropdownMenuItem(value: y, child: Text('Year $y'))).toList(),
                     onChanged: (val) {
                       if (val != null) {
@@ -1625,8 +1633,8 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
                     },
                   ),
                   DropdownButton<String>(
-                    value: _previewDiv,
-                    items: ['A', 'B'].map((d) => DropdownMenuItem(value: d, child: Text('Div $d'))).toList(),
+                    value: ['A', 'B', 'C', 'D'].contains(_previewDiv.toUpperCase()) ? _previewDiv.toUpperCase() : 'A',
+                    items: ['A', 'B', 'C', 'D'].map((d) => DropdownMenuItem(value: d, child: Text('Div $d'))).toList(),
                     onChanged: (val) {
                       if (val != null) {
                         setState(() => _previewDiv = val);
