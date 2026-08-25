@@ -8,7 +8,7 @@ import '../../../attendance/presentation/screens/mark_attendance_screen.dart';
 import '../../../copo/presentation/screens/copo_mapping_screen.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
-import '../../../timetable/presentation/screens/timetable_screen.dart';
+import '../../../timetable/presentation/screens/timetable_hub_screen.dart';
 import '../../../todo/presentation/screens/my_day_screen.dart';
 import 'dashboard_screen.dart';
 
@@ -31,7 +31,7 @@ class _MainShellState extends State<MainShell> {
   // Tabs for the main layout stack (indexed 0 to 7)
   static const List<Widget> _tabs = [
     DashboardScreen(),             // 0: Home
-    TimetableScreen(),             // 1: Timetable
+    TimetableHubScreen(),             // 1: Timetable
     CopoMappingScreen(),           // 2: CO-PO Mapping
     MarkAttendanceScreen(),        // 3: Attendance
     MyDayScreen(),                 // 4: To-Do List

@@ -1,9 +1,17 @@
-import 'package:flutter/material.dart';
 import 'app/app.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'features/timetable/providers/timetable_provider.dart';
 
-/// Entry point. Flutter's engine calls this function first.
-/// runApp() takes our root widget (EnosisApp) and attaches it to the screen —
-/// this is the very first step of: main() -> runApp() -> widget tree -> screens.
 void main() {
-  runApp(const EnosisApp());
+  // Keep any initialization you had here previously
+  
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => TimetableProvider()),
+      ],
+      child: const EnosisApp(), // <-- This is the correct name!
+    ),
+  );
 }

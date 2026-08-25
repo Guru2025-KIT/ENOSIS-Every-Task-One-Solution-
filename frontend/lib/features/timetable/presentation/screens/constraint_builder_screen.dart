@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_typography.dart';
-import '../../../../core/utils/responsive.dart';
-import '../../../../core/widgets/primary_button.dart';
-import '../../../../core/auth/auth_session.dart';
-import '../../data/constraint_repository.dart';
-import '../../data/timetable_repository.dart';
+import '../../models/timetable_constraint.dart';
+import '../../providers/timetable_provider.dart';
 
 class ConstraintBuilderScreen extends StatefulWidget {
   const ConstraintBuilderScreen({super.key});
@@ -15,408 +12,396 @@ class ConstraintBuilderScreen extends StatefulWidget {
 }
 
 class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _timetableRepository = TimetableRepository();
-  final _constraintRepository = ConstraintRepository();
+  final List<String> _constraintCategories = [
+    'Faculty Unavailable',
+    'Fixed Subject Slot',
+    'No Theory After Lunch',
+    'Holiday / College Closed', // Added Holiday Option
+    'Natural Language Rule', 
+  ];
+  
+  String _selectedCategory = 'Faculty Unavailable';
+  String _naturalLanguageText = '';
 
-  // Selected constraint type key mapping to solver constraint types
-  String _selectedType = 'faculty_unavailability';
+  final List<String> _selectedFaculties = [];
+  final List<String> _selectedSubjects = [];
+  final List<String> _selectedClasses = [];
+  final List<String> _allDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  final List<String> _selectedDays = [];
+  
+  final List<int> _allSlots = [1, 2, 3, 4, 5, 6, 7, 8];
+  final List<int> _selectedSlots = [];
 
-  // Selection states
-  FacultyOption? _selectedFaculty;
-  RoomModel? _selectedRoom;
-  DivisionModel? _selectedDivision;
-  SubjectModel? _selectedSubject;
-
-  int _selectedDay = 0; // Mon = 0
-  int _selectedSlot = 0; // Slot 1 = 0
-  String _priority = 'hard'; // 'hard' or 'soft'
-
-  // Lists populated from database
-  List<FacultyOption> _facultyList = [];
-  List<RoomModel> _roomList = [];
-  List<DivisionModel> _divisionList = [];
-  List<SubjectModel> _subjectList = [];
-
-  bool _isLoading = false;
-  bool _isSaving = false;
-  final _noteController = TextEditingController();
-
-  final List<String> _dayLabels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAllDropdownData();
-  }
-
-  @override
-  void dispose() {
-    _noteController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadAllDropdownData() async {
-    setState(() => _isLoading = true);
-    try {
-      final facs = await _timetableRepository.fetchFacultyList();
-      final rooms = await _timetableRepository.fetchRooms();
-      final divs = await _timetableRepository.fetchDivisions();
-      final subs = await _timetableRepository.fetchSubjects();
-
-      if (mounted) {
-        setState(() {
-          _facultyList = facs;
-          if (facs.isNotEmpty) {
-            _selectedFaculty = facs.first;
-            // If user is a faculty but not admin/hod, lock selection to themselves
-            if (!AuthSession.canAccessTimetableGeneration) {
-              final loggedName = AuthSession.fullName ?? '';
-              final match = facs.cast<FacultyOption?>().firstWhere(
-                (f) => f != null && f.fullName.toLowerCase() == loggedName.toLowerCase(),
-                orElse: () => null,
-              );
-              if (match != null) {
-                _selectedFaculty = match;
-              }
-            }
-          }
-
-          _roomList = rooms;
-          if (rooms.isNotEmpty) _selectedRoom = rooms.first;
-
-          _divisionList = divs;
-          if (divs.isNotEmpty) _selectedDivision = divs.first;
-
-          _subjectList = subs;
-          if (subs.isNotEmpty) _selectedSubject = subs.first;
-        });
-      }
-    } catch (e) {
-      _showError('Failed to load configuration dropdowns: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  void _resetForm() {
-    setState(() {
-      _selectedType = 'faculty_unavailability';
-      _priority = 'hard';
-      if (_facultyList.isNotEmpty) _selectedFaculty = _facultyList.first;
-      if (_roomList.isNotEmpty) _selectedRoom = _roomList.first;
-      if (_divisionList.isNotEmpty) _selectedDivision = _divisionList.first;
-      if (_subjectList.isNotEmpty) _selectedSubject = _subjectList.first;
-      _selectedDay = 0;
-      _selectedSlot = 0;
-      _noteController.clear();
-    });
-  }
-
-  Future<void> _saveConstraint() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    Map<String, dynamic> payload = {};
-    String description = '';
-
-    // Dynamically build payload + priority + description based on constraint type
-    switch (_selectedType) {
-      case 'faculty_unavailability':
-        if (_selectedFaculty == null) return _showError('Please select a faculty member.');
-        _priority = 'hard';
-        payload = {
-          'faculty_id': _selectedFaculty!.id,
-          'day': _selectedDay,
-          'slot': _selectedSlot,
-        };
-        description = 'Hard Unavailability: ${_selectedFaculty!.fullName} unavailable on ${_dayLabels[_selectedDay]} Slot ${_selectedSlot + 1}';
-        break;
-
-      case 'avoid_first_period':
-        if (_selectedFaculty == null) return _showError('Please select a faculty member.');
-        _priority = 'soft';
-        payload = {'faculty_id': _selectedFaculty!.id};
-        description = 'Soft Preference: Avoid Slot 1 for ${_selectedFaculty!.fullName}';
-        break;
-
-      case 'avoid_last_period':
-        if (_selectedFaculty == null) return _showError('Please select a faculty member.');
-        _priority = 'soft';
-        payload = {'faculty_id': _selectedFaculty!.id};
-        description = 'Soft Preference: Avoid last slot for ${_selectedFaculty!.fullName}';
-        break;
-
-      case 'prefer_morning':
-        if (_selectedFaculty == null) return _showError('Please select a faculty member.');
-        _priority = 'soft';
-        payload = {'faculty_id': _selectedFaculty!.id};
-        description = 'Soft Preference: Prefer morning sessions for ${_selectedFaculty!.fullName}';
-        break;
-
-      case 'preferred_room':
-        if (_selectedSubject == null || _selectedRoom == null) {
-          return _showError('Please select both a subject and preferred room.');
-        }
-        _priority = 'soft';
-        payload = {
-          'subject_id': _selectedSubject!.id,
-          'room_id': _selectedRoom!.id,
-        };
-        description = 'Soft Preference: Prefer room ${_selectedRoom!.name} for subject ${_selectedSubject!.name}';
-        break;
-
-      case 'preferred_slot':
-        if (_selectedSubject == null) return _showError('Please select a subject.');
-        _priority = 'soft';
-        payload = {
-          'subject_id': _selectedSubject!.id,
-          'day': _selectedDay,
-          'slot': _selectedSlot,
-        };
-        description = 'Soft Preference: Prefer ${_selectedSubject!.name} on ${_dayLabels[_selectedDay]} Slot ${_selectedSlot + 1}';
-        break;
-
-      case 'avoid_consecutive_same':
-        if (_selectedDivision == null || _selectedSubject == null) {
-          return _showError('Please select both a division and subject.');
-        }
-        _priority = 'soft';
-        payload = {
-          'division_id': _selectedDivision!.id,
-          'subject_id': _selectedSubject!.id,
-        };
-        description = 'Soft Preference: Avoid back-to-back lectures of ${_selectedSubject!.name} for division ${_selectedDivision!.name}';
-        break;
-    }
-
-    // Append user note if present
-    final note = _noteController.text.trim();
-    if (note.isNotEmpty) {
-      description += ' (Note: $note)';
-    }
-
-    setState(() => _isSaving = true);
-    try {
-      await _constraintRepository.addConstraint(
-        type: _selectedType,
-        priority: _priority,
-        payload: payload,
-        description: description,
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Constraint saved successfully!'),
-            behavior: SnackBarBehavior.floating,
+  Future<void> _addCustomCategory() async {
+    final customController = TextEditingController();
+    String? newCategory = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Add Custom Constraint Type'),
+          content: TextField(
+            controller: customController,
+            decoration: const InputDecoration(hintText: 'e.g., Guest Lecture', border: OutlineInputBorder()),
+            autofocus: true,
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              onPressed: () {
+                if (customController.text.trim().isNotEmpty) Navigator.pop(context, customController.text.trim());
+              },
+              child: const Text('Add', style: TextStyle(color: Colors.white)),
+            ),
+          ],
         );
-        Navigator.of(context).pop(true); // Return true to trigger refresh on previous page
-      }
-    } catch (e) {
-      _showError('Failed to save constraint: $e');
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
+      },
+    );
+
+    if (newCategory != null && !_constraintCategories.contains(newCategory)) {
+      setState(() {
+        _constraintCategories.add(newCategory);
+        _selectedCategory = newCategory;
+      });
     }
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+  Future<void> _showMultiSelectDialog({
+    required String title,
+    required List<String> allOptions,
+    required List<String> selectedItems,
+  }) async {
+    final List<String> tempSelected = List.from(selectedItems);
+    final TextEditingController customController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('Select $title'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: allOptions.length,
+                        itemBuilder: (context, index) {
+                          final item = allOptions[index];
+                          return CheckboxListTile(
+                            title: Text(item),
+                            value: tempSelected.contains(item),
+                            activeColor: AppColors.primary,
+                            onChanged: (bool? checked) {
+                              setDialogState(() {
+                                if (checked == true) tempSelected.add(item);
+                                else tempSelected.remove(item);
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                    const Divider(),
+                    TextField(
+                      controller: customController,
+                      decoration: InputDecoration(
+                        hintText: 'Add custom (e.g., Guest Faculty)...',
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.add_circle, color: AppColors.primary),
+                          onPressed: () {
+                            if (customController.text.trim().isNotEmpty) {
+                              setDialogState(() {
+                                tempSelected.add(customController.text.trim());
+                                customController.clear();
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                  onPressed: () {
+                    setState(() {
+                      selectedItems.clear();
+                      selectedItems.addAll(tempSelected);
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Done', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
+  }
+
+  Widget _buildMultiSelectField({
+    required String label,
+    required List<String> allOptions,
+    required List<String> selectedItems,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 4),
+        InkWell(
+          onTap: () => _showMultiSelectDialog(title: label, allOptions: allOptions, selectedItems: selectedItems),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade400),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: selectedItems.isEmpty
+                      ? Text('Select $label...', style: TextStyle(color: Colors.grey.shade500))
+                      : Wrap(
+                          spacing: 6.0,
+                          runSpacing: 4.0,
+                          children: selectedItems.map((item) {
+                            return Chip(
+                              label: Text(item, style: const TextStyle(fontSize: 11)),
+                              backgroundColor: AppColors.primary.withOpacity(0.1),
+                              padding: EdgeInsets.zero,
+                              visualDensity: VisualDensity.compact,
+                            );
+                          }).toList(),
+                        ),
+                ),
+                const Icon(Icons.arrow_drop_down, color: Colors.grey),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _addConstraint() {
+    // Handle Natural Language Rule separately
+    if (_selectedCategory == 'Natural Language Rule') {
+      if (_naturalLanguageText.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please type the rule in English.')),
+        );
+        return;
+      }
+      
+      context.read<TimetableProvider>().addNaturalLanguageConstraint(_naturalLanguageText);
+      
+      setState(() {
+        _naturalLanguageText = ''; 
+        _selectedCategory = 'Faculty Unavailable'; 
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Natural Language Rule Parsed & Added!'), backgroundColor: Colors.green),
+      );
+      return;
+    }
+
+    // REMOVED compulsory validations. You can add a rule with just Days, or just Faculty, etc.
+    if (_selectedDays.isEmpty && _selectedCategory != 'Holiday / College Closed') {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select at least one day.')));
+      return;
+    }
+
+    final newConstraint = TimetableConstraint(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      category: _selectedCategory,
+      facultyNames: List.from(_selectedFaculties),
+      subjectNames: List.from(_selectedSubjects),
+      classNames: List.from(_selectedClasses),
+      days: List.from(_selectedDays),
+      slotNumbers: List.from(_selectedSlots),
+    );
+
+    context.read<TimetableProvider>().addConstraint(newConstraint);
+    setState(() {
+      _selectedFaculties.clear();
+      _selectedSubjects.clear();
+      _selectedClasses.clear();
+      _selectedDays.clear();
+      _selectedSlots.clear();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool isFacultyLocked = !AuthSession.canAccessTimetableGeneration;
+    final provider = context.watch<TimetableProvider>();
+    final facultyList = provider.facultyNames;
+    final subjectList = provider.subjectNames;
+    final classList = provider.classesAndBatches; 
+    final constraints = provider.constraints;
+
+    // Hide form fields if Holiday or NLP is selected
+    bool showStandardForm = _selectedCategory != 'Natural Language Rule' && _selectedCategory != 'Holiday / College Closed';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Add Solver Constraint'),
+        title: const Text('Manage Constraints'),
+        backgroundColor: AppColors.primary,
       ),
-      body: SafeArea(
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-                child: ResponsiveCenter(
-                  maxWidth: Responsive.maxContentWidth,
-                  padding: const EdgeInsets.all(24),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Configure Solver Rules', style: AppTypography.h2),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Select a constraint type below. Rules are converted directly into Google OR-Tools model parameters.',
-                          style: AppTypography.bodySecondary,
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Constraint Type Selector
-                        DropdownButtonFormField<String>(
-                          initialValue: _selectedType,
-                          decoration: const InputDecoration(labelText: 'Constraint Type'),
-                          items: const [
-                            DropdownMenuItem(value: 'faculty_unavailability', child: Text('🔴 Faculty Unavailability (Hard)')),
-                            DropdownMenuItem(value: 'avoid_first_period', child: Text('🟡 Avoid First Period (Soft)')),
-                            DropdownMenuItem(value: 'avoid_last_period', child: Text('🟡 Avoid Last Period (Soft)')),
-                            DropdownMenuItem(value: 'prefer_morning', child: Text('🟡 Prefer Morning Slots (Soft)')),
-                            DropdownMenuItem(value: 'preferred_room', child: Text('🟢 Preferred Room (Soft)')),
-                            DropdownMenuItem(value: 'preferred_slot', child: Text('🟢 Preferred Slot (Soft)')),
-                            DropdownMenuItem(value: 'avoid_consecutive_same', child: Text('🟢 Avoid Consecutive Lectures (Soft)')),
-                          ],
-                          onChanged: (val) => setState(() {
-                            _selectedType = val ?? _selectedType;
-                          }),
-                        ),
-                        const SizedBox(height: 20),
-
-                        // ─── DYNAMIC SUB-FIELDS BASED ON CHOSEN TYPE ───────────
-
-                        // Faculty Selector (for faculty_unavailability, avoid_first, avoid_last, prefer_morning)
-                        if (_selectedType == 'faculty_unavailability' ||
-                            _selectedType == 'avoid_first_period' ||
-                            _selectedType == 'avoid_last_period' ||
-                            _selectedType == 'prefer_morning') ...[
-                          if (isFacultyLocked)
-                            InputDecorator(
-                              decoration: const InputDecoration(labelText: 'Faculty Member'),
-                              child: Text(
-                                _selectedFaculty?.fullName ?? AuthSession.fullName ?? '',
-                                style: AppTypography.bodyMedium,
-                              ),
-                            )
-                          else
-                            DropdownButtonFormField<FacultyOption>(
-                              initialValue: _selectedFaculty,
-                              decoration: const InputDecoration(labelText: 'Select Faculty'),
-                              items: _facultyList
-                                  .map((f) => DropdownMenuItem(value: f, child: Text(f.fullName)))
-                                  .toList(),
-                              onChanged: (val) => setState(() => _selectedFaculty = val),
-                            ),
-                          const SizedBox(height: 20),
-                        ],
-
-                        // Room Selector (for preferred_room)
-                        if (_selectedType == 'preferred_room') ...[
-                          DropdownButtonFormField<RoomModel>(
-                            initialValue: _selectedRoom,
-                            decoration: const InputDecoration(labelText: 'Preferred Classroom/Lab'),
-                            items: _roomList
-                                  .map((r) => DropdownMenuItem(value: r, child: Text('${r.name} (${r.type})')))
-                                  .toList(),
-                            onChanged: (val) => setState(() => _selectedRoom = val),
-                          ),
-                          const SizedBox(height: 20),
-                        ],
-
-                        // Subject Selector (for preferred_room, preferred_slot, avoid_consecutive_same)
-                        if (_selectedType == 'preferred_room' ||
-                            _selectedType == 'preferred_slot' ||
-                            _selectedType == 'avoid_consecutive_same') ...[
-                          DropdownButtonFormField<SubjectModel>(
-                            initialValue: _selectedSubject,
-                            decoration: const InputDecoration(labelText: 'Select Subject'),
-                            items: _subjectList
-                                  .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))
-                                  .toList(),
-                            onChanged: (val) => setState(() => _selectedSubject = val),
-                          ),
-                          const SizedBox(height: 20),
-                        ],
-
-                        // Division Selector (for avoid_consecutive_same)
-                        if (_selectedType == 'avoid_consecutive_same') ...[
-                          DropdownButtonFormField<DivisionModel>(
-                            initialValue: _selectedDivision,
-                            decoration: const InputDecoration(labelText: 'Select Division'),
-                            items: _divisionList
-                                  .map((d) => DropdownMenuItem(value: d, child: Text(d.name)))
-                                  .toList(),
-                            onChanged: (val) => setState(() => _selectedDivision = val),
-                          ),
-                          const SizedBox(height: 20),
-                        ],
-
-                        // Day & Slot selectors (for faculty_unavailability, preferred_slot)
-                        if (_selectedType == 'faculty_unavailability' ||
-                            _selectedType == 'preferred_slot') ...[
-                          Row(
-                            children: [
-                              Expanded(
-                                child: DropdownButtonFormField<int>(
-                                  initialValue: _selectedDay,
-                                  decoration: const InputDecoration(labelText: 'Day'),
-                                  items: List.generate(_dayLabels.length, (idx) {
-                                    return DropdownMenuItem(
-                                      value: idx,
-                                      child: Text(_dayLabels[idx]),
-                                    );
-                                  }),
-                                  onChanged: (val) => setState(() => _selectedDay = val ?? _selectedDay),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: DropdownButtonFormField<int>(
-                                  initialValue: _selectedSlot,
-                                  decoration: const InputDecoration(labelText: 'Period Slot'),
-                                  items: List.generate(8, (idx) {
-                                    return DropdownMenuItem(
-                                      value: idx,
-                                      child: Text('Period ${idx + 1}'),
-                                    );
-                                  }),
-                                  onChanged: (val) => setState(() => _selectedSlot = val ?? _selectedSlot),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                        ],
-
-                        // Note text field
-                        TextField(
-                          controller: _noteController,
-                          maxLines: 3,
-                          decoration: const InputDecoration(
-                            labelText: 'Optional Comment / Rationale',
-                            hintText: 'e.g. Required due to guest lectures or physical constraints...',
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-
-                        // Actions row
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: _resetForm,
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size(0, 52),
-                                ),
-                                child: const Text('Reset Form'),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: PrimaryButton(
-                                label: 'Save Rule',
-                                isLoading: _isSaving,
-                                onPressed: _saveConstraint,
-                              ),
-                            ),
-                          ],
-                        ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Add New Constraint', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    
+                    DropdownButtonFormField<String>(
+                      value: _selectedCategory,
+                      decoration: const InputDecoration(labelText: 'Constraint Type', border: OutlineInputBorder()),
+                      items: [
+                        ..._constraintCategories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
+                        const DropdownMenuItem(value: '__add_new__', child: Text('➕ Add Custom Type...', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold))),
                       ],
+                      onChanged: (val) {
+                        if (val == '__add_new__') _addCustomCategory();
+                        else if (val != null) setState(() => _selectedCategory = val);
+                      },
                     ),
-                  ),
+                    const SizedBox(height: 16),
+
+                    if (_selectedCategory == 'Natural Language Rule')
+                      TextFormField(
+                        maxLines: 4,
+                        decoration: const InputDecoration(
+                          labelText: 'Type Rule in English',
+                          hintText: 'e.g., Vajreshwari should have 1st lecture on Monday for Btech AIML A',
+                          border: OutlineInputBorder(),
+                          alignLabelWithHint: true,
+                        ),
+                        onChanged: (val) => _naturalLanguageText = val,
+                      )
+                    else if (_selectedCategory == 'Holiday / College Closed')
+                      const Text('Select the days below that are holidays. The generator will leave these days blank.', style: TextStyle(color: Colors.grey))
+                    else ...[
+                      _buildMultiSelectField(label: 'Faculty / Guest', allOptions: facultyList, selectedItems: _selectedFaculties),
+                      const SizedBox(height: 12),
+                      _buildMultiSelectField(label: 'Subject', allOptions: subjectList, selectedItems: _selectedSubjects),
+                      const SizedBox(height: 12),
+                      _buildMultiSelectField(label: 'Class / Batch', allOptions: classList, selectedItems: _selectedClasses),
+                    ],
+
+                    if (showStandardForm || _selectedCategory == 'Holiday / College Closed') ...[
+                      const SizedBox(height: 16),
+                      const Text('Select Days', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      Wrap(
+                        spacing: 8.0,
+                        runSpacing: 4.0,
+                        children: _allDays.map((day) {
+                          return FilterChip(
+                            label: Text(day.substring(0, 3)),
+                            selected: _selectedDays.contains(day),
+                            selectedColor: AppColors.primary,
+                            labelStyle: TextStyle(color: _selectedDays.contains(day) ? Colors.white : Colors.black),
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) _selectedDays.add(day);
+                                else _selectedDays.remove(day);
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ],
+
+                    if (showStandardForm) ...[
+                      const SizedBox(height: 16),
+                      const Text('Applies to Slots (Optional: Select multiple for Labs)', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      Wrap(
+                        spacing: 8.0,
+                        runSpacing: 4.0,
+                        children: _allSlots.map((slot) {
+                          return FilterChip(
+                            label: Text('Slot $slot'),
+                            selected: _selectedSlots.contains(slot),
+                            selectedColor: AppColors.primary,
+                            labelStyle: TextStyle(color: _selectedSlots.contains(slot) ? Colors.white : Colors.black),
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) _selectedSlots.add(slot);
+                                else _selectedSlots.remove(slot);
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                    
+                    const SizedBox(height: 20),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Constraint'),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                      onPressed: _addConstraint,
+                    ),
+                  ],
                 ),
               ),
+            ),
+            const SizedBox(height: 24),
+            const Text('Active Constraints', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 8),
+            
+            if (constraints.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20.0),
+                child: Center(child: Text('No constraints added yet.', style: TextStyle(color: Colors.grey))),
+              )
+            else
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: constraints.length,
+                itemBuilder: (context, index) {
+                  final c = constraints[index];
+                  List<String> details = [];
+                  if (c.facultyNames.isNotEmpty) details.add('Faculty: ${c.facultyNames.join(", ")}');
+                  if (c.subjectNames.isNotEmpty) details.add('Subject: ${c.subjectNames.join(", ")}');
+                  if (c.classNames.isNotEmpty) details.add('Class: ${c.classNames.join(", ")}');
+                  
+                  return ListTile(
+                    leading: const Icon(Icons.push_pin_outlined, color: AppColors.secondary),
+                    title: Text(c.category, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(
+                      details.isEmpty ? 'Applied to selected days/slots.' : '${details.join("\n")}\nDays: ${c.days.join(", ")} | Slots: ${c.slotNumbers.join(", ")}', 
+                      style: const TextStyle(height: 1.4)
+                    ),
+                    isThreeLine: true,
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      onPressed: () => context.read<TimetableProvider>().removeConstraint(c.id),
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
       ),
     );
   }

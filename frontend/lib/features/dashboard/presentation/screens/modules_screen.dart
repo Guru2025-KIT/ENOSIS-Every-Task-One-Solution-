@@ -8,8 +8,7 @@ import '../../../attendance/presentation/screens/attendance_analytics_screen.dar
 import '../../../attendance/presentation/screens/mark_attendance_screen.dart';
 import '../../../career/presentation/screens/career_advancement_screen.dart';
 import '../../../copo/presentation/screens/copo_mapping_screen.dart';
-import '../../../timetable/presentation/screens/generate_timetable_screen.dart';
-import '../../../timetable/presentation/screens/timetable_screen.dart';
+import '../../../timetable/presentation/screens/timetable_hub_screen.dart';
 import '../../../todo/presentation/screens/my_day_screen.dart';
 import '../../data/mock_dashboard_data.dart';
 
@@ -37,10 +36,10 @@ class ModulesScreen extends StatelessWidget {
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AiAssistantScreen()));
         break;
       case 'Timetable':
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TimetableScreen()));
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TimetableHubScreen()));
         break;
       case 'Generate Timetable':
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GenerateTimetableScreen()));
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TimetableHubScreen()));
         break;
       case 'Career Adv.':
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CareerAdvancementScreen()));

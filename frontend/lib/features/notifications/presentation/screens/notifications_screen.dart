@@ -6,13 +6,6 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../data/notification_repository.dart';
 
-/// Screen 20 — Notifications screen.
-///
-/// Ref image features:
-/// - Screen title "Notifications"
-/// - Tab categories: All, Unread (with count badge)
-/// - Clean list cards with bold titles for unread entries
-/// - Fading timestamps ("10 min ago")
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
@@ -27,10 +20,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
-    _refresh();
+    _initializeData();
   }
 
-  void _refresh() => setState(() => _future = _repository.fetchMyNotifications());
+  Future<void> _initializeData() async {
+    _refresh();
+    if (mounted) setState(() {});
+  }
+
+  // FIX: Changed arrow function to block body so it returns void
+  void _refresh() {
+    setState(() {
+      _future = _repository.fetchMyNotifications();
+    });
+  }
 
   Future<void> _handleTap(NotificationModel notification) async {
     if (notification.isRead) return;
@@ -101,8 +104,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               }
 
               final notifications = snapshot.data ?? [];
-
-              // Filter notifications
               final unreadNotifications = notifications.where((n) => !n.isRead).toList();
 
               return TabBarView(

@@ -11,9 +11,7 @@ import '../../../attendance/presentation/screens/mark_attendance_screen.dart';
 import '../../../career/presentation/screens/career_advancement_screen.dart';
 import '../../../copo/presentation/screens/copo_mapping_screen.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
-import '../../../timetable/presentation/screens/constraint_builder_screen.dart';
-import '../../../timetable/presentation/screens/generate_timetable_screen.dart';
-import '../../../timetable/presentation/screens/timetable_screen.dart';
+import '../../../timetable/presentation/screens/timetable_hub_screen.dart';
 import '../../../todo/presentation/screens/my_day_screen.dart';
 import '../../data/mock_dashboard_data.dart';
 import 'modules_screen.dart';
@@ -43,10 +41,10 @@ class DashboardScreen extends StatelessWidget {
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AiAssistantScreen()));
         break;
       case 'Timetable':
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TimetableScreen()));
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TimetableHubScreen()));
         break;
       case 'Generate Timetable':
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GenerateTimetableScreen()));
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TimetableHubScreen()));
         break;
       case 'Career Adv.':
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CareerAdvancementScreen()));
@@ -55,7 +53,7 @@ class DashboardScreen extends StatelessWidget {
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CopoMappingScreen()));
         break;
       case 'My Constraints':
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ConstraintBuilderScreen()));
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TimetableHubScreen()));
         break;
       default:
         ScaffoldMessenger.of(context).showSnackBar(
@@ -136,7 +134,7 @@ class DashboardScreen extends StatelessWidget {
       padding: EdgeInsets.zero,
       onTap: () {
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const TimetableScreen()),
+          MaterialPageRoute(builder: (_) => const TimetableHubScreen()),
         );
       },
       child: IntrinsicHeight(
