@@ -89,7 +89,7 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
                   const SizedBox(height: 24),
                   Text('Generating Timetable...', style: AppTypography.h3),
                   const SizedBox(height: 8),
-                  Text('Applying CSP Algorithm & Constraints...', style: AppTypography.bodySecondary),
+                  Text('Splitting batches & assigning labs...', style: AppTypography.bodySecondary),
                 ],
               ),
             )
@@ -107,7 +107,7 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
         children: [
           Text('Ready to Generate', style: AppTypography.h2, textAlign: TextAlign.center),
           const SizedBox(height: 8),
-          Text('If you are not satisfied with the result, you can regenerate it or go back to add more constraints.', textAlign: TextAlign.center, style: AppTypography.bodySecondary),
+          Text('The algorithm will assign 1hr for Theory, 2 consecutive hrs for Labs, and dynamically split batches.', textAlign: TextAlign.center, style: AppTypography.bodySecondary),
           const SizedBox(height: 32),
           GridView.count(
             shrinkWrap: true,
@@ -145,13 +145,12 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
               Expanded(
                 child: DropdownButtonFormField<String>(
                   value: _selectedClass,
-                  decoration: const InputDecoration(labelText: 'Select Class', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(labelText: 'Select Class / Batch', border: OutlineInputBorder()),
                   items: generated.keys.map<DropdownMenuItem<String>>((c) => DropdownMenuItem<String>(value: c, child: Text(c))).toList(),
                   onChanged: (val) => setState(() => _selectedClass = val),
                 ),
               ),
               const SizedBox(width: 12),
-              // REGENERATE BUTTON
               OutlinedButton.icon(
                 onPressed: _startGeneration,
                 icon: const Icon(Icons.refresh, color: AppColors.primary),
@@ -181,64 +180,77 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
           child: _selectedClass == null
               ? const Center(child: Text('Select a class'))
               : SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Table(
-                      border: TableBorder.all(color: Colors.grey.shade300, width: 1, borderRadius: BorderRadius.circular(12)),
-                      defaultColumnWidth: const FixedColumnWidth(140.0),
-                      columnWidths: const { 0: FixedColumnWidth(110.0) },
-                      children: [
-                        TableRow(
-                          decoration: const BoxDecoration(color: Color(0xFF1F2937), borderRadius: BorderRadius.only(topLeft: Radius.circular(11), topRight: Radius.circular(11))),
-                          children: [
-                            const Padding(padding: EdgeInsets.all(12.0), child: Text('Day / Time', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                            ...days.map((day) => Padding(
-                              padding: const EdgeInsets.all(12.0),
-                              child: Text(day.substring(0, 3), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                            )).toList(),
-                          ]
-                        ),
-                        ...timeSlots.map((slot) {
-                          return TableRow(
+                  scrollDirection: Axis.vertical, // ✅ ADDED VERTICAL SCROLL
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal, // ✅ KEPT HORIZONTAL SCROLL
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Table(
+                        border: TableBorder.all(color: Colors.grey.shade300, width: 1, borderRadius: BorderRadius.circular(12)),
+                        defaultColumnWidth: const FixedColumnWidth(140.0),
+                        columnWidths: const { 0: FixedColumnWidth(110.0) },
+                        children: [
+                          TableRow(
+                            decoration: const BoxDecoration(color: Color(0xFF1F2937), borderRadius: BorderRadius.only(topLeft: Radius.circular(11), topRight: Radius.circular(11))),
                             children: [
-                              Container(
-                                color: const Color(0xFFF3F4F6),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12.0),
-                                  child: Text(
-                                    slot.isBreak ? 'Break' : 'Slot ${slot.lectureNumber}',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF374151)),
+                              const Padding(padding: EdgeInsets.all(12.0), child: Text('Day / Time', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                              ...days.map((day) => Padding(
+                                padding: const EdgeInsets.all(12.0),
+                                child: Text(day.substring(0, 3), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              )).toList(),
+                            ]
+                          ),
+                          ...timeSlots.map((slot) {
+                            return TableRow(
+                              children: [
+                                Container(
+                                  color: const Color(0xFFF3F4F6),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12.0),
+                                    child: Text(
+                                      slot.isBreak ? 'Break' : 'Slot ${slot.lectureNumber}',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF374151)),
+                                    ),
                                   ),
                                 ),
-                              ),
-                              ...days.map((day) {
-                                String cellKey = '${day}_${slot.lectureNumber}';
-                                List<String>? cellData = generated[_selectedClass]?[cellKey];
-                                String subject = cellData == null ? 'Free' : cellData[0];
-                                String faculty = cellData != null && cellData.length > 1 ? cellData[1] : '';
+                                ...days.map((day) {
+                                  String cellKey = '${day}_${slot.lectureNumber}';
+                                  List<String>? cellData = generated[_selectedClass]?[cellKey];
+                                  String subject = cellData == null ? 'Free' : cellData[0];
+                                  String faculty = cellData != null && cellData.length > 1 ? cellData[1] : '';
+                                  String batchInfo = cellData != null && cellData.length > 2 ? cellData[2] : '';
 
-                                return Container(
-                                  color: _getCellColor(subject),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(10.0),
-                                    child: subject == 'Free' || subject == 'Break' || subject == 'Holiday'
-                                      ? Center(child: Text(subject, style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500, fontSize: 12)))
-                                      : Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(subject, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _getTextColor(subject))),
-                                            const SizedBox(height: 4),
-                                            Text(faculty, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                                          ],
-                                        ),
-                                  ),
-                                );
-                              }).toList(),
-                            ]
-                          );
-                        }).toList(),
-                      ],
+                                  return Container(
+                                    color: _getCellColor(subject),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(10.0),
+                                      child: subject == 'Free' || subject == 'Break' || subject == 'Holiday'
+                                        ? Center(child: Text(subject, style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500, fontSize: 12)))
+                                        : Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(subject, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _getTextColor(subject))),
+                                              const SizedBox(height: 4),
+                                              Text(faculty, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                              if (batchInfo.isNotEmpty && batchInfo != 'All')
+                                                Padding(
+                                                  padding: const EdgeInsets.only(top: 4.0),
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                    decoration: BoxDecoration(color: Colors.purple.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                                                    child: Text(batchInfo, style: const TextStyle(fontSize: 9, color: Colors.purple, fontWeight: FontWeight.bold)),
+                                                  ),
+                                                )
+                                            ],
+                                          ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ]
+                            );
+                          }).toList(),
+                        ],
+                      ),
                     ),
                   ),
                 ),
