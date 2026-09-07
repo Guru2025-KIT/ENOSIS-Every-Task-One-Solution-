@@ -4,30 +4,26 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../ai_assistant/presentation/screens/ai_assistant_screen.dart';
-import '../../../attendance/presentation/screens/attendance_analytics_screen.dart';
-import '../../../attendance/presentation/screens/mark_attendance_screen.dart';
 import '../../../career/presentation/screens/career_advancement_screen.dart';
+import '../../../copo/presentation/screens/copo_attainment_screen.dart';
 import '../../../copo/presentation/screens/copo_mapping_screen.dart';
+import '../../../timetable/presentation/screens/generate_timetable_screen.dart';
 import '../../../timetable/presentation/screens/timetable_hub_screen.dart';
 import '../../../todo/presentation/screens/my_day_screen.dart';
 import '../../data/mock_dashboard_data.dart';
 
-/// Screen 7 — Modules Hub view from the reference image.
-///
-/// Ref image features:
-/// - Grid layout of all module shortcuts
-/// - CO-PO Mapping, Attendance, Timetable, Career Advancement, To-Do List, Reports
-/// - Clean typography, spacious structure, responsive scaling
+/// Screen 7 — Modules Hub view.
 class ModulesScreen extends StatelessWidget {
   const ModulesScreen({super.key});
 
   void _handleModuleTap(BuildContext context, String label) {
     switch (label) {
-      case 'Attendance':
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MarkAttendanceScreen()));
-        break;
       case 'Reports':
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AttendanceAnalyticsScreen()));
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const CopoAttainmentScreen(courseId: 'CS201', semester: 'Sem 4'),
+          ),
+        );
         break;
       case 'To-Do List':
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyDayScreen()));
@@ -39,7 +35,7 @@ class ModulesScreen extends StatelessWidget {
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TimetableHubScreen()));
         break;
       case 'Generate Timetable':
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TimetableHubScreen()));
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GenerateTimetableScreen()));
         break;
       case 'Career Adv.':
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CareerAdvancementScreen()));
@@ -49,7 +45,7 @@ class ModulesScreen extends StatelessWidget {
         break;
       default:
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$label is coming in a later batch.')),
+          SnackBar(content: Text('$label navigation selected.')),
         );
     }
   }

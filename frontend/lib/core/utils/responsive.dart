@@ -28,6 +28,9 @@ class Responsive {
   /// Max content width for wider layouts (dashboards with grids, etc.)
   static const double maxWideContentWidth = 900;
 
+  /// Max content width for the main dashboard desktop view
+  static const double maxDashboardWidth = 1280;
+
   // ─── Queries ──────────────────────────────────────────────────────────
 
   static bool isMobile(BuildContext context) =>
