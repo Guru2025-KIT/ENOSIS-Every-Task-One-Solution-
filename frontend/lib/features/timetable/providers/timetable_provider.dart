@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/teaching_assignment.dart';
 import '../models/time_slot.dart';
@@ -22,7 +23,6 @@ class TimetableProvider extends ChangeNotifier {
   List<String> get subjectNames =>
       _assignments.map((a) => a.subjectName).toSet().toList()..sort();
 
-  // ✅ Show all unique classes, including standalone ones like TY-DS
   List<String> get classesAndBatches {
     return _assignments.map((a) => a.className).where((c) => c.isNotEmpty).toSet().toList()..sort();
   }
@@ -81,22 +81,23 @@ class TimetableProvider extends ChangeNotifier {
     isTimetableSaved = false;
 
     List<String> classesToGenerate = _assignments.map((a) => a.className).toSet().toList();
-
     List<String> allDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    Map<String, Set<String>> facultySchedule = {};
+    
+    Map<String, bool> facultySchedule = {};
+    final random = Random();
 
     List<String> holidays = [];
     for (var con in _constraints) {
-      if (con.category == 'Holiday / College Closed') {
+      if (con.category.contains('Holiday')) {
         holidays.addAll(con.days);
       }
     }
     
     List<String> workingDays = allDays.where((d) => !holidays.contains(d)).toList();
 
+    // 1. INITIALIZE GRIDS
     for (String className in classesToGenerate) {
       _generatedTimetable[className] = {};
-      
       for (var day in allDays) {
         for (var slot in _timeSlots) {
           if (holidays.contains(day)) {
@@ -108,58 +109,84 @@ class TimetableProvider extends ChangeNotifier {
           }
         }
       }
+    }
 
+    // 2. APPLY FIXED CONSTRAINTS & NLP RULES FIRST
+    for (var con in _constraints) {
+      if (con.category.contains('Fixed Subject Slot') || con.category.contains('NLP Rule')) {
+        
+        // If no days were specified, apply to all working days
+        List<String> daysToApply = con.days.isEmpty ? workingDays : con.days;
+        
+        for (String day in daysToApply) {
+          if (holidays.contains(day)) continue;
+          for (int slotNum in con.slotNumbers) {
+            String cellKey = '${day}_$slotNum';
+            
+            List<String> targetClasses = classesToGenerate.where((c) {
+              if (con.classNames.isEmpty) return true;
+              return con.classNames.any((cn) => c == cn || c.startsWith(cn));
+            }).toList();
+
+            for (String className in targetClasses) {
+              // ✅ NULL-SAFE CHECK: If slot doesn't exist in grid, skip it!
+              var cellData = _generatedTimetable[className]?[cellKey];
+              if (cellData == null || cellData[0] != 'Free') continue;
+
+              String combinedClassName = className.contains('-') ? className.substring(0, className.lastIndexOf('-')) : className;
+              var classAssignments = _assignments.where((a) => 
+                a.className == className || a.className == combinedClassName
+              ).toList();
+
+              TeachingAssignment? assignToPlace;
+
+              if (con.subjectNames.isNotEmpty) {
+                assignToPlace = classAssignments.cast<TeachingAssignment?>().firstWhere(
+                  (a) => con.subjectNames.contains(a!.subjectName), 
+                  orElse: () => null
+                );
+              } else if (con.facultyNames.isNotEmpty) {
+                assignToPlace = classAssignments.cast<TeachingAssignment?>().firstWhere(
+                  (a) => con.facultyNames.contains(a!.facultyName), 
+                  orElse: () => null
+                );
+              }
+
+              if (assignToPlace != null) {
+                bool isCombined = assignToPlace.className == combinedClassName;
+                String facKey = '${assignToPlace.facultyName}_$cellKey';
+                
+                if (isCombined || !facultySchedule.containsKey(facKey)) {
+                   _generatedTimetable[className]![cellKey] = [assignToPlace.subjectName, assignToPlace.facultyName, 'Fixed'];
+                   facultySchedule[facKey] = true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 3. SCHEDULE LABS (2 consecutive slots)
+    for (String className in classesToGenerate) {
       String combinedClassName = className.contains('-') ? className.substring(0, className.lastIndexOf('-')) : className;
-      
       var classAssignments = _assignments.where((a) => 
         a.className == className || a.className == combinedClassName
       ).toList();
 
-      // 1. Schedule Theory
-      var theoryAssignments = classAssignments.where((a) => a.type == 'Theory').toList();
-      for (var assign in theoryAssignments) {
-        int scheduled = 0;
-        int attempts = 0;
-        while (scheduled < assign.weeklyHours && attempts < 100) {
-          attempts++;
-          String randomDay = workingDays[DateTime.now().millisecond % workingDays.length];
-          var freeSlots = _timeSlots.where((s) => !s.isBreak).toList();
-          var slot = freeSlots[DateTime.now().millisecond % freeSlots.length];
-          String cellKey = '${randomDay}_${slot.lectureNumber}';
-
-          bool classFree = _generatedTimetable[className]![cellKey]![0] == 'Free';
-          String facKey = '${assign.facultyName}_$cellKey';
-          
-          bool isCombined = assign.className == combinedClassName;
-          bool facFree = isCombined || !facultySchedule.containsKey(facKey);
-
-          if (classFree && facFree) {
-            _generatedTimetable[className]![cellKey] = [assign.subjectName, assign.facultyName, 'All'];
-            facultySchedule[facKey] = {};
-            scheduled++;
-          }
-        }
-      }
-
-      // 2. Schedule Labs
       var labAssignments = classAssignments.where((a) => a.type == 'Lab').toList();
       for (var lab in labAssignments) {
-        String targetBatch = lab.batch;
-        if (targetBatch == 'Single Batch') {
-           targetBatch = DateTime.now().millisecond % 2 == 0 ? 'Batch 1' : 'Batch 2';
-        }
-
-        int hoursToSchedule = 2;
+        String targetBatch = lab.batch == 'Single Batch' ? (random.nextBool() ? 'Batch 1' : 'Batch 2') : lab.batch;
         int scheduled = 0;
         int attempts = 0;
 
-        while (scheduled < hoursToSchedule && attempts < 100) {
+        while (scheduled < 2 && attempts < 100) {
           attempts++;
-          String randomDay = workingDays[DateTime.now().millisecond % workingDays.length];
+          String randomDay = workingDays[random.nextInt(workingDays.length)];
           var freeSlots = _timeSlots.where((s) => !s.isBreak).toList();
           if (freeSlots.length < 2) break;
 
-          int startIdx = DateTime.now().millisecond % (freeSlots.length - 1);
+          int startIdx = random.nextInt(freeSlots.length - 1);
           var slot1 = freeSlots[startIdx];
           var slot2 = freeSlots[startIdx + 1];
 
@@ -168,21 +195,76 @@ class TimetableProvider extends ChangeNotifier {
           String cellKey1 = '${randomDay}_${slot1.lectureNumber}';
           String cellKey2 = '${randomDay}_${slot2.lectureNumber}';
 
-          bool cell1Free = _generatedTimetable[className]![cellKey1]![0] == 'Free' || _generatedTimetable[className]![cellKey1]![2] != targetBatch;
-          bool cell2Free = _generatedTimetable[className]![cellKey2]![0] == 'Free' || _generatedTimetable[className]![cellKey2]![2] != targetBatch;
+          var cell1Data = _generatedTimetable[className]?[cellKey1];
+          var cell2Data = _generatedTimetable[className]?[cellKey2];
+
+          // ✅ NULL-SAFE CHECK
+          if (cell1Data == null || cell2Data == null) continue;
+
+          bool cell1Free = cell1Data[0] == 'Free' || cell1Data[2] != targetBatch;
+          bool cell2Free = cell2Data[0] == 'Free' || cell2Data[2] != targetBatch;
           
           String facKey1 = '${lab.facultyName}_$cellKey1';
           String facKey2 = '${lab.facultyName}_$cellKey2';
-          
           bool isCombined = lab.className == combinedClassName;
           bool facFree = isCombined || (!facultySchedule.containsKey(facKey1) && !facultySchedule.containsKey(facKey2));
 
-          if (cell1Free && cell2Free && facFree) {
+          bool isFacUnavailable = _constraints.any((con) {
+            if (con.category.contains('Faculty Unavailable') && con.facultyNames.contains(lab.facultyName)) {
+              return con.days.contains(randomDay) && (con.slotNumbers.contains(slot1.lectureNumber) || con.slotNumbers.contains(slot2.lectureNumber));
+            }
+            return false;
+          });
+
+          if (cell1Free && cell2Free && facFree && !isFacUnavailable) {
             _generatedTimetable[className]![cellKey1] = [lab.subjectName, lab.facultyName, targetBatch];
             _generatedTimetable[className]![cellKey2] = [lab.subjectName, lab.facultyName, targetBatch];
-            facultySchedule[facKey1] = {};
-            facultySchedule[facKey2] = {};
+            facultySchedule[facKey1] = true;
+            facultySchedule[facKey2] = true;
             scheduled = 2;
+          }
+        }
+      }
+    }
+
+    // 4. SCHEDULE THEORY (1 slot per hour)
+    for (String className in classesToGenerate) {
+      String combinedClassName = className.contains('-') ? className.substring(0, className.lastIndexOf('-')) : className;
+      var classAssignments = _assignments.where((a) => 
+        a.className == className || a.className == combinedClassName
+      ).toList();
+
+      var theoryAssignments = classAssignments.where((a) => a.type == 'Theory').toList();
+      for (var assign in theoryAssignments) {
+        int scheduled = 0;
+        int attempts = 0;
+        while (scheduled < assign.weeklyHours && attempts < 100) {
+          attempts++;
+          String randomDay = workingDays[random.nextInt(workingDays.length)];
+          var freeSlots = _timeSlots.where((s) => !s.isBreak).toList();
+          var slot = freeSlots[random.nextInt(freeSlots.length)];
+          String cellKey = '${randomDay}_${slot.lectureNumber}';
+
+          var cellData = _generatedTimetable[className]?[cellKey];
+          // ✅ NULL-SAFE CHECK
+          if (cellData == null) continue;
+
+          bool classFree = cellData[0] == 'Free';
+          String facKey = '${assign.facultyName}_$cellKey';
+          bool isCombined = assign.className == combinedClassName;
+          bool facFree = isCombined || !facultySchedule.containsKey(facKey);
+
+          bool isFacUnavailable = _constraints.any((con) {
+            if (con.category.contains('Faculty Unavailable') && con.facultyNames.contains(assign.facultyName)) {
+              return con.days.contains(randomDay) && con.slotNumbers.contains(slot.lectureNumber);
+            }
+            return false;
+          });
+
+          if (classFree && facFree && !isFacUnavailable) {
+            _generatedTimetable[className]![cellKey] = [assign.subjectName, assign.facultyName, 'All'];
+            facultySchedule[facKey] = true;
+            scheduled++;
           }
         }
       }
