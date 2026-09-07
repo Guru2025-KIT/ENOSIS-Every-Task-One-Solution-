@@ -40,7 +40,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final List<_PendingRequest> _requests = [
     _PendingRequest(id: 'r_1', facultyName: 'Dr. Priya Sharma', type: 'CAS', title: 'CAS Portfolio Verification Request - Tier II Promotion'),
     _PendingRequest(id: 'r_2', facultyName: 'Prof. Rajesh Kumar', type: 'Leave', title: 'Medical Leave Request: 14 Aug - 18 Aug (5 days)'),
-    _PendingRequest(id: 'r_3', facultyName: 'Dr. Anil Mehta', type: 'FDP', title: 'FDP Attendance Approval: National Workshop on AI/ML'),
+    _PendingRequest(id: 'r_3', facultyName: 'Dr. Anil Mehta', type: 'FDP', title: 'FDP Participation Approval: National Workshop on AI/ML'),
     _PendingRequest(id: 'r_4', facultyName: 'Prof. Sunita Rao', type: 'CAS', title: 'CAS Research Paper Validation: IEEE Communications'),
   ];
 
