@@ -47,11 +47,18 @@ class TimetableProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ✅ FIX 1: NLP Parser now searches for Subject Names too!
   void addNaturalLanguageConstraint(String text) {
     String lowerText = text.toLowerCase();
     List<String> foundFaculties = facultyNames.where((f) => lowerText.contains(f.toLowerCase())).toList();
     List<String> foundClasses = classesAndBatches.where((c) => lowerText.contains(c.toLowerCase())).toList();
     
+    // Search for subjects (check if any part of the text matches a subject)
+    List<String> foundSubjects = subjectNames.where((s) {
+      if (s.isEmpty) return false;
+      return lowerText.contains(s.toLowerCase());
+    }).toList();
+
     List<String> days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     List<String> foundDays = days.where((d) => lowerText.contains(d)).map((d) => d[0].toUpperCase() + d.substring(1)).toList();
     
@@ -59,6 +66,7 @@ class TimetableProvider extends ChangeNotifier {
     if (lowerText.contains('1st') || lowerText.contains('first')) foundSlots.add(1);
     if (lowerText.contains('2nd') || lowerText.contains('second')) foundSlots.add(2);
     if (lowerText.contains('3rd') || lowerText.contains('third')) foundSlots.add(3);
+    if (lowerText.contains('4th') || lowerText.contains('fourth')) foundSlots.add(4);
     if (lowerText.contains('last')) {
       int lastSlot = timeSlots.where((s) => !s.isBreak).length;
       if (lastSlot > 0) foundSlots.add(lastSlot);
@@ -68,7 +76,7 @@ class TimetableProvider extends ChangeNotifier {
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       category: 'NLP Rule: "$text"',
       facultyNames: foundFaculties,
-      subjectNames: [],
+      subjectNames: foundSubjects, // Now populated!
       classNames: foundClasses,
       days: foundDays,
       slotNumbers: foundSlots.isNotEmpty ? foundSlots : [1, 2, 3, 4, 5, 6, 7, 8],
@@ -115,7 +123,6 @@ class TimetableProvider extends ChangeNotifier {
     for (var con in _constraints) {
       if (con.category.contains('Fixed Subject Slot') || con.category.contains('NLP Rule')) {
         
-        // If no days were specified, apply to all working days
         List<String> daysToApply = con.days.isEmpty ? workingDays : con.days;
         
         for (String day in daysToApply) {
@@ -129,7 +136,6 @@ class TimetableProvider extends ChangeNotifier {
             }).toList();
 
             for (String className in targetClasses) {
-              // ✅ NULL-SAFE CHECK: If slot doesn't exist in grid, skip it!
               var cellData = _generatedTimetable[className]?[cellKey];
               if (cellData == null || cellData[0] != 'Free') continue;
 
@@ -140,6 +146,7 @@ class TimetableProvider extends ChangeNotifier {
 
               TeachingAssignment? assignToPlace;
 
+              // ✅ Now it will look for Subjects extracted from NLP
               if (con.subjectNames.isNotEmpty) {
                 assignToPlace = classAssignments.cast<TeachingAssignment?>().firstWhere(
                   (a) => con.subjectNames.contains(a!.subjectName), 
@@ -198,7 +205,6 @@ class TimetableProvider extends ChangeNotifier {
           var cell1Data = _generatedTimetable[className]?[cellKey1];
           var cell2Data = _generatedTimetable[className]?[cellKey2];
 
-          // ✅ NULL-SAFE CHECK
           if (cell1Data == null || cell2Data == null) continue;
 
           bool cell1Free = cell1Data[0] == 'Free' || cell1Data[2] != targetBatch;
@@ -209,8 +215,9 @@ class TimetableProvider extends ChangeNotifier {
           bool isCombined = lab.className == combinedClassName;
           bool facFree = isCombined || (!facultySchedule.containsKey(facKey1) && !facultySchedule.containsKey(facKey2));
 
+          // ✅ FIX 2: Check ALL constraints for faculty unavailability (Structured + NLP)
           bool isFacUnavailable = _constraints.any((con) {
-            if (con.category.contains('Faculty Unavailable') && con.facultyNames.contains(lab.facultyName)) {
+            if (con.facultyNames.contains(lab.facultyName)) {
               return con.days.contains(randomDay) && (con.slotNumbers.contains(slot1.lectureNumber) || con.slotNumbers.contains(slot2.lectureNumber));
             }
             return false;
@@ -246,7 +253,6 @@ class TimetableProvider extends ChangeNotifier {
           String cellKey = '${randomDay}_${slot.lectureNumber}';
 
           var cellData = _generatedTimetable[className]?[cellKey];
-          // ✅ NULL-SAFE CHECK
           if (cellData == null) continue;
 
           bool classFree = cellData[0] == 'Free';
@@ -254,8 +260,9 @@ class TimetableProvider extends ChangeNotifier {
           bool isCombined = assign.className == combinedClassName;
           bool facFree = isCombined || !facultySchedule.containsKey(facKey);
 
+          // ✅ FIX 2: Check ALL constraints for faculty unavailability (Structured + NLP)
           bool isFacUnavailable = _constraints.any((con) {
-            if (con.category.contains('Faculty Unavailable') && con.facultyNames.contains(assign.facultyName)) {
+            if (con.facultyNames.contains(assign.facultyName)) {
               return con.days.contains(randomDay) && con.slotNumbers.contains(slot.lectureNumber);
             }
             return false;
