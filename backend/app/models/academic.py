@@ -5,6 +5,7 @@ from sqlalchemy import Column, String, Integer, Boolean, Enum, ForeignKey, Numer
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
+from app.models.user import User
 
 
 class RoomType(str, enum.Enum):

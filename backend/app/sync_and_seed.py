@@ -98,6 +98,64 @@ def sync_database_schema():
         if "progress_status" not in topic_fb_cols:
             conn.execute(text("ALTER TABLE student_topic_feedback ADD COLUMN progress_status VARCHAR(20) NULL;"))
 
+        # 7. assessments
+        if "assessments" in inspector.get_table_names():
+            assessment_cols = {col["name"] for col in inspector.get_columns("assessments")}
+            for col_name, col_type in [
+                ("class_id", "INT NULL"),
+                ("faculty_id", "VARCHAR(36) NULL"),
+                ("status", "VARCHAR(20) NOT NULL DEFAULT 'DRAFT'"),
+                ("access_token", "VARCHAR(64) NULL"),
+                ("questions", "JSON NULL"),
+                ("created_at", "DATETIME NULL"),
+                ("updated_at", "DATETIME NULL"),
+            ]:
+                if col_name not in assessment_cols:
+                    conn.execute(text(f"ALTER TABLE assessments ADD COLUMN {col_name} {col_type};"))
+
+        if "assessment_id" not in pre_cols:
+            conn.execute(text("ALTER TABLE pre_semester_responses ADD COLUMN assessment_id INT NULL;"))
+        if "assessment_id" not in mid_cols:
+            conn.execute(text("ALTER TABLE mid_semester_responses ADD COLUMN assessment_id INT NULL;"))
+        if "assessment_id" not in end_cols:
+            conn.execute(text("ALTER TABLE end_semester_responses ADD COLUMN assessment_id INT NULL;"))
+
+        # 8. question_bank
+        if "question_bank" in inspector.get_table_names():
+            qb_cols = {col["name"] for col in inspector.get_columns("question_bank")}
+            for col_name, col_type in [
+                ("skill_id", "VARCHAR(100) NULL"),
+                ("difficulty", "SMALLINT NULL DEFAULT 3"),
+                ("marks", "INT NULL DEFAULT 1"),
+                ("options", "JSON NULL"),
+                ("question_title", "VARCHAR(255) NULL"),
+                ("section", "VARCHAR(100) NULL"),
+                ("dimension", "VARCHAR(100) NULL"),
+                ("competency", "VARCHAR(100) NULL"),
+            ]:
+                if col_name not in qb_cols:
+                    conn.execute(text(f"ALTER TABLE question_bank ADD COLUMN {col_name} {col_type};"))
+
+        # 9. MySQL Check Constraints Migration (ensure 'END' is allowed in student_topic_feedback)
+        if engine.dialect.name == "mysql":
+            try:
+                res = conn.execute(text("""
+                    SELECT CONSTRAINT_NAME 
+                    FROM information_schema.TABLE_CONSTRAINTS 
+                    WHERE TABLE_SCHEMA = DATABASE() 
+                    AND TABLE_NAME = 'student_topic_feedback' 
+                    AND CONSTRAINT_TYPE = 'CHECK';
+                """)).fetchall()
+                for r in res:
+                    cname = r[0]
+                    try:
+                        conn.execute(text(f"ALTER TABLE student_topic_feedback DROP CHECK `{cname}`;"))
+                    except Exception:
+                        pass
+                conn.execute(text("ALTER TABLE student_topic_feedback ADD CONSTRAINT ck_topic_feedback_stage CHECK (stage IN ('PRE', 'MID', 'END'));"))
+            except Exception as e:
+                print("MySQL check constraint sync notice:", e)
+
         conn.commit()
     print("Schema sync complete.")
 

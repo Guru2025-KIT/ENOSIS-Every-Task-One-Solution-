@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, timetable, users, todo, documents, ai_assistant, notifications, achievements, voice, sli, sli_analytics, sli_integration, attendance, dashboard
+from app.api.routes import auth, timetable, users, todo, documents, ai_assistant, notifications, achievements, voice, sli, sli_analytics, sli_integration, sli_ml, attendance, dashboard
 from app.core.config import settings
 from app.db.base import Base, engine
 
@@ -23,6 +23,9 @@ from app.models import (  # noqa: F401
 # switch to Alembic migrations so schema changes are tracked and
 # reversible instead of just "drop and recreate the table."
 Base.metadata.create_all(bind=engine)
+
+from app.sync_and_seed import sync_database_schema
+sync_database_schema()
 
 app = FastAPI(title=settings.APP_NAME)
 
@@ -48,6 +51,7 @@ app.include_router(voice.router)
 app.include_router(sli.router)
 app.include_router(sli_analytics.router)
 app.include_router(sli_integration.router)
+app.include_router(sli_ml.router)
 app.include_router(attendance.router)
 app.include_router(dashboard.router)
 

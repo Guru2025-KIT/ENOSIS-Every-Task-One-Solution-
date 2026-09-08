@@ -1,26 +1,27 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 /// Centralized HTTP client for every call to the ENOSIS FastAPI backend.
-/// Every repository (AuthRepository, TimetableRepository, etc.) goes
-/// through this instead of calling package:http directly — one place to
-/// change the base URL, add default headers, or add logging later.
-///
-/// BASE URL NOTE (this trips up almost everyone the first time): an
-/// Android EMULATOR can't reach your computer's "localhost" — from the
-/// emulator's point of view, "localhost" means the emulator itself.
-/// 10.0.2.2 is a special alias Android's emulator provides that maps back
-/// to your host machine. A PHYSICAL phone needs your computer's real LAN
-/// IP instead (e.g. 192.168.1.42) since it's a genuinely separate device
-/// on the network. Flutter WEB can use localhost directly, since it runs
-/// inside your computer's own browser. See docs/CONNECTING_FRONTEND_BACKEND.md.
 class ApiClient {
   ApiClient._();
 
-  /// Change this to match how you're running the app right now — see the
-  /// table in docs/CONNECTING_FRONTEND_BACKEND.md for the exact value per
-  /// platform (Android emulator / physical device / Flutter Web).
- static const String baseUrl = 'http://localhost:8000';
+  /// API Backend Base URL
+  static const String baseUrl = 'http://localhost:8000';
+
+  /// Configurable public application base URL for shareable links
+  static const String appBaseUrl = 'http://localhost:5000';
+
+  /// Resolves the absolute shareable URL for a student assessment
+  static String getAssessmentShareUrl(String accessToken) {
+    if (kIsWeb) {
+      final origin = Uri.base.origin;
+      if (origin.isNotEmpty && !origin.startsWith('null')) {
+        return '$origin/#/assessment/$accessToken';
+      }
+    }
+    return '$appBaseUrl/#/assessment/$accessToken';
+  }
 
   static Uri _uri(String path) => Uri.parse('$baseUrl$path');
 
@@ -64,6 +65,22 @@ class ApiClient {
       headers: {
         if (token != null) 'Authorization': 'Bearer $token',
       },
+    );
+  }
+
+  /// PUT with a JSON body — used for updates (e.g. updating assessment status).
+  static Future<http.Response> putJson(
+    String path,
+    Map<String, dynamic> body, {
+    String? token,
+  }) {
+    return http.put(
+      _uri(path),
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(body),
     );
   }
 

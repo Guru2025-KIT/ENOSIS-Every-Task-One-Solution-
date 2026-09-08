@@ -1,0 +1,78 @@
+{
+  "model_name": "LogisticRegression",
+  "trained_at": "2026-09-08T17:41:51.939165+00:00",
+  "total_samples": 106,
+  "train_samples": 79,
+  "validation_samples": 27,
+  "class_distribution": {
+    "at_risk": 36,
+    "on_track": 70
+  },
+  "metrics": {
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
+    "roc_auc": 1.0
+  },
+  "all_model_comparisons": {
+    "LogisticRegression": {
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "roc_auc": 1.0
+    },
+    "RandomForest": {
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "roc_auc": 1.0
+    },
+    "GradientBoosting": {
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "roc_auc": 1.0
+    }
+  },
+  "feature_names": [
+    "pre_skill_confidence_mean",
+    "pre_skill_application_mean",
+    "pre_skill_difficulty_mean",
+    "pre_overall_confidence",
+    "pre_problem_solving",
+    "pre_independent_learning",
+    "pre_learning_pace",
+    "pre_barrier_count",
+    "pre_barrier_frequency",
+    "mid_skill_confidence_mean",
+    "mid_skill_application_mean",
+    "mid_skill_difficulty_mean",
+    "mid_overall_confidence",
+    "mid_problem_solving",
+    "mid_barrier_count",
+    "mid_barrier_frequency",
+    "delta_confidence_mean",
+    "delta_application_mean",
+    "delta_difficulty_mean",
+    "delta_overall_confidence",
+    "delta_barrier_count",
+    "delta_barrier_frequency",
+    "min_mid_skill_score",
+    "has_critical_drop"
+  ],
+  "top_feature_importances": {
+    "mid_overall_confidence": 0.4622,
+    "mid_problem_solving": 0.4357,
+    "min_mid_skill_score": 0.4158,
+    "mid_skill_application_mean": 0.4104,
+    "mid_skill_confidence_mean": 0.4061,
+    "pre_overall_confidence": 0.3501,
+    "mid_barrier_frequency": 0.3472,
+    "mid_barrier_count": 0.3148
+  },
+  "is_calibration_dataset": true
+}

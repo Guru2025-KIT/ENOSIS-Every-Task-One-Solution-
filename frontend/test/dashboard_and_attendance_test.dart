@@ -9,7 +9,6 @@ import 'package:enosis/features/dashboard/data/services/dashboard_service.dart';
 import 'package:enosis/features/dashboard/presentation/providers/attendance_provider.dart';
 import 'package:enosis/features/dashboard/presentation/providers/dashboard_provider.dart';
 import 'package:enosis/features/dashboard/presentation/screens/dashboard_screen.dart';
-import 'package:enosis/features/dashboard/presentation/widgets/lecture_attendance_sheet.dart';
 import 'package:enosis/features/faculty_insights/presentation/providers/sli_end_provider.dart';
 import 'package:enosis/features/faculty_insights/presentation/providers/sli_mid_provider.dart';
 import 'package:enosis/features/faculty_insights/presentation/providers/sli_pre_provider.dart';

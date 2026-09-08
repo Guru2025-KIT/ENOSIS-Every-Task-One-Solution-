@@ -4,10 +4,10 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.models.academic import Division, Subject
+from app.models.academic import Division, Subject, TeachingAssignment
 from app.models.generation_history import GenerationRun
 from app.models.sli import (
-    AcademicClass, Department, EndSemesterResponse, Enrollment, MidSemesterResponse, PreSemesterResponse,
+    AcademicClass, Assessment, Department, EndSemesterResponse, Enrollment, MidSemesterResponse, PreSemesterResponse,
     Semester, Student, StudentTopicFeedback, Topic,
 )
 from app.models.timetable import TimetableEntry
@@ -35,10 +35,14 @@ def get_faculty_teaching_contexts(
 ) -> list[dict]:
     """
     Resolves the active teaching contexts for a logged-in faculty directly
-    from the published/active timetable (`timetable_entries`).
+    from the published/active timetable (`timetable_entries`), explicit
+    `teaching_assignments`, and faculty-created `assessments`.
     """
     active_batch_id = get_active_timetable_batch_id(db)
 
+    assigned_pairs_set: set[tuple[str, str]] = set()
+
+    # 1. Timetable entries for faculty
     query = db.query(
         TimetableEntry.subject_id,
         TimetableEntry.division_id,
@@ -48,13 +52,41 @@ def get_faculty_teaching_contexts(
     if active_batch_id:
         query = query.filter(TimetableEntry.batch_id == active_batch_id)
 
-    assigned_pairs = query.distinct().all()
+    for pair in query.distinct().all():
+        if pair[0] and pair[1]:
+            assigned_pairs_set.add((pair[0], pair[1]))
+
+    # 2. Explicit teaching assignments for faculty
+    ta_query = db.query(
+        TeachingAssignment.subject_id,
+        TeachingAssignment.division_id,
+    )
+    if not is_admin:
+        ta_query = ta_query.filter(TeachingAssignment.faculty_id == faculty_id)
+    for pair in ta_query.distinct().all():
+        if pair[0] and pair[1]:
+            assigned_pairs_set.add((pair[0], pair[1]))
+
+    # 3. Explicit assessments created by faculty
+    assessments_query = db.query(Assessment.subject_id, Assessment.class_id)
+    if not is_admin:
+        assessments_query = assessments_query.filter(Assessment.faculty_id == faculty_id)
+    for sub_id, cls_id in assessments_query.distinct().all():
+        if sub_id and cls_id:
+            ac = db.query(AcademicClass).filter(AcademicClass.class_id == cls_id).first()
+            if ac:
+                div = db.query(Division).filter(Division.id == ac.division_id).first() if ac.division_id else None
+                if not div:
+                    div = db.query(Division).filter(
+                        Division.year == ac.year_level,
+                        Division.division_code == ac.division,
+                    ).first()
+                if div:
+                    assigned_pairs_set.add((sub_id, div.id))
+
+    assigned_pairs = list(assigned_pairs_set)
 
     contexts = []
-    # Fetch active/upcoming semesters
-    active_semesters = db.query(Semester).filter(
-        Semester.status.in_(["ACTIVE", "UPCOMING"])
-    ).all()
 
     for subject_id, division_id in assigned_pairs:
         subject = db.query(Subject).filter(Subject.id == subject_id).first()
@@ -165,7 +197,7 @@ def authorize_faculty_teaching_assignment(
 ) -> None:
     """
     Verifies that the faculty member is assigned to teach the given subject
-    and division in the active published timetable.
+    and division in the active published timetable or explicit teaching assignments.
     """
     if is_admin:
         return
@@ -182,11 +214,170 @@ def authorize_faculty_teaching_assignment(
         query = query.filter(TimetableEntry.batch_id == active_batch_id)
 
     assignment_exists = query.first() is not None
+
+    if not assignment_exists:
+        ta_query = db.query(TeachingAssignment).filter(
+            TeachingAssignment.faculty_id == faculty_id,
+            TeachingAssignment.subject_id == subject_id,
+        )
+        if division_id:
+            ta_query = ta_query.filter(TeachingAssignment.division_id == division_id)
+        assignment_exists = ta_query.first() is not None
+
     if not assignment_exists:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not assigned to teach this subject and division in the active timetable.",
         )
+
+
+# ---------------------------------------------------------------------------
+# 2B. Manual / Dynamic Faculty Teaching Assignment & Options
+# ---------------------------------------------------------------------------
+
+def get_available_teaching_options(db: Session) -> dict[str, Any]:
+    """
+    Returns available subjects, divisions, and active semesters for explicit
+    assignment selection when no timetable assignment exists.
+    """
+    subjects = db.query(Subject).order_by(Subject.name.asc()).all()
+    divisions = db.query(Division).order_by(Division.year.asc(), Division.division_code.asc()).all()
+    semesters = db.query(Semester).order_by(Semester.status.asc(), Semester.semester_id.asc()).all()
+
+    return {
+        "subjects": [
+            {
+                "subject_id": s.id,
+                "subject_name": s.name,
+                "subject_code": s.code,
+            }
+            for s in subjects
+        ],
+        "divisions": [
+            {
+                "division_id": d.id,
+                "division_name": d.name,
+                "year_level": d.year,
+                "division_code": d.division_code,
+            }
+            for d in divisions
+        ],
+        "semesters": [
+            {
+                "semester_id": sem.semester_id,
+                "semester_number": sem.semester_number,
+                "academic_year": sem.academic_year,
+                "status": sem.status,
+            }
+            for sem in semesters
+        ],
+    }
+
+
+def assign_faculty_teaching_context(
+    db: Session,
+    faculty_id: str,
+    subject_id: str,
+    division_id: str,
+    semester_id: int | None = None,
+) -> dict[str, Any]:
+    """
+    Explicitly assigns a teaching context (subject + division) to the faculty member.
+    Saves/ensures a TeachingAssignment record and AcademicClass association exists.
+    """
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found.")
+
+    division = db.query(Division).filter(Division.id == division_id).first()
+    if not division:
+        raise HTTPException(status_code=404, detail="Division not found.")
+
+    # 1. Upsert TeachingAssignment
+    ta = db.query(TeachingAssignment).filter(
+        TeachingAssignment.faculty_id == faculty_id,
+        TeachingAssignment.subject_id == subject_id,
+        TeachingAssignment.division_id == division_id,
+    ).first()
+    if not ta:
+        ta = TeachingAssignment(
+            faculty_id=faculty_id,
+            subject_id=subject_id,
+            division_id=division_id,
+        )
+        db.add(ta)
+        db.commit()
+
+    # 2. Find or create AcademicClass
+    academic_class = db.query(AcademicClass).filter(
+        AcademicClass.division_id == division.id
+    ).first()
+    if not academic_class:
+        academic_class = db.query(AcademicClass).filter(
+            AcademicClass.year_level == division.year,
+            AcademicClass.division == division.division_code,
+        ).first()
+
+    if not academic_class:
+        dept = db.query(Department).first()
+        dept_id = dept.department_id if dept else 1
+        academic_class = AcademicClass(
+            department_id=dept_id,
+            year_level=division.year,
+            division=division.division_code,
+            division_id=division.id,
+            academic_year="2025-26",
+        )
+        db.add(academic_class)
+        db.commit()
+        db.refresh(academic_class)
+
+    # 3. Resolve semester
+    matched_semester = None
+    if semester_id:
+        matched_semester = db.query(Semester).filter(Semester.semester_id == semester_id).first()
+    if not matched_semester:
+        matched_semester = db.query(Semester).filter(Semester.status == "ACTIVE").first() or db.query(Semester).filter(Semester.status == "UPCOMING").first()
+
+    sem_id = matched_semester.semester_id if matched_semester else None
+    sem_num = matched_semester.semester_number if matched_semester else None
+    acad_yr = matched_semester.academic_year if matched_semester else None
+
+    # Count enrollments
+    total_students = 0
+    assessed_students = 0
+    mid_assessed_students = 0
+    end_assessed_students = 0
+
+    if academic_class.class_id and sem_id:
+        eq = db.query(Enrollment).filter(
+            Enrollment.class_id == academic_class.class_id,
+            Enrollment.subject_id == subject.id,
+            Enrollment.semester_id == sem_id,
+        )
+        total_students = eq.count()
+        assessed_students = eq.join(PreSemesterResponse, Enrollment.enrollment_id == PreSemesterResponse.enrollment_id).count()
+        mid_assessed_students = eq.join(MidSemesterResponse, Enrollment.enrollment_id == MidSemesterResponse.enrollment_id).count()
+        end_assessed_students = eq.join(EndSemesterResponse, Enrollment.enrollment_id == EndSemesterResponse.enrollment_id).count()
+
+    return {
+        "subject_id": subject.id,
+        "subject_name": subject.name,
+        "subject_code": subject.code,
+        "division_id": division.id,
+        "division_name": division.name,
+        "year_level": division.year,
+        "division_code": division.division_code,
+        "class_id": academic_class.class_id,
+        "semester_id": sem_id,
+        "semester_number": sem_num,
+        "academic_year": acad_yr,
+        "total_students": total_students,
+        "assessed_students": assessed_students,
+        "mid_assessed_students": mid_assessed_students,
+        "end_assessed_students": end_assessed_students,
+    }
+
 
 
 # ---------------------------------------------------------------------------

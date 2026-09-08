@@ -5,6 +5,7 @@ import '../../../../core/utils/responsive.dart';
 import '../../data/models/analytics_models.dart';
 import '../providers/sli_analytics_provider.dart';
 import '../widgets/analytics_widgets.dart';
+import '../widgets/ml_risk_card.dart';
 
 class StudentAnalyticsDetailScreen extends StatefulWidget {
   final int enrollmentId;
@@ -95,6 +96,10 @@ class _StudentAnalyticsDetailScreenState extends State<StudentAnalyticsDetailScr
                         children: [
                           _buildProfileHeader(student),
                           const SizedBox(height: 20),
+                          if (student.mlPrediction != null) ...[
+                            MlRiskCard(prediction: student.mlPrediction!),
+                            const SizedBox(height: 20),
+                          ],
                           if (student.riskFindings.isNotEmpty) ...[
                             Text(
                               'Flagged Risk & Attention Areas',

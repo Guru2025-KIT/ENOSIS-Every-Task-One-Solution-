@@ -195,6 +195,9 @@ class StudentLongitudinalAnalyticsOut(BaseModel):
     # Student-Specific Deterministic Risk Findings
     risk_findings: list[RiskFindingOut]
 
+    # Machine Learning Early Warning Prediction (MID-stage inference)
+    ml_prediction: dict[str, Any] | None = None
+
 
 # ---------------------------------------------------------------------------
 # Attention Roster Models

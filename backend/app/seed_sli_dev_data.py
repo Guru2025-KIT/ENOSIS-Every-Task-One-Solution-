@@ -34,7 +34,7 @@ from app.db.base import Base, engine, SessionLocal
 from app.models.academic import Division, Room, Subject
 from app.models.generation_history import GenerationRun
 from app.models.sli import (
-    AcademicClass, Department, Enrollment, Semester, Student, Topic,
+    AcademicClass, Department, Enrollment, QuestionBank, Semester, Student, Topic,
 )
 from app.models.timetable import TimetableEntry
 from app.models.user import User, UserRole
@@ -220,12 +220,10 @@ def seed():
             gen_run = GenerationRun(
                 id=str(uuid.uuid4()),
                 status="OPTIMAL",
-                solver_status="OPTIMAL",
                 validation_passed=True,
                 solve_time_seconds=0.1,
-                quality_score=98.5,
-                soft_score=100.0,
-                total_classes_placed=1,
+                objective_score=98.5,
+                total_entries=1,
             )
             db.add(gen_run)
             db.flush()
@@ -311,6 +309,70 @@ def seed():
             print(f"  + Enrollments created: {enrollment_count}")
         else:
             print("  - All enrollments already exist")
+
+        # ── 13. Question Bank Items ───────────────────────────────
+        qb_count = 0
+        for subj in subjects:
+            subj_topics = db.query(Topic).filter_by(subject_id=subj.id).all()
+            for t in subj_topics:
+                # Provide questions across different difficulty levels (1-5) and stages (PRE, MID, END)
+                q_specs = [
+                    {
+                        "stage": "PRE",
+                        "diff": 2,
+                        "title": f"Prerequisite Baseline: {t.topic_name}",
+                        "text": f"Rate your foundational understanding of prerequisite principles before learning {t.topic_name}.",
+                        "dim": "PREREQUISITES",
+                    },
+                    {
+                        "stage": "MID",
+                        "diff": 3,
+                        "title": f"Practical Application: {t.topic_name}",
+                        "text": f"How confidently can you implement and debug practical problem scenarios in {t.topic_name}?",
+                        "dim": "APPLICATION_PRACTICAL",
+                    },
+                    {
+                        "stage": "END",
+                        "diff": 4,
+                        "title": f"Outcome Attainment: {t.topic_name}",
+                        "text": f"Evaluate your comprehensive mastery and problem-solving agility in {t.topic_name}.",
+                        "dim": "MASTERY_OUTCOMES",
+                    },
+                ]
+                for q_spec in q_specs:
+                    existing_q = db.query(QuestionBank).filter_by(
+                        subject_id=subj.id,
+                        topic_id=t.topic_id,
+                        assessment_type=q_spec["stage"],
+                        question_title=q_spec["title"],
+                    ).first()
+                    if not existing_q:
+                        new_q = QuestionBank(
+                            subject_id=subj.id,
+                            topic_id=t.topic_id,
+                            assessment_type=q_spec["stage"],
+                            question_title=q_spec["title"],
+                            question_text=q_spec["text"],
+                            question_type="LIKERT_1_5",
+                            section=f"Question Bank: {t.topic_name}",
+                            dimension=q_spec["dim"],
+                            competency="Analytical Problem Solving",
+                            skill_id=derive_skill_id(t.topic_name),
+                            difficulty=q_spec["diff"],
+                            marks=1,
+                            is_active=True,
+                            created_by=dev_faculty.id,
+                            created_at=datetime.utcnow(),
+                            updated_at=datetime.utcnow(),
+                        )
+                        db.add(new_q)
+                        qb_count += 1
+
+        db.flush()
+        if qb_count:
+            print(f"  + Question Bank items created: {qb_count}")
+        else:
+            print("  - Question Bank items already seeded")
 
         db.commit()
         print("\n[OK] SLI development seed complete.")

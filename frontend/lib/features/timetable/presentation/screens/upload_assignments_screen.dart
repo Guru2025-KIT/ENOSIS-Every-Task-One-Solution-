@@ -1,5 +1,5 @@
 import 'dart:typed_data';
-import 'dart:html' as html;
+import 'package:universal_html/html.dart' as html;
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
@@ -109,7 +109,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
       else if (RegExp(r'B\s*TECH').hasMatch(seg) || RegExp(r'FINAL\s*YEAR').hasMatch(seg)) year = 'BTECH';
 
       if (year.isEmpty && lastYear != null) {
-        year = lastYear!;
+        year = lastYear;
       } else if (year.isNotEmpty) {
         lastYear = year;
       }
@@ -129,7 +129,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
       }
 
       if (depts.isEmpty && lastDept != null) {
-        depts.add(lastDept!);
+        depts.add(lastDept);
       } else if (depts.isNotEmpty) {
         lastDept = depts.join('-');
       }

@@ -24,9 +24,12 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
 
-    # App
+    # App & URLs
     APP_NAME: str = "ENOSIS Backend"
     ENV: str = "development"
+    API_BASE_URL: str = "http://localhost:8000"
+    FRONTEND_APP_BASE_URL: str = "http://localhost:5000"
+    APP_BASE_URL: str = "http://localhost:5000"  # Backward compatibility alias for FRONTEND_APP_BASE_URL
 
     # Displayed on the timetable and other institution-branded screens.
     # Override in .env — this default is a clearly-fake placeholder so

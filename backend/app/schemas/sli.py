@@ -492,3 +492,271 @@ class StudentRosterItemOut(BaseModel):
     is_end_assessed: bool = False
     submitted_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+# ---------------------------------------------------------------------------
+# Assessment Lifecycle & Publishing Schemas
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Question Bank & Assessment Configuration Schemas
+# ---------------------------------------------------------------------------
+
+class QuestionBankItemCreate(BaseModel):
+    subject_id: str
+    topic_id: int | None = None
+    assessment_type: str = "ALL"  # PRE, MID, END, ALL
+    question_title: str | None = None
+    question_text: str
+    question_type: str = "LIKERT_1_5"
+    section: str | None = None
+    dimension: str | None = None
+    competency: str | None = None
+    skill_id: str | None = None
+    difficulty: int | None = Field(default=3, ge=1, le=5)
+    marks: int | None = 1
+    options: list[dict[str, Any]] | None = None
+
+
+class QuestionBankUpdate(BaseModel):
+    topic_id: int | None = None
+    assessment_type: str | None = None
+    question_title: str | None = None
+    question_text: str | None = None
+    question_type: str | None = None
+    section: str | None = None
+    dimension: str | None = None
+    competency: str | None = None
+    skill_id: str | None = None
+    difficulty: int | None = Field(default=None, ge=1, le=5)
+    marks: int | None = None
+    options: list[dict[str, Any]] | None = None
+    is_active: bool | None = None
+
+
+class QuestionBankItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    question_id: int
+    subject_id: str
+    topic_id: int | None = None
+    assessment_type: str
+    question_title: str | None = None
+    question_text: str
+    question_type: str
+    section: str | None = None
+    dimension: str | None = None
+    competency: str | None = None
+    skill_id: str | None = None
+    difficulty: int | None = 3
+    marks: int | None = 1
+    options: list[dict[str, Any]] | None = None
+    is_active: bool
+    created_by: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class AssessmentQuestionsUpdateRequest(BaseModel):
+    questions: list[dict[str, Any]] = Field(
+        ...,
+        min_length=15,
+        max_length=20,
+        description="Customized assessment question list (strictly 15 to 20 questions)",
+    )
+
+
+class AssessmentCreateRequest(BaseModel):
+    class_id: int
+    subject_id: str
+    semester_id: int
+    assessment_type: str = Field(..., description="PRE, MID, or END")
+    assessment_name: str | None = None
+    question_count: int | None = Field(default=20, ge=15, le=20, description="Target question count (15 to 20)")
+    questions: list[dict[str, Any]] | None = Field(default=None, max_length=20, description="Explicit questions (max 20)")
+
+
+class AssessmentStatusUpdateRequest(BaseModel):
+    status: str = Field(..., description="DRAFT, PUBLISHED, or CLOSED")
+
+
+class AssessmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    assessment_id: int
+    subject_id: str
+    subject_name: str
+    subject_code: str | None = None
+    semester_id: int
+    class_id: int
+    class_name: str
+    assessment_name: str
+    assessment_type: str
+    status: str
+    access_token: str | None = None
+    share_url: str | None = None
+    questions: list[dict[str, Any]] | None = None
+    total_enrolled: int = 0
+    total_submitted: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class StudentAssessmentPortalStudentItem(BaseModel):
+    student_id: str
+    name: str
+    enrollment_id: int
+    current_year: int | None = None
+    division: str | None = None
+    is_submitted: bool = False
+
+
+class StudentAssessmentPortalOut(BaseModel):
+    assessment_id: int
+    access_token: str
+    assessment_name: str
+    assessment_type: str
+    status: str
+    subject_id: str
+    subject_name: str
+    subject_code: str | None = None
+    class_name: str
+    division_name: str | None = None
+    expected_division: str | None = None
+    academic_year: str | None = None
+    semester_number: int | None = None
+    share_url: str | None = None
+    questions: list[dict[str, Any]] = Field(default_factory=list)
+    topics: list[dict[str, Any]] = Field(default_factory=list)
+    students: list[StudentAssessmentPortalStudentItem] = Field(default_factory=list)
+
+
+class StudentPortalSubmissionRequest(BaseModel):
+    student_id: str = Field(..., description="Student Roll Number / PRN / Institutional Identifier")
+    full_name: str = Field(..., description="Student's Full Name")
+    division_code: str = Field(..., description="Student's Division (e.g. 'A', 'Div A')")
+
+    # PRE fields
+    subject_interest: int | None = Field(None, ge=1, le=5)
+    self_assessed_skill: int | None = Field(None, ge=1, le=5)
+    learning_confidence: int | None = Field(None, ge=1, le=5)
+    expected_difficulty: int | None = Field(None, ge=1, le=5)
+    preferred_learning_format: str | None = None
+    preferred_content_types: list[str] | None = None
+    learning_source: str | None = None
+    free_vs_paid_preference: str | None = None
+    career_interest: str | None = None
+    placement_goal: str | None = None
+    skills_to_improve: str | None = None
+
+    # MID fields
+    current_confidence: int | None = Field(None, ge=1, le=5)
+    current_interest: int | None = Field(None, ge=1, le=5)
+    understanding_level: int | None = Field(None, ge=1, le=5)
+    concept_application_ability: int | None = Field(None, ge=1, le=5)
+    learning_satisfaction: int | None = Field(None, ge=1, le=5)
+    useful_learning_format: AllowedLearningFormat | None = None
+    resource_effectiveness: int | None = Field(None, ge=1, le=5)
+    practical_lab_experience: int | None = Field(None, ge=1, le=5)
+    teaching_pace: TeachingPace | None = None
+    learning_barriers: list[LearningBarrier] = Field(default_factory=list)
+
+    # END fields
+    final_confidence: int | None = Field(None, ge=1, le=5)
+    final_interest: int | None = Field(None, ge=1, le=5)
+    core_concepts_mastery: int | None = Field(None, ge=1, le=5)
+    problem_solving_ability: int | None = Field(None, ge=1, le=5)
+    practical_lab_competence: int | None = Field(None, ge=1, le=5)
+    independent_learning_ability: int | None = Field(None, ge=1, le=5)
+    real_world_application: int | None = Field(None, ge=1, le=5)
+    effective_learning_format: AllowedLearningFormat | None = None
+    overall_learning_experience: int | None = Field(None, ge=1, le=5)
+
+    # Common fields
+    perceived_difficulty: int | None = Field(None, ge=1, le=5)
+    skills_progress: list[SkillProgressItem] = Field(default_factory=list)
+    topic_feedback: list[dict[str, Any]] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Manual / Dynamic Faculty Teaching Assignment Schemas
+# ---------------------------------------------------------------------------
+
+class FacultyContextAssignRequest(BaseModel):
+    subject_id: str
+    division_id: str
+    semester_id: int | None = None
+
+
+class SubjectOptionItem(BaseModel):
+    subject_id: str
+    subject_name: str
+    subject_code: str | None = None
+
+
+class DivisionOptionItem(BaseModel):
+    division_id: str
+    division_name: str
+    year_level: int
+    division_code: str
+
+
+class SemesterOptionItem(BaseModel):
+    semester_id: int
+    semester_number: int | None = None
+    academic_year: str | None = None
+    status: str | None = None
+
+
+class AvailableTeachingOptionsOut(BaseModel):
+    subjects: list[SubjectOptionItem]
+    divisions: list[DivisionOptionItem]
+    semesters: list[SemesterOptionItem]
+
+
+# ---------------------------------------------------------------------------
+# Machine Learning Risk & Prediction Schemas
+# ---------------------------------------------------------------------------
+
+class MlPredictionOut(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    enrollment_id: int
+    student_id: str
+    student_name: str | None = None
+    roll_number: str | None = None
+    subject_id: str | None = None
+    subject_name: str | None = None
+    is_at_risk: bool
+    risk_probability: float
+    risk_level: str  # HIGH, MODERATE, LOW
+    confidence_score: float
+    model_used: str
+    top_risk_drivers: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+    features: dict[str, float] = Field(default_factory=dict)
+
+
+class MlTrainingResultOut(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    model_name: str
+    trained_at: str
+    total_samples: int
+    train_samples: int
+    validation_samples: int
+    class_distribution: dict[str, int]
+    metrics: dict[str, float]
+    all_model_comparisons: dict[str, dict[str, float]]
+    feature_names: list[str]
+    top_feature_importances: dict[str, float]
+    is_calibration_dataset: bool
+
+
+class MlModelInfoOut(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    status: str
+    model_name: str | None = None
+    trained_at: str | None = None
+    metrics: dict[str, float] | None = None
+    top_feature_importances: dict[str, float] | None = None
+    message: str | None = None
+
+
+
