@@ -9,6 +9,7 @@ import '../../data/models/student_roster_item.dart';
 import '../providers/sli_end_provider.dart';
 import '../providers/sli_mid_provider.dart';
 import '../providers/sli_pre_provider.dart';
+import 'assessment_management_screen.dart';
 import 'end_assessment_form_screen.dart';
 import 'mid_assessment_form_screen.dart';
 import 'pre_assessment_form_screen.dart';
@@ -86,6 +87,21 @@ class _StudentRosterScreenState extends State<StudentRosterScreen> {
             iconTheme: const IconThemeData(color: Colors.white),
             elevation: 0,
             actions: [
+              if (contextItem != null)
+                IconButton(
+                  icon: const Icon(Icons.share_outlined, color: Colors.white),
+                  tooltip: 'Manage & Publish Assessments',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AssessmentManagementScreen(
+                          teachingContext: contextItem,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               IconButton(
                 icon: const Icon(Icons.refresh, color: Colors.white),
                 tooltip: 'Refresh Roster',

@@ -17,6 +17,7 @@ from app.schemas.sli_analytics import (
     StudentTopicProgressionOut, TopicCohortSummaryOut,
 )
 from app.services.sli_pre_service import authorize_faculty_teaching_assignment
+from app.ml.predictor import predict_student_risk
 
 
 def _safe_mean(values: list[float | int | None]) -> float | None:
@@ -683,7 +684,10 @@ def get_student_longitudinal_analytics(
         skill_progressions=skill_progressions,
     )
 
-    barriers = mid_resp.learning_barriers if (mid_resp and isinstance(mid_resp.learning_barriers, list)) else []
+    # 7. Compute ML Early Warning Risk Prediction (MID-stage inference)
+    ml_pred = predict_student_risk(pre_response=pre_resp, mid_response=mid_resp)
+
+    barriers = mid_resp.learning_barriers if (mid_resp and mid_resp.learning_barriers and isinstance(mid_resp.learning_barriers, list)) else []
 
     return StudentLongitudinalAnalyticsOut(
         enrollment_id=enrollment_id,
@@ -712,6 +716,7 @@ def get_student_longitudinal_analytics(
         topics=topic_progressions,
         skills=skill_progressions,
         risk_findings=student_risk_findings,
+        ml_prediction=ml_pred,
     )
 
 

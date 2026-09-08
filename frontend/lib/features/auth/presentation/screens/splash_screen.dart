@@ -37,6 +37,10 @@ class _SplashScreenState extends State<SplashScreen> {
     ]);
 
     if (!mounted) return;
+    final currentRoute = ModalRoute.of(context);
+    if (currentRoute != null && !currentRoute.isCurrent) {
+      return;
+    }
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
     );

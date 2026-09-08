@@ -84,6 +84,7 @@ class MidTopicFeedbackSubmissionItem {
 class MidAssessmentSubmissionResponse {
   final String status;
   final String message;
+  final int? responseId;
   final int enrollmentId;
   final DateTime submittedAt;
   final int topicsRecorded;
@@ -92,6 +93,7 @@ class MidAssessmentSubmissionResponse {
   const MidAssessmentSubmissionResponse({
     required this.status,
     required this.message,
+    this.responseId,
     required this.enrollmentId,
     required this.submittedAt,
     required this.topicsRecorded,
@@ -102,10 +104,13 @@ class MidAssessmentSubmissionResponse {
     return MidAssessmentSubmissionResponse(
       status: json['status'] as String? ?? 'success',
       message: json['message'] as String? ?? '',
-      enrollmentId: json['enrollment_id'] as int,
-      submittedAt: DateTime.parse(json['submitted_at'] as String),
-      topicsRecorded: json['topics_recorded'] as int? ?? 0,
-      skillsRecorded: json['skills_recorded'] as int? ?? 0,
+      responseId: json['response_id'] as int?,
+      enrollmentId: (json['enrollment_id'] as num?)?.toInt() ?? 0,
+      submittedAt: json['submitted_at'] != null
+          ? (DateTime.tryParse(json['submitted_at'].toString()) ?? DateTime.now())
+          : DateTime.now(),
+      topicsRecorded: (json['topics_recorded'] as num?)?.toInt() ?? 0,
+      skillsRecorded: (json['skills_recorded'] as num?)?.toInt() ?? 0,
     );
   }
 }

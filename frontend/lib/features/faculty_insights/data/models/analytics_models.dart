@@ -1,3 +1,5 @@
+import 'sli_ml_models.dart';
+
 class AssessmentFunnel {
   final int totalEnrolled;
   final int preCompleted;
@@ -574,6 +576,7 @@ class StudentLongitudinalAnalytics {
   final List<StudentTopicProgression> topics;
   final List<StudentSkillProgression> skills;
   final List<RiskFinding> riskFindings;
+  final SliMlPrediction? mlPrediction;
 
   const StudentLongitudinalAnalytics({
     required this.enrollmentId,
@@ -602,6 +605,7 @@ class StudentLongitudinalAnalytics {
     required this.topics,
     required this.skills,
     required this.riskFindings,
+    this.mlPrediction,
   });
 
   factory StudentLongitudinalAnalytics.fromJson(Map<String, dynamic> json) {
@@ -632,6 +636,7 @@ class StudentLongitudinalAnalytics {
       topics: (json['topics'] as List<dynamic>?)?.map((e) => StudentTopicProgression.fromJson(e as Map<String, dynamic>)).toList() ?? [],
       skills: (json['skills'] as List<dynamic>?)?.map((e) => StudentSkillProgression.fromJson(e as Map<String, dynamic>)).toList() ?? [],
       riskFindings: (json['risk_findings'] as List<dynamic>?)?.map((e) => RiskFinding.fromJson(e as Map<String, dynamic>)).toList() ?? [],
+      mlPrediction: json['ml_prediction'] != null ? SliMlPrediction.fromJson(json['ml_prediction'] as Map<String, dynamic>) : null,
     );
   }
 }

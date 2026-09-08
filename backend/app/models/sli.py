@@ -211,6 +211,12 @@ class PreSemesterResponse(Base):
         nullable=False,
         index=True,
     )
+    assessment_id = Column(
+        Integer,
+        ForeignKey("assessments.assessment_id"),
+        nullable=True,
+        index=True,
+    )
 
     # Subject-level ratings (1-5)
     subject_interest = Column(SmallInteger, nullable=True)       # 1-5
@@ -315,6 +321,12 @@ class MidSemesterResponse(Base):
         nullable=False,
         index=True,
     )
+    assessment_id = Column(
+        Integer,
+        ForeignKey("assessments.assessment_id"),
+        nullable=True,
+        index=True,
+    )
 
     # 1. Current Subject Understanding & Perception (1 to 5)
     current_confidence = Column(SmallInteger, nullable=True)          # 1-5 (Evolution of PRE learning_confidence)
@@ -358,6 +370,12 @@ class EndSemesterResponse(Base):
         Integer,
         ForeignKey("enrollments.enrollment_id"),
         nullable=False,
+        index=True,
+    )
+    assessment_id = Column(
+        Integer,
+        ForeignKey("assessments.assessment_id"),
+        nullable=True,
         index=True,
     )
 
@@ -453,13 +471,12 @@ class StudentTopicFeedback(Base):
 
 class Assessment(Base):
     """
-    Assessment definitions — INTERNAL, ASSIGNMENT, PRACTICAL, QUIZ,
-    PROJECT, VIVA, EXAM.  These are NOT hard-coded as separate tables.
+    Assessment definitions — PRE, MID, END, INTERNAL, ASSIGNMENT, PRACTICAL, QUIZ,
+    PROJECT, VIVA, EXAM.
     """
     __tablename__ = "assessments"
 
     assessment_id = Column(Integer, primary_key=True, autoincrement=True)
-    # Uses existing subjects table UUID PK
     subject_id = Column(
         String(36),
         ForeignKey("subjects.id"),
@@ -472,10 +489,27 @@ class Assessment(Base):
         nullable=True,
         index=True,
     )
+    class_id = Column(
+        Integer,
+        ForeignKey("classes.class_id"),
+        nullable=True,
+        index=True,
+    )
+    faculty_id = Column(
+        String(36),
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
     assessment_name = Column(String(100), nullable=True)
-    assessment_type = Column(String(50), nullable=True)  # INTERNAL, ASSIGNMENT, etc.
+    assessment_type = Column(String(50), nullable=True)  # PRE, MID, END, INTERNAL, etc.
+    status = Column(String(20), nullable=False, default="DRAFT")  # DRAFT, PUBLISHED, CLOSED
+    access_token = Column(String(64), unique=True, nullable=True, index=True)
+    questions = Column(JSON, nullable=True)
     max_score = Column(Numeric(6, 2), nullable=True)
     assessment_date = Column(Date, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -680,3 +714,50 @@ class InterventionOutcome(Base):
     copo_change = Column(Numeric(5, 2), nullable=True)
     effectiveness = Column(String(30), nullable=True)
     evaluated_at = Column(DateTime, server_default=func.now())
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# U. QUESTION BANK (Faculty-managed subject questions repository)
+# ═══════════════════════════════════════════════════════════════════════
+
+class QuestionBank(Base):
+    """
+    Subject-aligned question repository.
+    Enables faculty to create, customize, and maintain question pools for
+    PRE, MID, and END assessments across specific course topics and competencies.
+    """
+    __tablename__ = "question_bank"
+
+    question_id = Column(Integer, primary_key=True, autoincrement=True)
+    subject_id = Column(
+        String(36),
+        ForeignKey("subjects.id"),
+        nullable=False,
+        index=True,
+    )
+    topic_id = Column(
+        Integer,
+        ForeignKey("topics.topic_id"),
+        nullable=True,
+        index=True,
+    )
+    assessment_type = Column(String(20), nullable=False, default="ALL")  # PRE, MID, END, ALL
+    question_title = Column(String(255), nullable=True)
+    question_text = Column(Text, nullable=False)
+    question_type = Column(String(50), nullable=False, default="LIKERT_1_5")  # LIKERT_1_5, TOPIC_RATING_MATRIX, PEDAGOGY, BARRIERS_AND_SKILLS, COMPETENCIES_MATRIX, RETROSPECTIVE, TEXT, MULTI_SELECT
+    section = Column(String(100), nullable=True)
+    dimension = Column(String(100), nullable=True)
+    competency = Column(String(100), nullable=True)
+    skill_id = Column(String(100), nullable=True)
+    difficulty = Column(SmallInteger, nullable=True, default=3)
+    marks = Column(Integer, nullable=True, default=1)
+    options = Column(JSON, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_by = Column(
+        String(36),
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+

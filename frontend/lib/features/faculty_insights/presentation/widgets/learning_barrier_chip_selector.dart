@@ -21,7 +21,7 @@ const List<LearningBarrierOption> kAvailableLearningBarriers = [
     icon: Icons.schedule_outlined,
   ),
   LearningBarrierOption(
-    key: 'PREREQUISITE_GAPS',
+    key: 'PREREQUISITE_GAP',
     label: 'Prerequisite Gaps',
     icon: Icons.account_tree_outlined,
   ),
@@ -31,19 +31,19 @@ const List<LearningBarrierOption> kAvailableLearningBarriers = [
     icon: Icons.psychology_outlined,
   ),
   LearningBarrierOption(
-    key: 'LAB_RESOURCES',
+    key: 'LIMITED_LAB_EXPOSURE',
     label: 'Lab & Compute Access',
     icon: Icons.science_outlined,
   ),
   LearningBarrierOption(
-    key: 'PACE_OF_DELIVERY',
+    key: 'TEACHING_PACE',
     label: 'Pace of Delivery',
     icon: Icons.speed_outlined,
   ),
   LearningBarrierOption(
-    key: 'PERSONAL_REASONS',
-    label: 'Personal Constraints',
-    icon: Icons.person_outline,
+    key: 'LACK_OF_PRACTICE',
+    label: 'Lack of Practice / Application',
+    icon: Icons.fitness_center_outlined,
   ),
 ];
 

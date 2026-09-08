@@ -9,7 +9,6 @@ import 'package:enosis/features/faculty_insights/presentation/screens/mid_assess
 import 'package:enosis/features/faculty_insights/presentation/widgets/learning_barrier_chip_selector.dart';
 import 'package:enosis/features/faculty_insights/presentation/widgets/mid_pre_comparison_badge.dart';
 import 'package:enosis/features/faculty_insights/presentation/widgets/mid_topic_assessment_card.dart';
-import 'package:enosis/features/faculty_insights/presentation/widgets/skills_progress_card.dart';
 
 void main() {
   group('SLI MID Assessment - Canonical Enum & Serialization Tests', () {
@@ -235,7 +234,7 @@ void main() {
 
       await tester.tap(find.text('Prerequisite Gaps'));
       await tester.pump();
-      expect(toggledKey, 'PREREQUISITE_GAPS');
+      expect(toggledKey, 'PREREQUISITE_GAP');
     });
 
     testWidgets('MidTopicAssessmentCard renders topic name and dual PRE/MID badges', (tester) async {
