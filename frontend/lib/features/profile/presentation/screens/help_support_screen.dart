@@ -36,8 +36,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
       answer: 'Go to the Timetable tab from the bottom navigation. regular faculty can look up schedule details. Admins and coordinators can access the Generate console to rebuild sheets.',
     ),
     _FaqItem(
-      question: 'Is attendance verification automatic?',
-      answer: 'Yes! The face verification scan checks user face alignments in real time, confirming coordinates before logging check-ins on our servers.',
+      question: 'How are CO-PO attainments calculated?',
+      answer: 'CO-PO attainment levels are computed directly from continuous internal evaluations and end-semester assessments weighted against the defined course matrix.',
     ),
     _FaqItem(
       question: 'Can I log achievements without documents?',

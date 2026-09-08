@@ -6,7 +6,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_chip.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../copo/presentation/screens/copo_progress_screen.dart';
-import '../../../timetable/presentation/screens/timetable_generation_mode_screen.dart';
+import '../../../timetable/presentation/screens/timetable_hub_screen.dart';
 
 class _PendingRequest {
   final String id;
@@ -40,7 +40,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final List<_PendingRequest> _requests = [
     _PendingRequest(id: 'r_1', facultyName: 'Dr. Priya Sharma', type: 'CAS', title: 'CAS Portfolio Verification Request - Tier II Promotion'),
     _PendingRequest(id: 'r_2', facultyName: 'Prof. Rajesh Kumar', type: 'Leave', title: 'Medical Leave Request: 14 Aug - 18 Aug (5 days)'),
-    _PendingRequest(id: 'r_3', facultyName: 'Dr. Anil Mehta', type: 'FDP', title: 'FDP Attendance Approval: National Workshop on AI/ML'),
+    _PendingRequest(id: 'r_3', facultyName: 'Dr. Anil Mehta', type: 'FDP', title: 'FDP Participation Approval: National Workshop on AI/ML'),
     _PendingRequest(id: 'r_4', facultyName: 'Prof. Sunita Rao', type: 'CAS', title: 'CAS Research Paper Validation: IEEE Communications'),
   ];
 
@@ -151,7 +151,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         AppCard(
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const TimetableGenerationModeScreen()),
+              MaterialPageRoute(builder: (_) => const TimetableHubScreen()),
             );
           },
           child: const Row(

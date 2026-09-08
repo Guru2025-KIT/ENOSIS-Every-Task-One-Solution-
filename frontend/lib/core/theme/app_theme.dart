@@ -75,18 +75,18 @@ class AppTheme {
       ),
 
       // ─── Elevated Buttons ───────────────────────────────────────────
-      // Reference: dark navy filled buttons, full width, rounded.
+      // Reference: dark navy filled buttons, rounded.
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: AppColors.textOnPrimary,
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
           textStyle: AppTypography.button,
           elevation: 0,
-          minimumSize: const Size(double.infinity, 52),
+          minimumSize: const Size(64, 48),
         ),
       ),
 

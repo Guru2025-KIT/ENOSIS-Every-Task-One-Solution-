@@ -1,7 +1,7 @@
 import enum
 import uuid
 
-from sqlalchemy import Column, String, Integer, Boolean, Enum, ForeignKey, JSON
+from sqlalchemy import Column, String, Integer, Boolean, Enum, ForeignKey, Numeric
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -47,6 +47,19 @@ class Subject(Base):
     lab_sessions_per_week = Column(Integer, nullable=False, default=0)
     lab_block_size = Column(Integer, nullable=False, default=2)  # consecutive slots per lab session
 
+    # ── SLI (Student Learning Intelligence) extensions ───────────────
+    # All nullable so the existing timetable subject-creation flow is
+    # unaffected — these get populated when SLI data is loaded.
+    sli_department_id = Column(
+        Integer,
+        ForeignKey("departments.department_id"),
+        nullable=True,
+        index=True,
+    )
+    credits = Column(Numeric(3, 1), nullable=True)
+    subject_type = Column(String(30), nullable=True)           # THEORY, LAB, ELECTIVE, …
+    placement_relevance = Column(Numeric(4, 2), nullable=True) # college-defined value
+
 
 class Room(Base):
     """A physical room/lab. `type` gates which subjects can use it."""
@@ -88,47 +101,3 @@ class FacultyUnavailability(Base):
     faculty_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     day = Column(Integer, nullable=False)  # 0 = Monday ... 5 = Saturday
     slot = Column(Integer, nullable=False)  # 0-indexed period of the day
-
-
-class InstitutionalCourse(Base):
-    """
-    Fixed/institutional course decided by the college with fixed timings.
-    Blocks all normal courses for the configured divisions during this day/slot.
-    """
-    __tablename__ = "institutional_courses"
-
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    course_name = Column(String(255), nullable=False)
-    course_code = Column(String(50), nullable=True)
-    year = Column(Integer, nullable=False, default=1)
-    divisions = Column(JSON, nullable=False, default=list)  # JSON list of strings (e.g. ["A", "B", "C"])
-    day = Column(Integer, nullable=False)  # 0 = Monday ... 5 = Saturday
-    start_slot = Column(Integer, nullable=False)  # 0-indexed period of the day
-    duration_slots = Column(Integer, nullable=False, default=1)
-    faculty_id = Column(String(36), ForeignKey("users.id"), nullable=True)
-    room_id = Column(String(36), ForeignKey("rooms.id"), nullable=True)
-
-    faculty = relationship("User")
-    room = relationship("Room")
-
-
-class SharedCourse(Base):
-    """
-    Shared/mixed-division course where students from multiple divisions attend
-    together at the same time and in the exact same room.
-    """
-    __tablename__ = "shared_courses"
-
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    course_name = Column(String(255), nullable=False)
-    course_code = Column(String(50), nullable=True)
-    year = Column(Integer, nullable=False, default=1)
-    divisions = Column(JSON, nullable=False, default=list)  # JSON list of strings (e.g. ["A", "B"])
-    faculty_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    room_id = Column(String(36), ForeignKey("rooms.id"), nullable=True)
-    duration_slots = Column(Integer, nullable=False, default=1)
-    weekly_sessions = Column(Integer, nullable=False, default=1)
-    session_type = Column(String(50), nullable=False, default="lecture")  # "lecture" or "lab"
-
-    faculty = relationship("User")
-    room = relationship("Room")

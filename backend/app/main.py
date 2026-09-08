@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, timetable, users, todo, documents, ai_assistant, notifications, achievements, voice
+from app.api.routes import auth, timetable, users, todo, documents, ai_assistant, notifications, achievements, voice, sli, sli_analytics, sli_integration, attendance, dashboard
 from app.core.config import settings
 from app.db.base import Base, engine
 
@@ -14,6 +14,8 @@ from app.models import (  # noqa: F401
     user, academic, timetable as timetable_models, todo as todo_models,
     document, notification, achievement,
     schedule_config, constraints, generation_history,
+    sli as sli_models,  # Student Learning Intelligence tables
+    attendance as attendance_models,  # Lecture Attendance tables
 )
 
 # Creates tables if they don't already exist. Fine for this early stage of
@@ -43,6 +45,11 @@ app.include_router(ai_assistant.router)
 app.include_router(notifications.router)
 app.include_router(achievements.router)
 app.include_router(voice.router)
+app.include_router(sli.router)
+app.include_router(sli_analytics.router)
+app.include_router(sli_integration.router)
+app.include_router(attendance.router)
+app.include_router(dashboard.router)
 
 
 @app.get("/health")
