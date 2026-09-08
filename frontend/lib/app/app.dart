@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_theme.dart';
 import '../features/auth/presentation/screens/splash_screen.dart';
+import '../features/dashboard/presentation/screens/main_shell.dart';
 
 /// Root widget of ENOSIS.
 ///
