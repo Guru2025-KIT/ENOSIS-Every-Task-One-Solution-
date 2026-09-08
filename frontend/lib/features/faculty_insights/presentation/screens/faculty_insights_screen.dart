@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
+import 'teaching_contexts_screen.dart';
 
-/// Screen for the Faculty Insights ML Module.
+/// Screen for the Faculty Insights Module.
 ///
-/// Features:
-/// - Academic ML intelligence placeholder
-/// - Real-time student perception vs verified attainment bridging
-/// - Gap analysis and recommended pedagogical interventions
+/// Houses the 4-stage academic intelligence pipeline, beginning with
+/// Stage 01: Student Perception & PRE-Semester Assessment.
 class FacultyInsightsScreen extends StatelessWidget {
   const FacultyInsightsScreen({super.key});
 
@@ -25,7 +24,11 @@ class FacultyInsightsScreen extends StatelessWidget {
             SizedBox(width: 10),
             Text(
               'Faculty Insights',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: Colors.white,
+              ),
             ),
           ],
         ),
@@ -78,7 +81,7 @@ class FacultyInsightsScreen extends StatelessWidget {
                           children: [
                             Icon(Icons.auto_awesome, color: Color(0xFFA5B4FC), size: 14),
                             Text(
-                              'ML ACADEMIC INTELLIGENCE',
+                              'STUDENT LEARNING INTELLIGENCE (SLI)',
                               style: TextStyle(
                                 color: Color(0xFFE0E7FF),
                                 fontSize: 11,
@@ -112,6 +115,82 @@ class FacultyInsightsScreen extends StatelessWidget {
 
                 const SizedBox(height: 24),
 
+                // Active Stage 01 Focus Cards: PRE, MID & END Semester Assessments
+                if (isMobile) ...[
+                  _PreSemesterActionCard(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const TeachingContextsScreen(stage: 'PRE'),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  _MidSemesterActionCard(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const TeachingContextsScreen(stage: 'MID'),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  _EndSemesterActionCard(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const TeachingContextsScreen(stage: 'END'),
+                        ),
+                      );
+                    },
+                  ),
+                ] else ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _PreSemesterActionCard(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const TeachingContextsScreen(stage: 'PRE'),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: _MidSemesterActionCard(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const TeachingContextsScreen(stage: 'MID'),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: _EndSemesterActionCard(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const TeachingContextsScreen(stage: 'END'),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
+                const SizedBox(height: 28),
+
                 // Core ML Pipeline Overview
                 Text(
                   'Intelligent Academic Cycle Pipeline',
@@ -137,6 +216,7 @@ class FacultyInsightsScreen extends StatelessWidget {
                         'desc': 'Formative feedback & concept confidence before and during topic delivery.',
                         'icon': Icons.record_voice_over_outlined,
                         'color': const Color(0xFF0284C7),
+                        'active': true,
                       },
                       {
                         'step': '02',
@@ -144,6 +224,7 @@ class FacultyInsightsScreen extends StatelessWidget {
                         'desc': 'ML models identify diverging trends between perceived grasp and continuous assessments.',
                         'icon': Icons.troubleshoot_outlined,
                         'color': const Color(0xFF7C3AED),
+                        'active': false,
                       },
                       {
                         'step': '03',
@@ -151,6 +232,7 @@ class FacultyInsightsScreen extends StatelessWidget {
                         'desc': 'Recommended pedagogical adjustments, remedial sessions, and lab emphasis.',
                         'icon': Icons.touch_app_outlined,
                         'color': const Color(0xFFF4791E),
+                        'active': false,
                       },
                       {
                         'step': '04',
@@ -158,6 +240,7 @@ class FacultyInsightsScreen extends StatelessWidget {
                         'desc': 'End-term summative attainment matrix validates effectiveness for the next cycle.',
                         'icon': Icons.verified_outlined,
                         'color': const Color(0xFF16A34A),
+                        'active': false,
                       },
                     ];
 
@@ -166,7 +249,18 @@ class FacultyInsightsScreen extends StatelessWidget {
                         children: stages.map((st) {
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 12),
-                            child: _StageCard(stage: st),
+                            child: _StageCard(
+                              stage: st,
+                              onTap: st['active'] == true
+                                  ? () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => const TeachingContextsScreen(),
+                                        ),
+                                      );
+                                    }
+                                  : null,
+                            ),
                           );
                         }).toList(),
                       );
@@ -178,7 +272,18 @@ class FacultyInsightsScreen extends StatelessWidget {
                         return Expanded(
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: _StageCard(stage: st),
+                            child: _StageCard(
+                              stage: st,
+                              onTap: st['active'] == true
+                                  ? () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => const TeachingContextsScreen(),
+                                        ),
+                                      );
+                                    }
+                                  : null,
+                            ),
                           ),
                         );
                       }).toList(),
@@ -201,10 +306,14 @@ class FacultyInsightsScreen extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF7C3AED).withOpacity(0.1),
+                          color: const Color(0xFF0284C7).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.hub_outlined, color: Color(0xFF7C3AED), size: 24),
+                        child: const Icon(
+                          Icons.insights_outlined,
+                          color: Color(0xFF0284C7),
+                          size: 24,
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -212,7 +321,7 @@ class FacultyInsightsScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Module Integration Status',
+                              'Stage 01 Assessment Active',
                               style: AppTypography.bodyMedium.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.textPrimary,
@@ -220,7 +329,7 @@ class FacultyInsightsScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'ML models and student perception dataset ingestion are scheduled for the next release cycle.',
+                              'PRE-Semester assessment data collection is active. MID and END cycle evaluations will activate during teaching sessions.',
                               style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
                             ),
                           ],
@@ -238,26 +347,24 @@ class FacultyInsightsScreen extends StatelessWidget {
   }
 }
 
-class _StageCard extends StatelessWidget {
-  final Map<String, dynamic> stage;
+class _PreSemesterActionCard extends StatelessWidget {
+  final VoidCallback onTap;
 
-  const _StageCard({required this.stage});
+  const _PreSemesterActionCard({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final color = stage['color'] as Color;
-
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.3), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+            color: const Color(0xFF0284C7).withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -265,43 +372,364 @@ class _StageCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  color: const Color(0xFF0284C7).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(stage['icon'] as IconData, color: color, size: 20),
+                child: const Icon(
+                  Icons.assignment_outlined,
+                  color: Color(0xFF0284C7),
+                  size: 24,
+                ),
               ),
-              Text(
-                stage['step'] as String,
-                style: AppTypography.captionBold.copyWith(
-                  color: AppColors.textTertiary,
-                  fontSize: 12,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'STAGE 01 • STUDENT PERCEPTION',
+                      style: AppTypography.captionBold.copyWith(
+                        color: const Color(0xFF0284C7),
+                        letterSpacing: 0.8,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'PRE-Semester Student Assessment',
+                      style: AppTypography.h4.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Text(
-            stage['title'] as String,
-            style: AppTypography.bodyMedium.copyWith(
-              fontWeight: FontWeight.bold,
-              color: AppColors.primary,
-              fontSize: 14,
-            ),
+            'Capture students\' baseline understanding, learning preferences and goals before the semester begins.',
+            style: AppTypography.bodySecondary.copyWith(height: 1.4),
           ),
-          const SizedBox(height: 6),
-          Text(
-            stage['desc'] as String,
-            style: AppTypography.caption.copyWith(
-              color: AppColors.textSecondary,
-              height: 1.35,
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: onTap,
+              icon: const Icon(Icons.arrow_forward, size: 16),
+              label: const Text(
+                'Manage & Record PRE Assessments',
+                style: TextStyle(fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _MidSemesterActionCard extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _MidSemesterActionCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF7C3AED).withOpacity(0.3), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF7C3AED).withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF7C3AED).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.trending_up,
+                  color: Color(0xFF7C3AED),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'STAGE 01 • IN-PROGRESS GRASP',
+                      style: AppTypography.captionBold.copyWith(
+                        color: const Color(0xFF7C3AED),
+                        letterSpacing: 0.8,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'MID-Semester Student Assessment',
+                      style: AppTypography.h4.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Track active grasp, pace feedback, learning barriers, and progress against baseline target skills.',
+            style: AppTypography.bodySecondary.copyWith(height: 1.4),
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF7C3AED),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: onTap,
+              icon: const Icon(Icons.arrow_forward, size: 16),
+              label: const Text(
+                'Manage & Record MID Assessments',
+                style: TextStyle(fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EndSemesterActionCard extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _EndSemesterActionCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF16A34A).withOpacity(0.3), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF16A34A).withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16A34A).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.verified_outlined,
+                  color: Color(0xFF16A34A),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'STAGE 01 • FINAL OUTCOME',
+                      style: AppTypography.captionBold.copyWith(
+                        color: const Color(0xFF16A34A),
+                        letterSpacing: 0.8,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'END-Semester Assessment',
+                      style: AppTypography.h4.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Record final subject grasp, competency ratings, course experience, and topic/skills mastery outcomes.',
+            style: AppTypography.bodySecondary.copyWith(height: 1.4),
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF16A34A),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: onTap,
+              icon: const Icon(Icons.arrow_forward, size: 16),
+              label: const Text(
+                'Manage & Record END Assessments',
+                style: TextStyle(fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StageCard extends StatelessWidget {
+  final Map<String, dynamic> stage;
+  final VoidCallback? onTap;
+
+  const _StageCard({required this.stage, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = stage['color'] as Color;
+    final bool isActive = stage['active'] == true;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isActive ? color.withOpacity(0.5) : AppColors.border,
+            width: isActive ? 1.5 : 1.0,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(stage['icon'] as IconData, color: color, size: 20),
+                ),
+                Text(
+                  stage['step'] as String,
+                  style: AppTypography.captionBold.copyWith(
+                    color: AppColors.textTertiary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              stage['title'] as String,
+              style: AppTypography.bodyMedium.copyWith(
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              stage['desc'] as String,
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.35,
+              ),
+            ),
+            if (isActive) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Text(
+                    'Open Assessment',
+                    style: AppTypography.captionBold.copyWith(
+                      color: color,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.arrow_forward, size: 12, color: color),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

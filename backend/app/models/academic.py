@@ -1,7 +1,7 @@
 import enum
 import uuid
 
-from sqlalchemy import Column, String, Integer, Boolean, Enum, ForeignKey
+from sqlalchemy import Column, String, Integer, Boolean, Enum, ForeignKey, Numeric
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -46,6 +46,19 @@ class Subject(Base):
     is_lab = Column(Boolean, nullable=False, default=False)
     lab_sessions_per_week = Column(Integer, nullable=False, default=0)
     lab_block_size = Column(Integer, nullable=False, default=2)  # consecutive slots per lab session
+
+    # ── SLI (Student Learning Intelligence) extensions ───────────────
+    # All nullable so the existing timetable subject-creation flow is
+    # unaffected — these get populated when SLI data is loaded.
+    sli_department_id = Column(
+        Integer,
+        ForeignKey("departments.department_id"),
+        nullable=True,
+        index=True,
+    )
+    credits = Column(Numeric(3, 1), nullable=True)
+    subject_type = Column(String(30), nullable=True)           # THEORY, LAB, ELECTIVE, …
+    placement_relevance = Column(Numeric(4, 2), nullable=True) # college-defined value
 
 
 class Room(Base):
