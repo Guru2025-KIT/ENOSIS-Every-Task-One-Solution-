@@ -44,4 +44,10 @@ def upload_file(file_bytes: bytes, *, folder: str = "enosis") -> dict:
 
 def delete_file(public_id: str, resource_type: str = "image") -> dict:
     _configure()
-    return cloudinary.uploader.destroy(public_id, resource_type=resource_type)
+    try:
+        res = cloudinary.uploader.destroy(public_id, resource_type=resource_type, invalidate=True)
+        if res.get("result") == "not found" and resource_type != "raw":
+            res = cloudinary.uploader.destroy(public_id, resource_type="raw", invalidate=True)
+        return res
+    except Exception:
+        return cloudinary.uploader.destroy(public_id, resource_type="raw", invalidate=True)

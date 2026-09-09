@@ -128,3 +128,75 @@ def test_cannot_attach_another_users_document(faculty_user, admin_token):
         headers=_auth_headers(faculty_token),
     )
     assert attempt.status_code == 404
+
+
+def test_delete_achievement_cascades_to_document_and_cloudinary(faculty_user):
+    """When an achievement with an attached document is deleted, both the DB
+    document record and the Cloudinary asset must be deleted."""
+    _, token = faculty_user
+    headers = _auth_headers(token)
+
+    fake_cloudinary_response = {
+        "secure_url": "https://res.cloudinary.com/demo/image/upload/v1/enosis/cert_to_delete.pdf",
+        "public_id": "ENOSIS/Faculty/test/Career_Advancement/Certificates/cert_to_delete",
+        "resource_type": "raw",
+        "bytes": 2048,
+    }
+
+    with patch("app.api.routes.documents.is_configured", return_value=True), \
+         patch("app.api.routes.documents.upload_file", return_value=fake_cloudinary_response):
+        document = client.post(
+            "/documents/upload?category=certification",
+            files={"file": ("cert_to_delete.pdf", io.BytesIO(b"dummy cert content"), "application/pdf")},
+            headers=headers,
+        ).json()
+
+    achievement = client.post(
+        "/achievements",
+        json={"title": "Achievement to delete", "category": "certification", "document_id": document["id"]},
+        headers=headers,
+    ).json()
+
+    # Verify achievement and document were created
+    assert achievement["document_url"] == fake_cloudinary_response["secure_url"]
+    assert achievement["file_name"] == "cert_to_delete.pdf"
+    assert achievement["file_size"] == "2.0 KB"
+
+    # Now delete the achievement and verify delete_file is called on Cloudinary
+    with patch("app.api.routes.achievements.is_configured", return_value=True), \
+         patch("app.api.routes.achievements.delete_file") as mock_delete_file:
+        del_resp = client.delete(f"/achievements/{achievement['id']}", headers=headers)
+        assert del_resp.status_code == 204
+        mock_delete_file.assert_called_once_with(
+            fake_cloudinary_response["public_id"],
+            resource_type="raw",
+        )
+
+    # Verify achievement is gone
+    my_list = client.get("/achievements/mine", headers=headers).json()
+    assert not any(a["id"] == achievement["id"] for a in my_list)
+
+    # Verify document is also gone from documents/mine
+    my_docs = client.get("/documents/mine", headers=headers).json()
+    assert not any(d["id"] == document["id"] for d in my_docs)
+
+
+def test_webinar_and_course_categories(faculty_user):
+    _, token = faculty_user
+    headers = _auth_headers(token)
+
+    webinar_res = client.post(
+        "/achievements",
+        json={"title": "AI Webinar", "category": "webinar"},
+        headers=headers,
+    )
+    assert webinar_res.status_code == 201
+    assert webinar_res.json()["category"] == "webinar"
+
+    course_res = client.post(
+        "/achievements",
+        json={"title": "Cloud Computing Course", "category": "course"},
+        headers=headers,
+    )
+    assert course_res.status_code == 201
+    assert course_res.json()["category"] == "course"

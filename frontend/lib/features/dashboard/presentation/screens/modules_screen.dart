@@ -38,6 +38,7 @@ class ModulesScreen extends StatelessWidget {
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GenerateTimetableScreen()));
         break;
       case 'Career Adv.':
+      case 'Career Advancement':
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CareerAdvancementScreen()));
         break;
       case 'CO-PO Mapping':

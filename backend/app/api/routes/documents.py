@@ -17,38 +17,83 @@ _NOT_CONFIGURED_DETAIL = (
 )
 
 
+import os
+from typing import Optional
+
+ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".doc", ".docx"}
+MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+
+CATEGORY_FOLDERS = {
+    "certification": "Certificates",
+    "fdp": "FDPs",
+    "webinar": "Webinars",
+    "workshop": "Workshops",
+    "conference": "Conferences",
+    "publication": "Publications",
+    "award": "Awards",
+    "research": "Research_Patents",
+    "patent": "Research_Patents",
+    "course": "Courses",
+    "other": "Other",
+}
+
+
 @router.post("/upload", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
 async def upload_document(
     file: UploadFile = File(...),
+    category: Optional[str] = None,
+    folder: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Owner-scoped upload — every document belongs to whoever uploaded it
-    (same ownership pattern as To-Do's tasks). No module-specific logic
-    here on purpose (see Document's docstring) — this is the generic
-    storage layer future modules (Career Advancement certificates,
-    attendance photos, etc.) will build on top of.
+    Owner-scoped upload with validation and structured Cloudinary folders:
+    ENOSIS/Faculty/{faculty_id}/Career_Advancement/{Category_Folder}/
     """
     if not is_configured():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=_NOT_CONFIGURED_DETAIL)
 
+    filename = file.filename or "upload.pdf"
+    _, ext = os.path.splitext(filename.lower())
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid file format '{ext}'. Allowed formats: PDF, PNG, JPG, JPEG, DOC, DOCX.",
+        )
+
     file_bytes = await file.read()
     if not file_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
+
+    if len(file_bytes) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File size exceeds the 10MB maximum limit.",
+        )
+
+    # Determine Cloudinary folder organization
+    if folder:
+        target_folder = folder
+    else:
+        faculty_tag = current_user.employee_id or current_user.id
+        if category:
+            subfolder = CATEGORY_FOLDERS.get(category.lower().strip(), "Other")
+            target_folder = f"ENOSIS/Faculty/{faculty_tag}/Career_Advancement/{subfolder}"
+        else:
+            target_folder = f"ENOSIS/Faculty/{faculty_tag}/Career_Advancement"
 
     try:
-        result = upload_file(file_bytes)
-    except Exception as e:  # Cloudinary SDK errors are its own exception types
-        raise HTTPException(status_code=502, detail=f"Upload to Cloudinary failed: {e}")
+        result = upload_file(file_bytes, folder=target_folder)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Upload to Cloudinary failed: {e}")
 
     document = Document(
         owner_id=current_user.id,
-        file_name=file.filename or "upload",
-        url=result["secure_url"],
+        file_name=filename,
+        url=result.get("secure_url", result.get("url")),
         cloudinary_public_id=result["public_id"],
         resource_type=result.get("resource_type", "image"),
-        file_size_bytes=result.get("bytes"),
+        file_size_bytes=result.get("bytes", len(file_bytes)),
     )
     db.add(document)
     db.commit()

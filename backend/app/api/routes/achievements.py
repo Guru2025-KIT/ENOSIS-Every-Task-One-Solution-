@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.base import get_db
+from app.core.cloudinary_client import is_configured, delete_file
 from app.models.achievement import Achievement
 from app.models.document import Document
 from app.models.user import User
@@ -11,14 +12,36 @@ from app.schemas.achievement import AchievementCreate, AchievementOut
 router = APIRouter(prefix="/achievements", tags=["achievements"])
 
 
+def _format_size(size_bytes: int | None) -> str | None:
+    if size_bytes is None:
+        return None
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    else:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+
 def _to_out(achievement: Achievement, db: Session) -> AchievementOut:
     document_url = None
+    file_name = None
+    file_size_bytes = None
+    file_size = None
+    cloudinary_public_id = None
+
     if achievement.document_id:
         document = db.query(Document).filter(Document.id == achievement.document_id).first()
         if document:
             document_url = document.url
+            file_name = document.file_name
+            file_size_bytes = document.file_size_bytes
+            file_size = _format_size(document.file_size_bytes)
+            cloudinary_public_id = document.cloudinary_public_id
+
     return AchievementOut(
         id=achievement.id,
+        owner_id=achievement.owner_id,
         title=achievement.title,
         category=achievement.category,
         date_achieved=achievement.date_achieved,
@@ -26,7 +49,12 @@ def _to_out(achievement: Achievement, db: Session) -> AchievementOut:
         description=achievement.description,
         document_id=achievement.document_id,
         document_url=document_url,
+        file_name=file_name,
+        file_size_bytes=file_size_bytes,
+        file_size=file_size,
+        cloudinary_public_id=cloudinary_public_id,
         created_at=achievement.created_at,
+        updated_at=getattr(achievement, "updated_at", None),
     )
 
 
@@ -79,6 +107,21 @@ def delete_achievement(achievement_id: str, db: Session = Depends(get_db), curre
     )
     if achievement is None:
         raise HTTPException(status_code=404, detail="Achievement not found")
+
+    # If achievement has an associated document, clean up Cloudinary asset and Document record
+    if achievement.document_id:
+        document = (
+            db.query(Document)
+            .filter(Document.id == achievement.document_id, Document.owner_id == current_user.id)
+            .first()
+        )
+        if document:
+            if is_configured() and document.cloudinary_public_id:
+                try:
+                    delete_file(document.cloudinary_public_id, resource_type=document.resource_type)
+                except Exception:
+                    pass
+            db.delete(document)
 
     db.delete(achievement)
     db.commit()
