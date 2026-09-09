@@ -199,6 +199,13 @@ class MockDashboardData {
       icon: Icons.assessment_outlined,
       accentColor: Color(0xFF1E8E3E),
     ),
+    WorkspaceActionItem(
+      title: 'Career Advancement',
+      subtitle: 'Track your professional achievements & growth',
+      actionLabel: 'View Growth',
+      icon: Icons.workspace_premium_outlined,
+      accentColor: Color(0xFF8B5CF6),
+    ),
   ];
 
   static const courseAttainments = [
@@ -289,6 +296,11 @@ class MockDashboardData {
       icon: Icons.auto_awesome_outlined,
       label: 'Generate Timetable',
       subtitle: 'Automated schedule engine',
+    ),
+    QuickAccessItem(
+      icon: Icons.workspace_premium_outlined,
+      label: 'Career Advancement',
+      subtitle: 'Track your professional growth',
     ),
   ];
 }

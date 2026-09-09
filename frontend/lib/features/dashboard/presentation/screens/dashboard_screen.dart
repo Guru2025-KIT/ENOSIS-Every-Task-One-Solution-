@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../ai_assistant/presentation/screens/ai_assistant_screen.dart';
+import '../../../career/presentation/screens/career_advancement_screen.dart';
 import '../../../copo/presentation/screens/copo_attainment_screen.dart';
 import '../../../copo/presentation/screens/copo_mapping_screen.dart';
 import '../../../faculty_insights/presentation/screens/faculty_insights_screen.dart';
@@ -107,6 +108,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           );
         }
+        break;
+      case 'Career Advancement':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const CareerAdvancementScreen()),
+        );
         break;
       default:
         break;
@@ -716,10 +722,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: isMobile ? 2 : (isTablet ? 2 : 4),
+            crossAxisCount: isMobile ? 2 : (isTablet ? 3 : 5),
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            childAspectRatio: isMobile ? 0.92 : 1.12,
+            childAspectRatio: isMobile ? 0.90 : (isTablet ? 1.05 : 1.10),
           ),
           itemCount: workspaceItems.length,
           itemBuilder: (context, index) {
