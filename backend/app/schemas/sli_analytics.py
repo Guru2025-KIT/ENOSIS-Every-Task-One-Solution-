@@ -1,5 +1,6 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Any
+from app.schemas.sli import InterventionOut
 
 
 class AssessmentFunnelOut(BaseModel):
@@ -197,6 +198,9 @@ class StudentLongitudinalAnalyticsOut(BaseModel):
 
     # Machine Learning Early Warning Prediction (MID-stage inference)
     ml_prediction: dict[str, Any] | None = None
+
+    # Faculty Interventions & Actions
+    interventions: list[InterventionOut] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

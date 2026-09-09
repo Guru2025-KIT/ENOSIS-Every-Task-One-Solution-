@@ -27,13 +27,17 @@ from app.schemas.sli import (
     StudentAssessmentPortalOut,
     StudentPortalSubmissionRequest,
     StudentRosterItemOut,
+    InterventionLogRequest,
+    InterventionOut,
 )
 from app.services import (
+    sli_analytics_service,
     sli_assessment_service,
     sli_end_service,
     sli_mid_service,
     sli_pre_service,
 )
+
 
 router = APIRouter(prefix="/sli", tags=["sli"])
 
@@ -493,5 +497,54 @@ def submit_student_assessment(
         access_token=access_token,
         payload=payload,
     )
+
+
+# ---------------------------------------------------------------------------
+# Faculty Intervention Logging & Tracking
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/interventions/log",
+    response_model=InterventionOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def log_faculty_intervention(
+    payload: InterventionLogRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Persists a faculty action or intervention taken for an at-risk student.
+    """
+    is_admin = current_user.role == UserRole.ADMIN
+    return sli_analytics_service.log_faculty_intervention(
+        db=db,
+        faculty_id=current_user.id,
+        payload=payload,
+        is_admin=is_admin,
+    )
+
+
+@router.get(
+    "/interventions/enrollment/{enrollment_id}",
+    response_model=list[InterventionOut],
+)
+@router.get(
+    "/interventions/{enrollment_id}",
+    response_model=list[InterventionOut],
+)
+def get_enrollment_interventions(
+    enrollment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Retrieves intervention history for a student enrollment.
+    """
+    return sli_analytics_service.get_enrollment_interventions(
+        db=db,
+        enrollment_id=enrollment_id,
+    )
+
 
 

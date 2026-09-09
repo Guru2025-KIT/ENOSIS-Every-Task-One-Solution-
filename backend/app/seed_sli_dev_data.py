@@ -38,6 +38,7 @@ from app.models.sli import (
 )
 from app.models.timetable import TimetableEntry
 from app.models.user import User, UserRole
+from app.services.sli_assessment_service import derive_skill_id
 
 # Ensure all tables exist
 from app.models import (  # noqa: F401
@@ -117,21 +118,22 @@ def seed():
         else:
             print(f"  - Room already exists: Room 301 (id={room.id})")
 
-        # ── 5. Semester ───────────────────────────────────────────
-        sem = db.query(Semester).filter_by(
-            academic_year="2025-26", semester_number=5
-        ).first()
-        if not sem:
-            sem = Semester(
-                academic_year="2025-26",
-                semester_number=5,
-                status="ACTIVE",
-            )
-            db.add(sem)
-            db.flush()
-            print(f"  + Semester created: 2025-26 Sem-5 (id={sem.semester_id})")
-        else:
-            print(f"  - Semester already exists: (id={sem.semester_id})")
+        # ── 5. Semesters (1 through 8) ────────────────────────────
+        for s_num in range(1, 9):
+            s_obj = db.query(Semester).filter_by(
+                academic_year="2025-26", semester_number=s_num
+            ).first()
+            if not s_obj:
+                s_obj = Semester(
+                    academic_year="2025-26",
+                    semester_number=s_num,
+                    status="ACTIVE" if s_num % 2 == 1 else "UPCOMING",
+                )
+                db.add(s_obj)
+                db.flush()
+                print(f"  + Semester created: 2025-26 Sem-{s_num} (id={s_obj.semester_id})")
+            if s_num == 5:
+                sem = s_obj
 
         # ── 6. Class ──────────────────────────────────────────────
         cls = db.query(AcademicClass).filter_by(

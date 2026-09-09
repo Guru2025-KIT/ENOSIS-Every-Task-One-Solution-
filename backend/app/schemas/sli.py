@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 import enum
 from typing import Any
 
@@ -674,6 +674,7 @@ class StudentPortalSubmissionRequest(BaseModel):
     perceived_difficulty: int | None = Field(None, ge=1, le=5)
     skills_progress: list[SkillProgressItem] = Field(default_factory=list)
     topic_feedback: list[dict[str, Any]] = Field(default_factory=list)
+    question_responses: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -757,6 +758,34 @@ class MlModelInfoOut(BaseModel):
     metrics: dict[str, float] | None = None
     top_feature_importances: dict[str, float] | None = None
     message: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Intervention Logging & Tracking Schemas
+# ---------------------------------------------------------------------------
+
+class InterventionLogRequest(BaseModel):
+    enrollment_id: int
+    intervention_type: str = Field(..., min_length=2, max_length=100)
+    implementation_date: date | None = None
+    notes: str | None = None
+    status: str = Field(default="COMPLETED")  # COMPLETED, PLANNED, IN_PROGRESS
+
+
+class InterventionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    intervention_id: int
+    enrollment_id: int | None = None
+    recommendation_id: int | None = None
+    faculty_id: str | None = None
+    intervention_type: str
+    status: str
+    implemented: bool = True
+    implementation_date: date | None = None
+    notes: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
 
 
 

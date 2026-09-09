@@ -577,6 +577,7 @@ class StudentLongitudinalAnalytics {
   final List<StudentSkillProgression> skills;
   final List<RiskFinding> riskFindings;
   final SliMlPrediction? mlPrediction;
+  final List<StudentIntervention> interventions;
 
   const StudentLongitudinalAnalytics({
     required this.enrollmentId,
@@ -606,12 +607,13 @@ class StudentLongitudinalAnalytics {
     required this.skills,
     required this.riskFindings,
     this.mlPrediction,
+    this.interventions = const [],
   });
 
   factory StudentLongitudinalAnalytics.fromJson(Map<String, dynamic> json) {
     return StudentLongitudinalAnalytics(
       enrollmentId: json['enrollment_id'] as int? ?? 0,
-      studentId: json['student_id'] as String? ?? '',
+      studentId: json['student_id']?.toString() ?? '',
       studentName: json['student_name'] as String? ?? '',
       rollNumber: json['roll_number'] as String?,
       classId: json['class_id'] as int? ?? 0,
@@ -637,9 +639,69 @@ class StudentLongitudinalAnalytics {
       skills: (json['skills'] as List<dynamic>?)?.map((e) => StudentSkillProgression.fromJson(e as Map<String, dynamic>)).toList() ?? [],
       riskFindings: (json['risk_findings'] as List<dynamic>?)?.map((e) => RiskFinding.fromJson(e as Map<String, dynamic>)).toList() ?? [],
       mlPrediction: json['ml_prediction'] != null ? SliMlPrediction.fromJson(json['ml_prediction'] as Map<String, dynamic>) : null,
+      interventions: (json['interventions'] as List<dynamic>?)?.map((e) => StudentIntervention.fromJson(e as Map<String, dynamic>)).toList() ?? [],
     );
   }
 }
+
+class StudentIntervention {
+  final int interventionId;
+  final int? enrollmentId;
+  final int? recommendationId;
+  final String? facultyId;
+  final String interventionType;
+  final String status;
+  final bool implemented;
+  final String? implementationDate;
+  final String? notes;
+  final String? createdAt;
+  final String? updatedAt;
+
+  const StudentIntervention({
+    required this.interventionId,
+    this.enrollmentId,
+    this.recommendationId,
+    this.facultyId,
+    required this.interventionType,
+    required this.status,
+    required this.implemented,
+    this.implementationDate,
+    this.notes,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  factory StudentIntervention.fromJson(Map<String, dynamic> json) {
+    return StudentIntervention(
+      interventionId: json['intervention_id'] as int? ?? 0,
+      enrollmentId: json['enrollment_id'] as int?,
+      recommendationId: json['recommendation_id'] as int?,
+      facultyId: json['faculty_id'] as String?,
+      interventionType: json['intervention_type'] as String? ?? '',
+      status: json['status'] as String? ?? 'COMPLETED',
+      implemented: json['implemented'] as bool? ?? true,
+      implementationDate: json['implementation_date'] as String?,
+      notes: json['notes'] as String?,
+      createdAt: json['created_at'] as String?,
+      updatedAt: json['updated_at'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'intervention_id': interventionId,
+    'enrollment_id': enrollmentId,
+    'recommendation_id': recommendationId,
+    'faculty_id': facultyId,
+    'intervention_type': interventionType,
+    'status': status,
+    'implemented': implemented,
+    'implementation_date': implementationDate,
+    'notes': notes,
+    'created_at': createdAt,
+    'updated_at': updatedAt,
+  };
+}
+
 
 class AttentionRosterItem {
   final int enrollmentId;

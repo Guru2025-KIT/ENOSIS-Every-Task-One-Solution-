@@ -4,7 +4,6 @@ import csv
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
-import openpyxl
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
@@ -899,6 +898,13 @@ async def upload_excel(
     errors = []
 
     if filename.lower().endswith(".xlsx"):
+        try:
+            import openpyxl
+        except ImportError:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Excel parser (openpyxl) is not installed in the environment. Please upload CSV or install openpyxl."
+            )
         try:
             wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
         except Exception as e:

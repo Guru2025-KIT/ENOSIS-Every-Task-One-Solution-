@@ -13,6 +13,7 @@ import 'assessment_management_screen.dart';
 import 'end_assessment_form_screen.dart';
 import 'mid_assessment_form_screen.dart';
 import 'pre_assessment_form_screen.dart';
+import 'student_analytics_detail_screen.dart';
 
 /// Screen displaying the student roster for a selected teaching context with PRE/MID/END stages.
 class StudentRosterScreen extends StatefulWidget {
@@ -579,62 +580,90 @@ class _StudentRosterCard extends StatelessWidget {
 
           // Student Details
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  student.name,
-                  style: AppTypography.bodyMedium.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Row(
-                  children: [
-                    Text(
-                      'ID: ${student.studentId}',
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => StudentAnalyticsDetailScreen(
+                      enrollmentId: student.enrollmentId,
                     ),
-                    if (student.division != null) ...[
-                      const Text(' • ', style: TextStyle(color: AppColors.textTertiary)),
+                  ),
+                );
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    student.name,
+                    style: AppTypography.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
                       Text(
-                        'Div ${student.division}',
+                        'ID: ${student.studentId}',
                         style: AppTypography.caption.copyWith(
                           color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
+                      if (student.division != null) ...[
+                        const Text(' • ', style: TextStyle(color: AppColors.textTertiary)),
+                        Text(
+                          'Div ${student.division}',
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-                const SizedBox(height: 6),
-                // Triple stage status pills
-                Wrap(
-                  spacing: 6,
-                  children: [
-                    _MiniStatusBadge(
-                      label: 'PRE',
-                      isRecorded: student.isPreAssessed,
-                      color: const Color(0xFF0284C7),
-                    ),
-                    _MiniStatusBadge(
-                      label: 'MID',
-                      isRecorded: student.isMidAssessed,
-                      color: const Color(0xFF7C3AED),
-                    ),
-                    _MiniStatusBadge(
-                      label: 'END',
-                      isRecorded: student.isEndAssessed,
-                      color: const Color(0xFF16A34A),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 6),
+                  // Triple stage status pills
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      _MiniStatusBadge(
+                        label: 'PRE',
+                        isRecorded: student.isPreAssessed,
+                        color: const Color(0xFF0284C7),
+                      ),
+                      _MiniStatusBadge(
+                        label: 'MID',
+                        isRecorded: student.isMidAssessed,
+                        color: const Color(0xFF7C3AED),
+                      ),
+                      _MiniStatusBadge(
+                        label: 'END',
+                        isRecorded: student.isEndAssessed,
+                        color: const Color(0xFF16A34A),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
+
+          // Student 360 Analytics & ML Risk Button
+          IconButton(
+            icon: const Icon(Icons.psychology_outlined, color: Color(0xFF6366F1), size: 22),
+            tooltip: 'Student 360 Analytics & ML Risk',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => StudentAnalyticsDetailScreen(
+                    enrollmentId: student.enrollmentId,
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 4),
 
           // Stage Action Button
           ElevatedButton(

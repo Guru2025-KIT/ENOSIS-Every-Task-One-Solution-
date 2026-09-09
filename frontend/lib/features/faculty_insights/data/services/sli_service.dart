@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '../../../../core/auth/auth_session.dart';
 import '../../../../core/network/api_client.dart';
+import '../models/analytics_models.dart';
 import '../models/end_assessment_form.dart';
 import '../models/end_assessment_submission.dart';
 import '../models/faculty_teaching_context.dart';
@@ -430,6 +431,56 @@ class SliService {
     final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
     return SliMlModelInfo.fromJson(data);
   }
+
+  // ---------------------------------------------------------------------------
+  // Faculty Action / Intervention Tracking
+  // ---------------------------------------------------------------------------
+
+  /// Log a faculty intervention / action for an enrolled student.
+  Future<StudentIntervention> logIntervention({
+    required int enrollmentId,
+    required String interventionType,
+    DateTime? implementationDate,
+    String? notes,
+    String status = 'COMPLETED',
+  }) async {
+    final date = implementationDate ?? DateTime.now();
+    final String dateStr =
+        '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+    final response = await ApiClient.postJson(
+      '/sli/interventions/log',
+      {
+        'enrollment_id': enrollmentId,
+        'intervention_type': interventionType,
+        'implementation_date': dateStr,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+        'status': status,
+      },
+      token: _token,
+    );
+
+    _handleCommonErrors(response.statusCode, response.body);
+
+    final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
+    return StudentIntervention.fromJson(data);
+  }
+
+  /// Fetch intervention history for an enrolled student.
+  Future<List<StudentIntervention>> fetchInterventionHistory(int enrollmentId) async {
+    final response = await ApiClient.get(
+      '/sli/interventions/enrollment/$enrollmentId',
+      token: _token,
+    );
+
+    _handleCommonErrors(response.statusCode, response.body);
+
+    final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
+    return data
+        .map((item) => StudentIntervention.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
 
   void _handleCommonErrors(int statusCode, String body) {
     if (statusCode >= 200 && statusCode < 300) return;

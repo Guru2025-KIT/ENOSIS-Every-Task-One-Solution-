@@ -990,6 +990,18 @@ def submit_student_assessment_response(
                     db.add(fb)
                     topics_count += 1
 
+            if assessment.faculty_id:
+                try:
+                    from app.services.notifications import notify
+                    notify(
+                        db=db,
+                        recipient_id=assessment.faculty_id,
+                        title="New PRE Assessment Submission",
+                        message=f"{student.name} ({student.student_id}) submitted the PRE assessment for {subject.name}.",
+                    )
+                except Exception:
+                    pass
+
             db.commit()
             return {
                 "status": "success",
@@ -1065,6 +1077,18 @@ def submit_student_assessment_response(
                     )
                     db.add(fb)
                     topics_count += 1
+
+            if assessment.faculty_id:
+                try:
+                    from app.services.notifications import notify
+                    notify(
+                        db=db,
+                        recipient_id=assessment.faculty_id,
+                        title="New MID Assessment Submission",
+                        message=f"{student.name} ({student.student_id}) submitted the MID assessment for {subject.name}.",
+                    )
+                except Exception:
+                    pass
 
             db.commit()
             return {
@@ -1142,6 +1166,18 @@ def submit_student_assessment_response(
                     )
                     db.add(fb)
                     topics_count += 1
+
+            if assessment.faculty_id:
+                try:
+                    from app.services.notifications import notify
+                    notify(
+                        db=db,
+                        recipient_id=assessment.faculty_id,
+                        title="New END Assessment Submission",
+                        message=f"{student.name} ({student.student_id}) submitted the END assessment for {subject.name}.",
+                    )
+                except Exception:
+                    pass
 
             db.commit()
             return {

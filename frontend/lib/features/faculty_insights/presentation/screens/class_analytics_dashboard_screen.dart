@@ -5,6 +5,7 @@ import '../../../../core/utils/responsive.dart';
 import '../../data/models/analytics_models.dart';
 import '../providers/sli_analytics_provider.dart';
 import '../widgets/analytics_widgets.dart';
+import '../widgets/cohort_trend_chart_card.dart';
 import 'student_analytics_detail_screen.dart';
 
 class ClassAnalyticsDashboardScreen extends StatefulWidget {
@@ -158,7 +159,96 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          CohortTrendChartCard(trajectories: analytics.trajectories),
+          const SizedBox(height: 20),
           AssessmentFunnelCard(funnel: analytics.funnel),
+          const SizedBox(height: 20),
+
+          // ML Learning Risk & Early Warning Banner
+          Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Color(0xFFC7D2FE), width: 1.2),
+            ),
+            color: const Color(0xFFF5F3FF),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6366F1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.psychology_rounded, color: Colors.white, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Text(
+                                  'ML Risk & Early Warning Engine',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF6366F1).withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    'AI / ML',
+                                    style: TextStyle(
+                                      color: Color(0xFF6366F1),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Analyzes PRE to MID longitudinal trajectories to detect at-risk students.',
+                              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _provider.attentionRoster != null && _provider.attentionRoster!.students.isNotEmpty
+                            ? '${_provider.attentionRoster!.students.length} Students Flagged for Intervention'
+                            : 'Students Tracked for MID Evaluation',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      TextButton.icon(
+                        icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                        label: const Text('View Attention Roster', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        onPressed: () {
+                          _tabController.animateTo(4);
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 20),
           Text(
             'Longitudinal Trajectories (Cohort Averages)',

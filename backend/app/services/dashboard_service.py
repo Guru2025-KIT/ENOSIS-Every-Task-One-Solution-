@@ -12,6 +12,7 @@ from app.models.todo import Task
 from app.models.user import User
 from app.schemas.dashboard import DashboardSummaryOut, TodayScheduleSlotOut
 from app.services.sli_analytics_service import get_student_longitudinal_analytics
+from app.services.sli_pre_service import get_faculty_teaching_contexts
 
 
 def _format_slot_time(slot: int, config: ScheduleConfig | None) -> str:
@@ -159,41 +160,71 @@ def get_faculty_dashboard_summary(
     sli_attention_count = 0
     sli_critical_count = 0
 
-    # Find distinct class + subject teaching contexts for this faculty
-    contexts = (
-        db.query(Enrollment.class_id, Enrollment.subject_id)
-        .join(TimetableEntry, (TimetableEntry.subject_id == Enrollment.subject_id))
-        .filter(TimetableEntry.faculty_id == faculty_user.id)
-        .distinct()
-        .all()
-    )
+    try:
+        is_admin_user = (
+            faculty_user.role.value == "admin"
+            if hasattr(faculty_user.role, "value")
+            else faculty_user.role == "admin"
+        )
+        faculty_contexts = get_faculty_teaching_contexts(
+            db=db,
+            faculty_id=faculty_user.id,
+            is_admin=is_admin_user,
+        )
 
-    seen_enrollment_ids = set()
-    for class_id, subject_id in contexts:
-        enrollments = db.query(Enrollment).filter(
-            Enrollment.class_id == class_id,
-            Enrollment.subject_id == subject_id,
-        ).all()
+        seen_enrollment_ids = set()
+        for ctx in faculty_contexts:
+            class_id = ctx.get("class_id")
+            subject_id = ctx.get("subject_id")
+            sem_id = ctx.get("semester_id")
 
-        for e in enrollments:
-            if e.enrollment_id in seen_enrollment_ids:
+            if not class_id or not subject_id:
                 continue
-            seen_enrollment_ids.add(e.enrollment_id)
-            try:
-                student_analytics = get_student_longitudinal_analytics(
-                    db=db,
-                    faculty_id=faculty_user.id,
-                    enrollment_id=e.enrollment_id,
-                    is_admin=faculty_user.role.value == "admin",
-                )
-                findings = student_analytics.risk_findings
-                if findings:
-                    if any(f.severity == "CRITICAL" for f in findings):
+
+            query = db.query(Enrollment).filter(
+                Enrollment.class_id == class_id,
+                Enrollment.subject_id == subject_id,
+            )
+            if sem_id:
+                query = query.filter(Enrollment.semester_id == sem_id)
+
+            for e in query.all():
+                if e.enrollment_id in seen_enrollment_ids:
+                    continue
+                seen_enrollment_ids.add(e.enrollment_id)
+                try:
+                    student_analytics = get_student_longitudinal_analytics(
+                        db=db,
+                        faculty_id=faculty_user.id,
+                        enrollment_id=e.enrollment_id,
+                        is_admin=True,
+                    )
+                    is_crit = False
+                    is_att = False
+
+                    findings = student_analytics.risk_findings or []
+                    if findings:
+                        if any(f.severity == "CRITICAL" for f in findings):
+                            is_crit = True
+                        else:
+                            is_att = True
+
+                    ml_pred = student_analytics.ml_prediction or {}
+                    risk_lvl = (ml_pred.get("risk_level") or "").upper()
+                    if risk_lvl in ["HIGH", "HIGH_RISK", "CRITICAL"]:
+                        is_crit = True
+                    elif risk_lvl in ["MODERATE", "MEDIUM", "MEDIUM_RISK", "ATTENTION"]:
+                        if not is_crit:
+                            is_att = True
+
+                    if is_crit:
                         sli_critical_count += 1
-                    else:
+                    elif is_att:
                         sli_attention_count += 1
-            except Exception:
-                continue
+                except Exception:
+                    continue
+    except Exception:
+        pass
 
     return DashboardSummaryOut(
         faculty_id=faculty_user.id,

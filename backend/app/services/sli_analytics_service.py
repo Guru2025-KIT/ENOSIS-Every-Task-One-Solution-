@@ -1,14 +1,15 @@
 import json
+from datetime import date, datetime
 from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.academic import Division, Subject
 from app.models.sli import (
-    AcademicClass, EndSemesterResponse, Enrollment, MidSemesterResponse,
+    AcademicClass, EndSemesterResponse, Enrollment, Intervention, MidSemesterResponse,
     PreSemesterResponse, Semester, Student, StudentTopicFeedback, Topic,
 )
-from app.schemas.sli import SkillProgressStatus, TopicProgressStatus
+from app.schemas.sli import InterventionLogRequest, InterventionOut, SkillProgressStatus, TopicProgressStatus
 from app.schemas.sli_analytics import (
     AssessmentFunnelOut, AttentionRosterItemOut, CohortTrajectorySummaryOut,
     ContextAnalyticsOut, ContextAttentionRosterOut, LearningExperienceAnalyticsOut,
@@ -662,6 +663,7 @@ def get_student_longitudinal_analytics(
     competencies = None
     if end_resp:
         competencies = StudentCompetenciesOut(
+
             understanding_level=end_resp.understanding_level,
             concept_application_ability=end_resp.concept_application_ability,
             core_concepts_mastery=end_resp.core_concepts_mastery,
@@ -688,6 +690,12 @@ def get_student_longitudinal_analytics(
     ml_pred = predict_student_risk(pre_response=pre_resp, mid_response=mid_resp)
 
     barriers = mid_resp.learning_barriers if (mid_resp and mid_resp.learning_barriers and isinstance(mid_resp.learning_barriers, list)) else []
+
+    # 8. Query Logged Interventions
+    interventions_db = db.query(Intervention).filter(
+        Intervention.enrollment_id == enrollment_id
+    ).order_by(Intervention.implementation_date.desc(), Intervention.created_at.desc()).all()
+    interventions_out = [InterventionOut.model_validate(inv) for inv in interventions_db]
 
     return StudentLongitudinalAnalyticsOut(
         enrollment_id=enrollment_id,
@@ -717,6 +725,7 @@ def get_student_longitudinal_analytics(
         skills=skill_progressions,
         risk_findings=student_risk_findings,
         ml_prediction=ml_pred,
+        interventions=interventions_out,
     )
 
 
@@ -732,9 +741,6 @@ def get_context_attention_roster(
     semester_id: int,
     is_admin: bool = False,
 ) -> ContextAttentionRosterOut:
-    """
-    Returns prioritized list of students requiring attention in the context.
-    """
     academic_class = db.query(AcademicClass).filter(AcademicClass.class_id == class_id).first()
     if not academic_class:
         raise HTTPException(status_code=404, detail="Class not found.")
@@ -747,7 +753,6 @@ def get_context_attention_roster(
     if not semester:
         raise HTTPException(status_code=404, detail="Semester not found.")
 
-    # Authorization Check
     division_id = academic_class.division_id
     if not division_id:
         div = db.query(Division).filter(
@@ -760,31 +765,33 @@ def get_context_attention_roster(
 
     enrollments = db.query(Enrollment).filter(
         Enrollment.class_id == class_id,
-        Enrollment.subject_id == subject_id,
-        Enrollment.semester_id == semester_id,
+        Enrollment.subject_id == subject.id,
+        Enrollment.semester_id == semester.semester_id,
     ).all()
 
     flagged_students: list[AttentionRosterItemOut] = []
 
-    for e in enrollments:
+    for enr in enrollments:
         student_analytics = get_student_longitudinal_analytics(
             db=db,
             faculty_id=faculty_id,
-            enrollment_id=e.enrollment_id,
+            enrollment_id=enr.enrollment_id,
             is_admin=is_admin,
         )
+
         findings = student_analytics.risk_findings
         if findings:
-            has_critical = any(f.severity == "CRITICAL" for f in findings)
-            highest_sev = "CRITICAL" if has_critical else "ATTENTION"
-            unres_count = sum(1 for t in student_analytics.topics if t.is_unresolved and t.end_confidence is not None)
+            has_crit = any(f.severity == "CRITICAL" for f in findings)
+            highest_sev = "CRITICAL" if has_crit else "ATTENTION"
+
+            unres_count = sum(1 for t in student_analytics.topics if t.is_unresolved)
             stag_count = sum(1 for s in student_analytics.skills if s.is_stagnant)
 
             final_conf = student_analytics.confidence.end
             c_delta = student_analytics.confidence.delta_end_pre
 
             flagged_students.append(AttentionRosterItemOut(
-                enrollment_id=e.enrollment_id,
+                enrollment_id=enr.enrollment_id,
                 student_id=student_analytics.student_id,
                 student_name=student_analytics.student_name,
                 roll_number=student_analytics.roll_number,
@@ -813,3 +820,92 @@ def get_context_attention_roster(
         attention_count=att_count,
         students=flagged_students,
     )
+
+
+# ---------------------------------------------------------------------------
+# 4. Faculty Action / Intervention Services
+# ---------------------------------------------------------------------------
+
+def log_faculty_intervention(
+    db: Session,
+    faculty_id: str,
+    payload: InterventionLogRequest,
+    is_admin: bool = False,
+) -> InterventionOut:
+    """
+    Persists a faculty action / intervention for a target student enrollment.
+    Validates enrollment existence, intervention type, and persistence.
+    """
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.enrollment_id == payload.enrollment_id
+    ).first()
+    if not enrollment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Enrollment {payload.enrollment_id} not found.",
+        )
+
+    if not is_admin and faculty_id:
+        # Verify teaching assignment / authorization if needed
+        pass
+
+    interv_type = payload.intervention_type.strip()
+    if not interv_type:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Intervention type is required and cannot be blank.",
+        )
+
+    action_date = payload.implementation_date or date.today()
+    status_val = payload.status.strip().upper() if payload.status else "COMPLETED"
+    is_implemented = (status_val == "COMPLETED")
+
+    intervention = Intervention(
+        enrollment_id=payload.enrollment_id,
+        faculty_id=faculty_id,
+        intervention_type=interv_type,
+        implemented=is_implemented,
+        status=status_val,
+        implementation_date=action_date,
+        notes=payload.notes.strip() if payload.notes else None,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(intervention)
+    try:
+        from app.services.notifications import notify
+        notify(
+            db=db,
+            recipient_id=faculty_id,
+            title="SLI Intervention Logged",
+            message=f"Intervention '{interv_type}' successfully logged for student enrollment #{payload.enrollment_id}.",
+        )
+    except Exception:
+        pass
+    db.commit()
+    db.refresh(intervention)
+
+    return InterventionOut.model_validate(intervention)
+
+
+def get_enrollment_interventions(
+    db: Session,
+    enrollment_id: int,
+) -> list[InterventionOut]:
+    """
+    Retrieves chronological intervention history for an enrollment.
+    """
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.enrollment_id == enrollment_id
+    ).first()
+    if not enrollment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Enrollment {enrollment_id} not found.",
+        )
+
+    interventions = db.query(Intervention).filter(
+        Intervention.enrollment_id == enrollment_id
+    ).order_by(Intervention.implementation_date.desc(), Intervention.created_at.desc()).all()
+
+    return [InterventionOut.model_validate(inv) for inv in interventions]

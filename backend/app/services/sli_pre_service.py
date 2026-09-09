@@ -242,7 +242,7 @@ def get_available_teaching_options(db: Session) -> dict[str, Any]:
     """
     subjects = db.query(Subject).order_by(Subject.name.asc()).all()
     divisions = db.query(Division).order_by(Division.year.asc(), Division.division_code.asc()).all()
-    semesters = db.query(Semester).order_by(Semester.status.asc(), Semester.semester_id.asc()).all()
+    semesters = db.query(Semester).order_by(Semester.semester_number.asc()).all()
 
     return {
         "subjects": [

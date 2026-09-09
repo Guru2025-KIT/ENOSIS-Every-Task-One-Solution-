@@ -944,7 +944,26 @@ class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignment
                   );
                 }).toList(),
                 onChanged: (val) {
-                  setState(() => _selectedDivisionId = val);
+                  setState(() {
+                    _selectedDivisionId = val;
+                    if (val != null) {
+                      final matchedDiv = _divisions.firstWhere(
+                        (d) => d['division_id'] == val,
+                        orElse: () => {},
+                      );
+                      final yr = matchedDiv['year_level'] as int?;
+                      if (yr != null) {
+                        final preferredSemNum = (yr * 2) - 1; // FE->1, SE->3, TE->5, BE->7
+                        final matchedSem = _semesters.firstWhere(
+                          (s) => s['semester_number'] == preferredSemNum,
+                          orElse: () => {},
+                        );
+                        if (matchedSem.isNotEmpty && matchedSem['semester_id'] != null) {
+                          _selectedSemesterId = matchedSem['semester_id'] as int;
+                        }
+                      }
+                    }
+                  });
                 },
               ),
             ),
@@ -954,7 +973,7 @@ class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignment
           // 3. Semester Dropdown (Optional/Resolved)
           if (_semesters.isNotEmpty) ...[
             Text(
-              'Select Academic Semester',
+              'Select Academic Semester *',
               style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -974,10 +993,13 @@ class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignment
                     final num = sem['semester_number'] as int?;
                     final yr = sem['academic_year'] as String? ?? '';
                     final status = sem['status'] as String? ?? '';
+                    final yrName = (num != null && num > 0)
+                        ? (num <= 2 ? 'FE' : num <= 4 ? 'SE' : num <= 6 ? 'TE' : 'BE')
+                        : '';
                     return DropdownMenuItem<int>(
                       value: sem['semester_id'] as int,
                       child: Text(
-                        'Semester ${num ?? 1} ($yr) • $status',
+                        'Semester ${num ?? 1}${yrName.isNotEmpty ? " ($yrName)" : ""} • $yr • $status',
                         style: const TextStyle(fontSize: 14),
                       ),
                     );

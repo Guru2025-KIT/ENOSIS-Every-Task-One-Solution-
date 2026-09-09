@@ -77,6 +77,42 @@ void main() {
       expect(portal.questions.length, 2);
     });
 
+    test('StudentPortalAssessment model correctly parses 20 questions and topics', () {
+      final questionsList = List.generate(20, (i) => {
+        'question_id': 'PRE_CS301_${(i + 1).toString().padLeft(2, '0')}',
+        'title': 'Question ${i + 1} Title',
+        'description': 'Description for question ${i + 1}',
+        'section': 'Section ${(i ~/ 5) + 1}',
+        'type': i == 13 ? 'BARRIERS_AND_SKILLS' : (i == 18 ? 'PEDAGOGY' : (i == 19 ? 'PREFERENCES' : 'LIKERT_1_5')),
+        'dimension': i == 13 ? 'learning_barriers' : (i == 18 ? 'learning_pace' : (i == 19 ? 'required_support' : 'self_reported_confidence')),
+      });
+
+      final portalJson = {
+        'assessment_id': 105,
+        'access_token': 'token-20q-123',
+        'assessment_type': 'PRE',
+        'status': 'PUBLISHED',
+        'subject_name': 'Database Management Systems',
+        'subject_code': 'CS301',
+        'class_name': 'Year 3 - Div A',
+        'division_name': 'A',
+        'expected_division': 'A',
+        'academic_year': '2025-26',
+        'semester_number': 5,
+        'questions': questionsList,
+        'topics': [
+          {'topic_id': 1, 'topic_name': 'Relational Data Modeling'},
+        ],
+        'students': [],
+      };
+
+      final portal = StudentPortalAssessment.fromJson(portalJson);
+      expect(portal.questions.length, 20);
+      expect(portal.topics.length, 1);
+      expect(portal.questions.first['question_id'], 'PRE_CS301_01');
+      expect(portal.questions.last['question_id'], 'PRE_CS301_20');
+    });
+
     testWidgets('StudentAssessmentPortalScreen displays token entry card when no token is provided', (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(

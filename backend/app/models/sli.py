@@ -673,16 +673,31 @@ class Intervention(Base):
     __tablename__ = "interventions"
 
     intervention_id = Column(Integer, primary_key=True, autoincrement=True)
+    enrollment_id = Column(
+        Integer,
+        ForeignKey("enrollments.enrollment_id"),
+        nullable=True,
+        index=True,
+    )
     recommendation_id = Column(
         Integer,
         ForeignKey("ml_recommendations.recommendation_id"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
-    implemented = Column(Boolean, nullable=True, default=False)
+    faculty_id = Column(
+        String(36),
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
+    intervention_type = Column(String(100), nullable=False)
+    status = Column(String(30), nullable=False, default="COMPLETED")  # COMPLETED, PLANNED, IN_PROGRESS
+    implemented = Column(Boolean, nullable=True, default=True)
     implementation_date = Column(Date, nullable=True)
-    intervention_type = Column(String(100), nullable=True)
     notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
 # ═══════════════════════════════════════════════════════════════════════

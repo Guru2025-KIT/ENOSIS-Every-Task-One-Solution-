@@ -156,11 +156,43 @@ def sync_database_schema():
             except Exception as e:
                 print("MySQL check constraint sync notice:", e)
 
+        # 10. interventions / sli_interventions
+        for tbl in ["interventions", "sli_interventions"]:
+            if tbl in inspector.get_table_names():
+                interv_cols = {col["name"] for col in inspector.get_columns(tbl)}
+                for col_name, col_type in [
+                    ("enrollment_id", "INT NULL"),
+                    ("faculty_id", "VARCHAR(50) NULL"),
+                    ("status", "VARCHAR(50) NOT NULL DEFAULT 'COMPLETED'"),
+                    ("created_at", "DATETIME NULL"),
+                    ("updated_at", "DATETIME NULL"),
+                ]:
+                    if col_name not in interv_cols:
+                        conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN {col_name} {col_type};"))
+
+        if engine.dialect.name == "sqlite" and "interventions" in inspector.get_table_names():
+            for col in inspector.get_columns("interventions"):
+                if col["name"] == "recommendation_id" and not col.get("nullable", True):
+                    try:
+                        conn.execute(text("DROP INDEX IF EXISTS ix_interventions_recommendation_id;"))
+                        conn.execute(text("DROP INDEX IF EXISTS ix_interventions_enrollment_id;"))
+                        conn.execute(text("DROP INDEX IF EXISTS ix_interventions_faculty_id;"))
+                        conn.execute(text("ALTER TABLE interventions RENAME TO interventions_old;"))
+                        app.models.sli.Intervention.__table__.create(bind=conn)
+                        old_cols = {c["name"] for c in inspector.get_columns("interventions_old")}
+                        common_cols = [c for c in ["intervention_id", "enrollment_id", "recommendation_id", "faculty_id", "intervention_type", "status", "implemented", "implementation_date", "notes", "created_at", "updated_at"] if c in old_cols]
+                        cols_str = ", ".join(common_cols)
+                        conn.execute(text(f"INSERT INTO interventions ({cols_str}) SELECT {cols_str} FROM interventions_old;"))
+                        conn.execute(text("DROP TABLE interventions_old;"))
+                    except Exception as e:
+                        print("SQLite interventions table migration notice:", e)
+
         conn.commit()
-    print("Schema sync complete.")
+        print("=== DATABASE SCHEMA SYNC COMPLETE ===")
 
 if __name__ == "__main__":
     sync_database_schema()
+
     from app.seed_sli_dev_data import seed
     print("\n=== 3. RUNNING DEV SEED ===")
     seed()

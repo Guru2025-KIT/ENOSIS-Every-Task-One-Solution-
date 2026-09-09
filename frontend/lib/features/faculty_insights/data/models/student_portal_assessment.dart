@@ -38,6 +38,7 @@ class StudentPortalAssessment {
   final int semesterNumber;
   final String? shareUrl;
   final List<dynamic> questions;
+  final List<dynamic> topics;
   final List<StudentPortalRosterItem> students;
 
   const StudentPortalAssessment({
@@ -55,6 +56,7 @@ class StudentPortalAssessment {
     required this.semesterNumber,
     this.shareUrl,
     required this.questions,
+    this.topics = const [],
     required this.students,
   });
 
@@ -79,6 +81,7 @@ class StudentPortalAssessment {
       semesterNumber: (json['semester_number'] as int?) ?? 0,
       shareUrl: url,
       questions: (json['questions'] as List<dynamic>?) ?? [],
+      topics: (json['topics'] as List<dynamic>?) ?? [],
       students: (json['students'] as List<dynamic>? ?? [])
           .map((s) => StudentPortalRosterItem.fromJson(s as Map<String, dynamic>))
           .toList(),

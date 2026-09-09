@@ -44,6 +44,7 @@ class _StudentAssessmentPortalScreenState extends State<StudentAssessmentPortalS
   String _preferredFormat = 'PRACTICAL_LABS';
   final TextEditingController _skillsToImproveController = TextEditingController();
   final Map<int, Map<String, int>> _topicRatings = {};
+  final Map<String, int> _dynamicRatings = {};
 
   // MID Form State
   int _currentConfidence = 4;
@@ -126,12 +127,53 @@ class _StudentAssessmentPortalScreenState extends State<StudentAssessmentPortalS
 
   void _initTopicRatings(StudentPortalAssessment data) {
     _topicRatings.clear();
-    for (final q in data.questions) {
-      if (q is Map && q['topics'] is List) {
-        for (final t in q['topics']) {
-          final tId = t['topic_id'] as int;
+    _midTopicProgress.clear();
+    _dynamicRatings.clear();
+
+    // 1. Initialize from topics array if provided
+    for (final t in data.topics) {
+      if (t is Map && t['topic_id'] != null) {
+        final tId = int.tryParse(t['topic_id'].toString()) ?? 0;
+        if (tId > 0) {
           _topicRatings[tId] = {'confidence': 3, 'difficulty': 3};
           _midTopicProgress[tId] = 'COMPLETED';
+        }
+      }
+    }
+
+    // 2. Initialize from questions list
+    for (int i = 0; i < data.questions.length; i++) {
+      final q = data.questions[i];
+      if (q is Map) {
+        final qId = q['question_id']?.toString() ?? 'Q_${i + 1}';
+        final dim = (q['dimension'] as String?)?.toLowerCase() ?? '';
+        final defaultScore = (dim == 'perceived_difficulty') ? 3 : 4;
+        _dynamicRatings[qId] = defaultScore;
+
+        // Register topic ID if present
+        if (q['topic_id'] != null) {
+          final tId = int.tryParse(q['topic_id'].toString()) ?? 0;
+          if (tId > 0) {
+            _topicRatings.putIfAbsent(tId, () => {'confidence': 3, 'difficulty': 3});
+            _midTopicProgress.putIfAbsent(tId, () => 'COMPLETED');
+            if (dim == 'perceived_difficulty') {
+              _topicRatings[tId]!['difficulty'] = defaultScore;
+            } else if (dim == 'self_reported_confidence') {
+              _topicRatings[tId]!['confidence'] = defaultScore;
+            }
+          }
+        }
+
+        if (q['topics'] is List) {
+          for (final t in q['topics']) {
+            if (t is Map && t['topic_id'] != null) {
+              final tId = int.tryParse(t['topic_id'].toString()) ?? 0;
+              if (tId > 0) {
+                _topicRatings.putIfAbsent(tId, () => {'confidence': 3, 'difficulty': 3});
+                _midTopicProgress.putIfAbsent(tId, () => 'COMPLETED');
+              }
+            }
+          }
         }
       }
     }
@@ -244,6 +286,10 @@ class _StudentAssessmentPortalScreenState extends State<StudentAssessmentPortalS
             'progress_status': 'COMPLETED',
           }).toList(),
         });
+      }
+
+      if (_dynamicRatings.isNotEmpty) {
+        payload['question_responses'] = _dynamicRatings;
       }
 
       final res = await _sliService.submitStudentAssessment(
@@ -572,16 +618,34 @@ class _StudentAssessmentPortalScreenState extends State<StudentAssessmentPortalS
         const SizedBox(height: 16),
 
         // Step 2: Assessment Questions
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-          child: Text(
-            'Step 2: Course Assessment Questions',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Step 2: Course Assessment Questions',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '${data.questions.length} Questions',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 8),
 
-        if (data.assessmentType == 'PRE')
+        if (data.questions.isNotEmpty)
+          _buildDynamicQuestionsList(data)
+        else if (data.assessmentType == 'PRE')
           _buildPreAssessmentQuestions(data)
         else if (data.assessmentType == 'MID')
           _buildMidAssessmentQuestions(data)
@@ -609,6 +673,551 @@ class _StudentAssessmentPortalScreenState extends State<StudentAssessmentPortalS
         ),
         const SizedBox(height: 40),
       ],
+    );
+  }
+
+  void _onDynamicRatingChanged(Map<String, dynamic> q, String qId, int score) {
+    setState(() {
+      _dynamicRatings[qId] = score;
+
+      final dim = (q['dimension'] as String?)?.toLowerCase() ?? '';
+      final tId = q['topic_id'] != null ? int.tryParse(q['topic_id'].toString()) : null;
+
+      if (tId != null && tId > 0) {
+        _topicRatings.putIfAbsent(tId, () => {'confidence': 3, 'difficulty': 3});
+        if (dim == 'perceived_difficulty') {
+          _topicRatings[tId]!['difficulty'] = score;
+        } else {
+          _topicRatings[tId]!['confidence'] = score;
+        }
+      }
+
+      if (dim == 'self_reported_confidence') {
+        _selfAssessedSkill = score;
+        _learningConfidence = score;
+      } else if (dim == 'application_ability') {
+        _coreConceptsMastery = score;
+        _practicalLabCompetence = score;
+      } else if (dim == 'perceived_difficulty') {
+        _expectedDifficulty = score;
+      } else if (dim == 'overall_confidence') {
+        _subjectInterest = score;
+        _learningConfidence = score;
+        _currentConfidence = score;
+        _finalConfidence = score;
+      } else if (dim == 'problem_solving') {
+        _problemSolvingAbility = score;
+      } else if (dim == 'independent_learning') {
+        _independentLearningAbility = score;
+      } else if (dim == 'barrier_frequency') {
+        _understandingLevel = (6 - score).clamp(1, 5);
+      } else if (dim == 'learning_pace') {
+        if (score <= 2) {
+          _teachingPace = 'TOO_SLOW';
+        } else if (score >= 4) {
+          _teachingPace = 'TOO_FAST';
+        } else {
+          _teachingPace = 'JUST_RIGHT';
+        }
+      }
+    });
+  }
+
+  Widget _buildDynamicQuestionsList(StudentPortalAssessment data) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: List.generate(data.questions.length, (index) {
+        final q = data.questions[index] as Map<String, dynamic>;
+        final qId = q['question_id']?.toString() ?? 'Q_${index + 1}';
+        final title = q['title'] ?? q['section'] ?? 'Question ${index + 1}';
+        final description = q['description'] ?? q['prompt'] ?? '';
+        final section = q['section'] as String?;
+        final type = (q['type'] as String?)?.toUpperCase() ?? 'LIKERT_1_5';
+        final dim = (q['dimension'] as String?)?.toLowerCase() ?? '';
+
+        if (type == 'BARRIERS_AND_SKILLS' || dim == 'learning_barriers') {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: _buildDynamicBarriersCard(
+              qIndex: index + 1,
+              title: title,
+              description: description,
+              section: section,
+            ),
+          );
+        }
+
+        if (type == 'PEDAGOGY' || dim == 'learning_pace') {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: _buildDynamicPacingCard(
+              qIndex: index + 1,
+              qId: qId,
+              q: q,
+              title: title,
+              description: description,
+              section: section,
+            ),
+          );
+        }
+
+        if (type == 'PREFERENCES' || dim == 'required_support') {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: _buildDynamicPreferencesCard(
+              qIndex: index + 1,
+              title: title,
+              description: description,
+              section: section,
+            ),
+          );
+        }
+
+        String minLabel = '1 = Low';
+        String maxLabel = '5 = High';
+        if (dim == 'perceived_difficulty') {
+          minLabel = '1 = Very Easy';
+          maxLabel = '5 = Very Challenging';
+        } else if (dim == 'self_reported_confidence' || dim == 'overall_confidence') {
+          minLabel = '1 = Low Confidence';
+          maxLabel = '5 = High Mastery';
+        } else if (dim == 'application_ability') {
+          minLabel = '1 = Novice / Basic';
+          maxLabel = '5 = Practical Problem Solver';
+        } else if (dim == 'problem_solving') {
+          minLabel = '1 = Need Guidance';
+          maxLabel = '5 = Autonomous Problem Solver';
+        } else if (dim == 'independent_learning') {
+          minLabel = '1 = Dependent';
+          maxLabel = '5 = Self-Directed';
+        } else if (dim == 'barrier_frequency') {
+          minLabel = '1 = Rarely / Never';
+          maxLabel = '5 = Persistent / Frequent';
+        }
+
+        final currentScore = _dynamicRatings[qId] ?? 4;
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: _buildDynamicLikertCard(
+            qIndex: index + 1,
+            title: title,
+            description: description,
+            section: section,
+            value: currentScore,
+            minLabel: minLabel,
+            maxLabel: maxLabel,
+            onChanged: (score) => _onDynamicRatingChanged(q, qId, score),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildDynamicLikertCard({
+    required int qIndex,
+    required String title,
+    required String description,
+    String? section,
+    required int value,
+    required ValueChanged<int> onChanged,
+    required String minLabel,
+    required String maxLabel,
+  }) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'Q$qIndex',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                if (section != null && section.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      section,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            if (description.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                description,
+                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+              ),
+            ],
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: List.generate(5, (index) {
+                final score = index + 1;
+                final isSelected = value == score;
+                return InkWell(
+                  onTap: () => onChanged(score),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    width: 46,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: isSelected ? AppColors.primary : AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: isSelected ? AppColors.primary : AppColors.border),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '$score',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isSelected ? Colors.white : AppColors.textPrimary,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(minLabel, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                Text(maxLabel, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDynamicBarriersCard({
+    required int qIndex,
+    required String title,
+    required String description,
+    String? section,
+  }) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'Q$qIndex',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                if (section != null && section.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      section,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            if (description.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(description, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: _availableBarriers.map((b) {
+                final isSelected = _selectedBarriers.contains(b['value']);
+                return FilterChip(
+                  label: Text(b['label'] ?? '', style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : null)),
+                  selected: isSelected,
+                  selectedColor: AppColors.primary,
+                  onSelected: (sel) {
+                    setState(() {
+                      if (sel) {
+                        _selectedBarriers.add(b['value']!);
+                      } else {
+                        _selectedBarriers.remove(b['value']!);
+                      }
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDynamicPacingCard({
+    required int qIndex,
+    required String qId,
+    required Map<String, dynamic> q,
+    required String title,
+    required String description,
+    String? section,
+  }) {
+    final paceOptions = [
+      {'val': 'TOO_SLOW', 'label': 'Too Slow', 'score': 1},
+      {'val': 'JUST_RIGHT', 'label': 'Just Right / Well-Paced', 'score': 3},
+      {'val': 'TOO_FAST', 'label': 'Too Fast', 'score': 5},
+    ];
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'Q$qIndex',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                if (section != null && section.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      section,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            if (description.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(description, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: paceOptions.map((opt) {
+                final isSelected = _teachingPace == opt['val'];
+                return ChoiceChip(
+                  label: Text(
+                    opt['label'] as String,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected ? Colors.white : AppColors.textPrimary,
+                    ),
+                  ),
+                  selected: isSelected,
+                  selectedColor: AppColors.primary,
+                  onSelected: (selected) {
+                    if (selected) {
+                      setState(() {
+                        _teachingPace = opt['val'] as String;
+                        _dynamicRatings[qId] = opt['score'] as int;
+                      });
+                    }
+                  },
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDynamicPreferencesCard({
+    required int qIndex,
+    required String title,
+    required String description,
+    String? section,
+  }) {
+    final formats = [
+      {'val': 'PRACTICAL_LABS', 'label': 'Practical Labs'},
+      {'val': 'RECORDED_VIDEOS', 'label': 'Recorded Videos'},
+      {'val': 'INTERACTIVE_SESSIONS', 'label': 'Interactive Sessions'},
+      {'val': 'READING_MATERIAL', 'label': 'Reading Materials'},
+    ];
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'Q$qIndex',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                if (section != null && section.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      section,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            if (description.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(description, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            ],
+            const SizedBox(height: 12),
+            const Text(
+              'Preferred Learning Format:',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: formats.map((fmt) {
+                final isSelected = _preferredFormat == fmt['val'];
+                return ChoiceChip(
+                  label: Text(
+                    fmt['label']!,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isSelected ? Colors.white : AppColors.textPrimary,
+                    ),
+                  ),
+                  selected: isSelected,
+                  selectedColor: AppColors.primary,
+                  onSelected: (selected) {
+                    if (selected) {
+                      setState(() {
+                        _preferredFormat = fmt['val']!;
+                        _usefulFormat = fmt['val']!;
+                      });
+                    }
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Target Skills or Support Needed:',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _skillsToImproveController,
+              decoration: InputDecoration(
+                hintText: 'e.g. Code walkthroughs, lab mentoring, practice exercises',
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
