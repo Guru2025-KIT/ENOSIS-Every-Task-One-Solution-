@@ -1040,67 +1040,51 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               'CO-PO Attainment Workbench',
-              style: AppTypography.h3.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+              style: AppTypography.h3.copyWith(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
             ),
             Text(
-              '${_repository.master.courseCode} · ${_repository.master.courseName} (${_repository.master.semester})',
-              style: AppTypography.caption.copyWith(color: Colors.white.withOpacity(0.85), fontSize: 11.5),
+              '${_repository.master.courseCode} · ${_repository.master.courseName}',
+              style: AppTypography.caption.copyWith(color: Colors.white.withOpacity(0.85), fontSize: 11),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
         backgroundColor: AppColors.primary,
         elevation: 1,
         actions: [
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.secondary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          Tooltip(
+            message: 'Attainment Rules (${_repository.config.directWeightPercent.toInt()}% Direct : ${_repository.config.indirectWeightPercent.toInt()}% Survey · Cutoff ${_repository.config.passingThresholdPercent.toInt()}%)',
+            child: IconButton(
+              icon: const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
+              tooltip: 'Attainment Rules (${_repository.config.directWeightPercent.toInt()}/${_repository.config.indirectWeightPercent.toInt()})',
+              onPressed: _showAttainmentConfigDialog,
             ),
-            icon: const Icon(Icons.tune_rounded, size: 15),
-            label: Text(
-              'Attainment Rules (${_repository.config.directWeightPercent.toInt()}/${_repository.config.indirectWeightPercent.toInt()} · Cutoff ${_repository.config.passingThresholdPercent.toInt()}%)',
-              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
-            ),
-            onPressed: _showAttainmentConfigDialog,
           ),
-          const SizedBox(width: 6),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white.withOpacity(0.18),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          Tooltip(
+            message: 'Export Official Attainment PDF Report',
+            child: IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined, color: Colors.white, size: 20),
+              tooltip: 'Export PDF Report',
+              onPressed: () => _exportPdfReport(report),
             ),
-            icon: const Icon(Icons.picture_as_pdf_outlined, size: 15),
-            label: const Text('Export PDF', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
-            onPressed: () => _exportPdfReport(report),
           ),
-          const SizedBox(width: 6),
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
-              side: const BorderSide(color: Colors.white60),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            ),
-            icon: const Icon(Icons.school_outlined, size: 15),
-            label: const Text('Switch Course', style: TextStyle(fontSize: 11.5)),
+          IconButton(
+            icon: const Icon(Icons.school_outlined, color: Colors.white, size: 20),
+            tooltip: 'Switch Course / Year',
             onPressed: () {
               setState(() {
                 _hasStartedMapping = false;
               });
             },
           ),
-          const SizedBox(width: 4),
           IconButton(
             icon: const Icon(Icons.functions_rounded, color: Colors.white, size: 20),
-            tooltip: 'View Formulas',
+            tooltip: 'View CO-PO Formulas & Rules',
             onPressed: _showFormulaGuideDialog,
           ),
           IconButton(
@@ -1108,7 +1092,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             tooltip: 'Recalculate Attainment',
             onPressed: _recalculate,
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 4),
         ],
         bottom: TabBar(
           controller: _tabController,
@@ -1252,56 +1236,57 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           const SizedBox(height: 10),
 
           // Row 2: Active Mapping Course Status Banner
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 10,
             children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.primarySoft,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
-                      ),
-                      child: Text(
-                        _selectedCourse.code,
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _selectedCourse.name,
-                            style: AppTypography.bodyMedium.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            'KIT\'s College of Engineering (Autonomous), Kolhapur · Department of CSE (AI & ML) · ${_selectedCourse.semester}',
-                            style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 11),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
               Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      _selectedCourse.code,
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _selectedCourse.name,
+                        style: AppTypography.bodyMedium.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        'KIT\'s College of Engineering (Autonomous) · ${_selectedCourse.semester}',
+                        style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 11),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1391,8 +1376,11 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 12,
+                    runSpacing: 10,
                     children: [
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1566,8 +1554,11 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 10,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1577,18 +1568,14 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   Text('Master student list joined with all exam evaluations via Roll No.', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
                 ],
               ),
-              Row(
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: _isProcessing ? null : _handleUploadRoster,
-                    icon: const Icon(Icons.upload_file, size: 16),
-                    label: const Text('Upload Roll Call (Excel/CSV)'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ],
+              ElevatedButton.icon(
+                onPressed: _isProcessing ? null : _handleUploadRoster,
+                icon: const Icon(Icons.upload_file, size: 16),
+                label: const Text('Upload Roll Call (Excel/CSV)'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
               ),
             ],
           ),
@@ -1635,9 +1622,11 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Sub-tabs ISE1 vs ISE2
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 10,
             children: [
               SegmentedButton<int>(
                 segments: const [
@@ -1824,9 +1813,11 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Segmented selector: MSE vs ESE
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 10,
             children: [
               SegmentedButton<int>(
                 segments: const [
@@ -2094,10 +2085,14 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 12,
+                  runSpacing: 10,
                   children: [
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
                           padding: const EdgeInsets.all(8),
@@ -2110,6 +2105,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                         const SizedBox(width: 12),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             const Text(
                               'NBA Compliance Audit Report Generator',
@@ -2389,8 +2385,11 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           const SizedBox(height: 14),
           const Divider(height: 1),
           const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 10,
             children: [
               if (hasPrev)
                 OutlinedButton.icon(
@@ -2485,89 +2484,95 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       ),
       child: SafeArea(
         top: false,
-        child: Row(
-          children: [
-            // Prev Step
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.textPrimary,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              icon: const Icon(Icons.arrow_back, size: 16),
-              label: Text(
-                hasPrev ? 'Back: $prevTitle' : 'Switch Course',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-              ),
-              onPressed: hasPrev
-                  ? () => _goToTab(currentIndex - 1)
-                  : () => setState(() => _hasStartedMapping = false),
-            ),
-            const Spacer(),
-            // Progress dots
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: List.generate(6, (i) {
-                final isCurrent = i == currentIndex;
-                final isPast = i < currentIndex;
-                return InkWell(
-                  onTap: () => _goToTab(i),
-                  borderRadius: BorderRadius.circular(10),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    width: isCurrent ? 26 : 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: isCurrent
-                          ? AppColors.secondary
-                          : (isPast ? AppColors.primary : AppColors.divider),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 32),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Prev Step
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textPrimary,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                );
-              }),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '${currentIndex + 1}/6',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const Spacer(),
-            // Next Step
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: hasNext ? AppColors.secondary : AppColors.success,
-                foregroundColor: Colors.white,
-                elevation: 2,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              icon: Icon(hasNext ? Icons.arrow_forward : Icons.check, size: 16),
-              label: Text(
-                hasNext ? 'Next: $nextTitle ➔' : 'Report Ready ✓',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-              ),
-              onPressed: () {
-                if (hasNext) {
-                  _goToTab(currentIndex + 1);
-                } else {
-                  _recalculate();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Attainment report is fully computed across all 6 stages.'),
-                      backgroundColor: AppColors.success,
-                      behavior: SnackBarBehavior.floating,
+                  icon: const Icon(Icons.arrow_back, size: 16),
+                  label: Text(
+                    hasPrev ? 'Back' : 'Switch Course',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                  onPressed: hasPrev
+                      ? () => _goToTab(currentIndex - 1)
+                      : () => setState(() => _hasStartedMapping = false),
+                ),
+                const SizedBox(width: 8),
+                // Progress dots
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (int i = 0; i < 6; i++)
+                      InkWell(
+                        onTap: () => _goToTab(i),
+                        borderRadius: BorderRadius.circular(10),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          width: i == currentIndex ? 22 : 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: i == currentIndex
+                                ? AppColors.secondary
+                                : (i < currentIndex ? AppColors.primary : AppColors.divider),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${currentIndex + 1}/6',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
-                  );
-                }
-              },
+                  ],
+                ),
+                const SizedBox(width: 8),
+                // Next Step
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: hasNext ? AppColors.secondary : AppColors.success,
+                    foregroundColor: Colors.white,
+                    elevation: 2,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: Icon(hasNext ? Icons.arrow_forward : Icons.check, size: 16),
+                  label: Text(
+                    hasNext ? 'Next: Stage ${currentIndex + 2} ➔' : 'Report Ready ✓',
+                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () {
+                    if (hasNext) {
+                      _goToTab(currentIndex + 1);
+                    } else {
+                      _recalculate();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Attainment report is fully computed across all 6 stages.'),
+                          backgroundColor: AppColors.success,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

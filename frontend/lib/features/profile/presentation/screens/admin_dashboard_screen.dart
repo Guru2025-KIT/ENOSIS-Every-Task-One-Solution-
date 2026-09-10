@@ -807,40 +807,80 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      decoration: const InputDecoration(
-                        hintText: 'Search faculty by name, employee code, or designation...',
-                        prefixIcon: Icon(Icons.search),
-                        isDense: true,
-                      ),
-                      onChanged: (val) => setState(() => _facultySearchQuery = val),
+              child: isMobile
+                  ? Column(
+                      children: [
+                        TextField(
+                          decoration: const InputDecoration(
+                            hintText: 'Search faculty...',
+                            prefixIcon: Icon(Icons.search),
+                            isDense: true,
+                          ),
+                          onChanged: (val) => setState(() => _facultySearchQuery = val),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButton<String>(
+                                value: _selectedDeptFilter,
+                                isExpanded: true,
+                                underline: const SizedBox(),
+                                items: ['All', 'CSE (AI & ML)', 'Computer Science', 'Electronics & Telecom', 'Basic Sciences']
+                                    .map((dept) => DropdownMenuItem(value: dept, child: Text(dept, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))))
+                                    .toList(),
+                                onChanged: (val) => setState(() => _selectedDeptFilter = val!),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.secondary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              ),
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('Add', style: TextStyle(fontWeight: FontWeight.bold)),
+                              onPressed: _openAddFacultyDialog,
+                            ),
+                          ],
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            decoration: const InputDecoration(
+                              hintText: 'Search faculty by name, employee code, or designation...',
+                              prefixIcon: Icon(Icons.search),
+                              isDense: true,
+                            ),
+                            onChanged: (val) => setState(() => _facultySearchQuery = val),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        DropdownButton<String>(
+                          value: _selectedDeptFilter,
+                          underline: const SizedBox(),
+                          items: ['All', 'CSE (AI & ML)', 'Computer Science', 'Electronics & Telecom', 'Basic Sciences']
+                              .map((dept) => DropdownMenuItem(value: dept, child: Text(dept, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))))
+                              .toList(),
+                          onChanged: (val) => setState(() => _selectedDeptFilter = val!),
+                        ),
+                        const SizedBox(width: 16),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.secondary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                          ),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Add Faculty', style: TextStyle(fontWeight: FontWeight.bold)),
+                          onPressed: _openAddFacultyDialog,
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  DropdownButton<String>(
-                    value: _selectedDeptFilter,
-                    underline: const SizedBox(),
-                    items: ['All', 'CSE (AI & ML)', 'Computer Science', 'Electronics & Telecom', 'Basic Sciences']
-                        .map((dept) => DropdownMenuItem(value: dept, child: Text(dept, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))))
-                        .toList(),
-                    onChanged: (val) => setState(() => _selectedDeptFilter = val!),
-                  ),
-                  const SizedBox(width: 16),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.secondary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                    ),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add Faculty', style: TextStyle(fontWeight: FontWeight.bold)),
-                    onPressed: _openAddFacultyDialog,
-                  ),
-                ],
-              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -956,30 +996,38 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 16,
+                runSpacing: 12,
                 children: [
-                  const Icon(Icons.filter_list, color: AppColors.secondary),
-                  const SizedBox(width: 10),
-                  const Text('Filter Term:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  const SizedBox(width: 14),
-                  DropdownButton<String>(
-                    value: _allocYearFilter,
-                    underline: const SizedBox(),
-                    items: ['F.Y. B.Tech', 'S.Y. B.Tech', 'T.Y. B.Tech', 'Final Year B.Tech']
-                        .map((y) => DropdownMenuItem(value: y, child: Text(y, style: const TextStyle(fontWeight: FontWeight.bold))))
-                        .toList(),
-                    onChanged: (v) => setState(() => _allocYearFilter = v!),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.filter_list, color: AppColors.secondary),
+                      const SizedBox(width: 8),
+                      const Text('Filter Term:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      const SizedBox(width: 12),
+                      DropdownButton<String>(
+                        value: _allocYearFilter,
+                        underline: const SizedBox(),
+                        items: ['F.Y. B.Tech', 'S.Y. B.Tech', 'T.Y. B.Tech', 'Final Year B.Tech']
+                            .map((y) => DropdownMenuItem(value: y, child: Text(y, style: const TextStyle(fontWeight: FontWeight.bold))))
+                            .toList(),
+                        onChanged: (v) => setState(() => _allocYearFilter = v!),
+                      ),
+                      const SizedBox(width: 14),
+                      DropdownButton<String>(
+                        value: _allocSemFilter,
+                        underline: const SizedBox(),
+                        items: ['Semester I', 'Semester II', 'Semester III', 'Semester IV', 'Semester V', 'Semester VI', 'Semester VII', 'Semester VIII']
+                            .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontWeight: FontWeight.bold))))
+                            .toList(),
+                        onChanged: (v) => setState(() => _allocSemFilter = v!),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 20),
-                  DropdownButton<String>(
-                    value: _allocSemFilter,
-                    underline: const SizedBox(),
-                    items: ['Semester I', 'Semester II', 'Semester III', 'Semester IV', 'Semester V', 'Semester VI', 'Semester VII', 'Semester VIII']
-                        .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontWeight: FontWeight.bold))))
-                        .toList(),
-                    onChanged: (v) => setState(() => _allocSemFilter = v!),
-                  ),
-                  const Spacer(),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
                     icon: const Icon(Icons.add, size: 18),
