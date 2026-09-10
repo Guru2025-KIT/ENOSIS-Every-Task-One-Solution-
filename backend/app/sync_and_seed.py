@@ -255,7 +255,7 @@ def seed_admin_user():
         # Check if any admin already exists
         existing_admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
         if existing_admin:
-            print(f"  ✓ Admin user already exists: {existing_admin.email}")
+            print(f"  [OK] Admin user already exists: {existing_admin.email}")
             return
 
         # Check if a user with the admin email exists but isn't admin yet
@@ -263,7 +263,7 @@ def seed_admin_user():
         if user:
             user.role = UserRole.ADMIN
             db.commit()
-            print(f"  ✓ Promoted existing user '{user.email}' to ADMIN role.")
+            print(f"  [OK] Promoted existing user '{user.email}' to ADMIN role.")
             return
 
         # Create a new admin user
@@ -279,10 +279,10 @@ def seed_admin_user():
         )
         db.add(admin_user)
         db.commit()
-        print(f"  ✓ Created admin user: {DEFAULT_ADMIN_EMAIL} (password: {DEFAULT_ADMIN_PASSWORD})")
+        print(f"  [OK] Created admin user: {DEFAULT_ADMIN_EMAIL} (password: {DEFAULT_ADMIN_PASSWORD})")
     except Exception as e:
         db.rollback()
-        print(f"  ⚠ Admin seeding failed: {e}")
+        print(f"  [WARNING] Admin seeding failed: {e}")
     finally:
         db.close()
 
