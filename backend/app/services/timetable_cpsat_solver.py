@@ -155,10 +155,9 @@ class TimetableCpSatSolver:
         n2 = c2.upper().replace("-", " ").strip()
         return n1 == n2 or n1.startswith(n2) or n2.startswith(n1)
 
-        def _parse_constraints(self) -> Tuple[Set[str], List[Constraint]]:
-
-         """Extract holidays, fill rules, and parsed active constraints."""
-
+    # ✅ FIXED INDENTATION HERE
+    def _parse_constraints(self) -> Tuple[Set[str], List[Constraint]]:
+        """Extract holidays, fill rules, and parsed active constraints."""
         holidays: Set[str] = set()
         parsed: List[Constraint] = []
         self.fill_rules = []
@@ -204,7 +203,7 @@ class TimetableCpSatSolver:
                 else:
                     intent = "avoid"
             elif intent == "parallel":
-                # ✅ Ensure it stays parallel even if category says unavailable
+                # Ensure it stays parallel even if category says unavailable
                 pass  
 
             parsed.append(Constraint(
@@ -219,6 +218,7 @@ class TimetableCpSatSolver:
             ))
 
         return holidays, parsed
+
     def _constraint_matches_session(self, con: Constraint, sess: SolverSession) -> bool:
         """Determines if a constraint is applicable to a specific session."""
         has_filter = False
@@ -268,7 +268,7 @@ class TimetableCpSatSolver:
                 constraint_joint = None
                 for con in self.constraints:
                     if con.subject_names and any(self._string_match(sn, a.subject) for sn in con.subject_names):
-                        # ✅ Check if intent is parallel or fixed
+                        # Check if intent is parallel or fixed
                         if con.intent == "parallel" or (len(con.class_names) > 1 and any(self._class_match(cn, a.class_name) for cn in con.class_names)):
                             constraint_joint = f"con_joint_{self._normalize(con.subject_names[0])}"
                             break

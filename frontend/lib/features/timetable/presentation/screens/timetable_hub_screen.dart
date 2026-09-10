@@ -3,9 +3,10 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import 'time_slot_setup_screen.dart';
 import 'upload_assignments_screen.dart';
+import 'manage_rooms_screen.dart'; // ✅ Added Import
 import 'constraint_builder_screen.dart';
-import 'generate_timetable_screen.dart';     // Added import
-import 'timetable_display_screen.dart';       // Added import
+import 'generate_timetable_screen.dart';
+import 'timetable_display_screen.dart';
 
 class TimetableHubScreen extends StatelessWidget {
   const TimetableHubScreen({super.key});
@@ -58,7 +59,21 @@ class TimetableHubScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // 3. Manage Constraints
+            // 3. Manage Classrooms & Labs
+            _buildActionCard(
+              context,
+              icon: Icons.meeting_room_outlined,
+              title: 'Manage Classrooms & Labs',
+              subtitle: 'Add physical room numbers and capacities manually.',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ManageRoomsScreen()),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+
+            // 4. Manage Constraints
             _buildActionCard(
               context,
               icon: Icons.rule_folder_outlined,
@@ -72,7 +87,7 @@ class TimetableHubScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             
-            // 4. View Current Timetable
+            // 5. View Current Timetable
             _buildActionCard(
               context,
               icon: Icons.table_chart_outlined,
@@ -80,13 +95,13 @@ class TimetableHubScreen extends StatelessWidget {
               subtitle: 'See the active schedule for all classes and faculty.',
               onTap: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const TimetableDisplayScreen()), // Navigates to display
+                  MaterialPageRoute(builder: (_) => const TimetableDisplayScreen()),
                 );
               },
             ),
             const SizedBox(height: 16),
 
-            // 5. Generate New Timetable
+            // 6. Generate New Timetable
             _buildActionCard(
               context,
               icon: Icons.auto_fix_high,
@@ -94,7 +109,7 @@ class TimetableHubScreen extends StatelessWidget {
               subtitle: 'Run the algorithm to create a clash-free schedule.',
               onTap: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const GenerateTimetableScreen()), // Navigates to generate
+                  MaterialPageRoute(builder: (_) => const GenerateTimetableScreen()),
                 );
               },
             ),

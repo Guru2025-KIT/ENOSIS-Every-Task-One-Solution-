@@ -5,6 +5,7 @@ import '../models/teaching_assignment.dart';
 import '../models/time_slot.dart';
 import '../models/timetable_constraint.dart';
 import 'package:flutter/foundation.dart';
+import '../models/room.dart';
 
 
 class TimetableProvider extends ChangeNotifier {
@@ -126,6 +127,21 @@ class TimetableProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+    // Add these variables
+  final List<Room> _rooms = [];
+  List<Room> get rooms => _rooms;
+
+  // Add these methods
+  void addRoom(Room room) {
+    _rooms.add(room);
+    notifyListeners();
+  }
+
+  void removeRoom(String name) {
+    _rooms.removeWhere((r) => r.name == name);
+    notifyListeners();
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // generateTimetable — calls POST /timetable/generate (CP-SAT solver)
   // ─────────────────────────────────────────────────────────────────────────
@@ -164,13 +180,14 @@ class TimetableProvider extends ChangeNotifier {
             final constraintsPayload = _constraints.map((c) => {
         'id': c.id,
         'category': c.category,
-        'intent': _resolveIntent(c.category), // ✅ ADD THIS LINE
+        'intent': _resolveIntent(c), // Pass the whole object 'c', not 'c.category'
         'facultyNames': c.facultyNames,
         'subjectNames': c.subjectNames,
         'classNames': c.classNames,
         'days': c.days,
         'slotNumbers': c.slotNumbers,
       }).toList();
+
       // ── 2. Detect combined / joint class groups ───────────────────────────
       final groupMap = <String, Set<String>>{};
       for (final a in _assignments) {

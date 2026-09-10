@@ -16,6 +16,9 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
   TimeOfDay? _endTime;
   bool _isBreak = false;
 
+  TimeOfDay? _collegeStartTime;
+  TimeOfDay? _collegeEndTime;
+
   String _formatTime(TimeOfDay time) {
     final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
     final minute = time.minute.toString().padLeft(2, '0');
@@ -23,10 +26,35 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
     return '$hour:$minute $period';
   }
 
+  int _toMinutes(TimeOfDay t) => t.hour * 60 + t.minute;
+
   void _addSlot() {
     if (_startTime == null || _endTime == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select both start and end times.')),
+        const SnackBar(content: Text('Please select both start and end times for the slot.'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    // ✅ STRICT COLLEGE TIME VALIDATION
+    if (_collegeStartTime != null && _collegeEndTime != null) {
+      int slotStartMins = _toMinutes(_startTime!);
+      int slotEndMins = _toMinutes(_endTime!);
+      int collegeStartMins = _toMinutes(_collegeStartTime!);
+      int collegeEndMins = _toMinutes(_collegeEndTime!);
+
+      if (slotStartMins < collegeStartMins || slotEndMins > collegeEndMins) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invalid Slot! Slot must be between ${_formatTime(_collegeStartTime!)} and ${_formatTime(_collegeEndTime!)}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return; // Stop execution, don't add slot
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please set College Start and End times first.'), backgroundColor: Colors.orange),
       );
       return;
     }
@@ -70,6 +98,34 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text('College Hours', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.login),
+                            label: Text(_collegeStartTime == null ? 'College Start' : _formatTime(_collegeStartTime!)),
+                            onPressed: () async {
+                              final picked = await showTimePicker(context: context, initialTime: TimeOfDay(hour: 9, minute: 0));
+                              if (picked != null) setState(() => _collegeStartTime = picked);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.logout),
+                            label: Text(_collegeEndTime == null ? 'College End' : _formatTime(_collegeEndTime!)),
+                            onPressed: () async {
+                              final picked = await showTimePicker(context: context, initialTime: TimeOfDay(hour: 17, minute: 0));
+                              if (picked != null) setState(() => _collegeEndTime = picked);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 32),
                     Text('Add New Slot', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 16),
                     Row(
@@ -77,7 +133,7 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                         Expanded(
                           child: OutlinedButton.icon(
                             icon: const Icon(Icons.access_time),
-                            label: Text(_startTime == null ? 'Start Time' : _formatTime(_startTime!)),
+                            label: Text(_startTime == null ? 'Slot Start' : _formatTime(_startTime!)),
                             onPressed: () async {
                               final picked = await showTimePicker(context: context, initialTime: TimeOfDay.now());
                               if (picked != null) setState(() => _startTime = picked);
@@ -88,7 +144,7 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                         Expanded(
                           child: OutlinedButton.icon(
                             icon: const Icon(Icons.access_time_filled),
-                            label: Text(_endTime == null ? 'End Time' : _formatTime(_endTime!)),
+                            label: Text(_endTime == null ? 'Slot End' : _formatTime(_endTime!)),
                             onPressed: () async {
                               final picked = await showTimePicker(context: context, initialTime: TimeOfDay.now());
                               if (picked != null) setState(() => _endTime = picked);

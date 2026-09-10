@@ -12,25 +12,17 @@ class ConstraintBuilderScreen extends StatefulWidget {
 }
 
 class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
-  final List<String> _constraintCategories = [
-    'Faculty Unavailable',
-    'Fixed Subject Slot',
-    'No Theory After Lunch',
-    'Holiday / College Closed',
-    'Natural Language Rule', 
-  ];
-  
-  String _selectedCategory = 'Faculty Unavailable';
   String _naturalLanguageText = '';
 
-  // ✅ FIX: Match the exact string used in initialization
+  // ✅ Only ONE dropdown now!
   String _selectedIntent = 'Block from Slot (Unavailable)'; 
   final List<String> _intents = [
     'Fix to Slot (Force)',
     'Block from Slot (Unavailable)',
     'Fill Empty Slots',
     'Holiday / College Closed',
-    'Parallel / Combined Session' // NEW
+    'Parallel / Combined Session',
+    'Natural Language Rule'
   ];
 
   final List<String> _selectedFaculties = [];
@@ -41,40 +33,6 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
   
   final List<int> _allSlots = [1, 2, 3, 4, 5, 6, 7, 8];
   final List<int> _selectedSlots = [];
-
-  Future<void> _addCustomCategory() async {
-    final customController = TextEditingController();
-    String? newCategory = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Add Custom Constraint Type'),
-          content: TextField(
-            controller: customController,
-            decoration: const InputDecoration(hintText: 'e.g., Guest Lecture', border: OutlineInputBorder()),
-            autofocus: true,
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-              onPressed: () {
-                if (customController.text.trim().isNotEmpty) Navigator.pop(context, customController.text.trim());
-              },
-              child: const Text('Add', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (newCategory != null && !_constraintCategories.contains(newCategory)) {
-      setState(() {
-        _constraintCategories.add(newCategory);
-        _selectedCategory = newCategory;
-      });
-    }
-  }
 
   Future<void> _showMultiSelectDialog({
     required String title,
@@ -202,9 +160,8 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
     );
   }
 
-   
   void _addConstraint() {
-    if (_selectedCategory == 'Natural Language Rule') {
+    if (_selectedIntent == 'Natural Language Rule') {
       if (_naturalLanguageText.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please type the rule in English.')),
@@ -216,7 +173,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
       
       setState(() {
         _naturalLanguageText = ''; 
-        _selectedCategory = 'Faculty Unavailable'; 
+        _selectedIntent = 'Block from Slot (Unavailable)'; 
       });
       
       ScaffoldMessenger.of(context).showSnackBar(
@@ -230,17 +187,17 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
       return;
     }
 
-    // ✅ MAP INTENT TO CODE
     String intentCode = 'blacklist';
     if (_selectedIntent == 'Fix to Slot (Force)') intentCode = 'fixed';
     if (_selectedIntent == 'Block from Slot (Unavailable)') intentCode = 'blacklist';
     if (_selectedIntent == 'Fill Empty Slots') intentCode = 'fill';
     if (_selectedIntent == 'Holiday / College Closed') intentCode = 'holiday';
-    if (_selectedIntent == 'Parallel / Combined Session') intentCode = 'parallel'; // NEW
+    if (_selectedIntent == 'Parallel / Combined Session') intentCode = 'parallel';
 
+    // ✅ We use the intentCode as the category itself. No more separate category string!
     final newConstraint = TimetableConstraint(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      category: '$intentCode|$_selectedCategory', 
+      category: intentCode, 
       facultyNames: List.from(_selectedFaculties),
       subjectNames: List.from(_selectedSubjects),
       classNames: List.from(_selectedClasses),
@@ -266,7 +223,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
     final classList = provider.classesAndBatches; 
     final constraints = provider.constraints;
 
-    bool showStandardForm = _selectedCategory != 'Natural Language Rule' && _selectedIntent != 'Holiday / College Closed' && _selectedIntent != 'Fill Empty Slots';
+    bool showStandardForm = _selectedIntent != 'Natural Language Rule' && _selectedIntent != 'Holiday / College Closed' && _selectedIntent != 'Fill Empty Slots';
 
     return Scaffold(
       appBar: AppBar(
@@ -296,21 +253,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    DropdownButtonFormField<String>(
-                      value: _selectedCategory,
-                      decoration: const InputDecoration(labelText: 'Constraint Category', border: OutlineInputBorder()),
-                      items: [
-                        ..._constraintCategories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
-                        const DropdownMenuItem(value: '__add_new__', child: Text('➕ Add Custom Category...', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold))),
-                      ],
-                      onChanged: (val) {
-                        if (val == '__add_new__') _addCustomCategory();
-                        else if (val != null) setState(() => _selectedCategory = val);
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    if (_selectedCategory == 'Natural Language Rule')
+                    if (_selectedIntent == 'Natural Language Rule')
                       TextFormField(
                         maxLines: 4,
                         decoration: const InputDecoration(
@@ -329,7 +272,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
                       _buildMultiSelectField(label: 'Class / Batch', allOptions: classList, selectedItems: _selectedClasses),
                     ],
 
-                    if (showStandardForm || _selectedIntent == 'Holiday / College Closed') ...[
+                    if (showStandardForm || _selectedIntent == 'Holiday / College Closed' || _selectedIntent == 'Parallel / Combined Session') ...[
                       const SizedBox(height: 16),
                       const Text('Select Days', style: TextStyle(fontSize: 12, color: Colors.grey)),
                       Wrap(
@@ -352,7 +295,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
                       ),
                     ],
 
-                    if (showStandardForm) ...[
+                    if (showStandardForm || _selectedIntent == 'Parallel / Combined Session') ...[
                       const SizedBox(height: 16),
                       const Text('Applies to Slots (Select multiple for Labs)', style: TextStyle(fontSize: 12, color: Colors.grey)),
                       Wrap(
@@ -412,7 +355,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
                     title: Text(
                       c.category.startsWith('NLP|')
                           ? 'NLP Rule: "${c.category.split('|').last}"'
-                          : c.category.split('|').last, 
+                          : c.category, 
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text(
