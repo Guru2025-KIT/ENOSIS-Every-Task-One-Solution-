@@ -174,3 +174,148 @@ def get_csv_template(template_type: str):
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+@router.post("/export-excel")
+def export_nba_audit_excel(req: CopoCalculationRequest):
+    """
+    Generates a production-ready, multi-tab NBA Accreditation Audit Excel Workbook
+    matching the 4-Layer ETL & Multi-Stage OBE calculation architecture.
+    """
+    from app.services.nba_copo_engine import (
+        NbaCopoPipeline,
+        ExamAttainmentEngine,
+        ExamDirectResult,
+        StudentRecord,
+    )
+
+    try:
+        # 1. Roster mapping
+        roster: List[StudentRecord] = []
+        if req.roster:
+            for r in req.roster:
+                roster.append(StudentRecord(
+                    sr_no=r.sr_no,
+                    roll_no=r.roll_no,
+                    name=r.name,
+                    prn=r.prn or f"PRN{r.roll_no}",
+                ))
+        else:
+            # Fallback to unique rolls from ISE1
+            for idx, s in enumerate(req.ise1.scores, start=1):
+                roster.append(StudentRecord(
+                    sr_no=idx,
+                    roll_no=s.roll_no,
+                    name=f"Student {s.roll_no}",
+                    prn=f"PRN{s.roll_no}",
+                ))
+
+        # 2. ISE 1 & ISE 2 Evaluations
+        ise1_q = ExamAttainmentEngine.evaluate_question(
+            question_id="ISE1_Total",
+            co_tag=req.ise1.mapped_co,
+            max_marks=req.ise1.max_marks,
+            scores=[s.marks for s in req.ise1.scores],
+        )
+        ise1_exam = ExamDirectResult(
+            exam_name=f"{req.ise1.exam_type} (In-Semester Evaluation 1)",
+            weight=0.10,
+            co_levels={req.ise1.mapped_co: float(ise1_q.attainment_level)},
+            question_evaluations=[ise1_q],
+        )
+
+        ise2_q = ExamAttainmentEngine.evaluate_question(
+            question_id="ISE2_Total",
+            co_tag=req.ise2.mapped_co,
+            max_marks=req.ise2.max_marks,
+            scores=[s.marks for s in req.ise2.scores],
+        )
+        ise2_exam = ExamDirectResult(
+            exam_name=f"{req.ise2.exam_type} (In-Semester Evaluation 2)",
+            weight=0.10,
+            co_levels={req.ise2.mapped_co: float(ise2_q.attainment_level)},
+            question_evaluations=[ise2_q],
+        )
+
+        # 3. MSE Evaluations
+        mse_evals = []
+        mse_co_levels: Dict[str, List[int]] = {}
+        for q in req.mse.questions:
+            q_scores = [s.scores.get(q.question_id) for s in req.mse.student_scores]
+            q_eval = ExamAttainmentEngine.evaluate_question(
+                question_id=q.question_id,
+                co_tag=q.co_tag,
+                max_marks=q.max_marks,
+                scores=q_scores,
+            )
+            mse_evals.append(q_eval)
+            mse_co_levels.setdefault(q.co_tag, []).append(q_eval.attainment_level)
+
+        mse_exam = ExamDirectResult(
+            exam_name="MSE (Mid-Semester Examination)",
+            weight=0.30,
+            co_levels={co: round(sum(lvls) / len(lvls), 2) for co, lvls in mse_co_levels.items() if lvls},
+            question_evaluations=mse_evals,
+        )
+
+        # 4. ESE Evaluations
+        ese_evals = []
+        ese_co_levels: Dict[str, List[int]] = {}
+        for q in req.ese.questions:
+            q_scores = [s.scores.get(q.question_id) for s in req.ese.student_scores]
+            q_eval = ExamAttainmentEngine.evaluate_question(
+                question_id=q.question_id,
+                co_tag=q.co_tag,
+                max_marks=q.max_marks,
+                scores=q_scores,
+            )
+            ese_evals.append(q_eval)
+            ese_co_levels.setdefault(q.co_tag, []).append(q_eval.attainment_level)
+
+        ese_exam = ExamDirectResult(
+            exam_name="ESE (End-Semester Examination)",
+            weight=0.50,
+            co_levels={co: round(sum(lvls) / len(lvls), 2) for co, lvls in ese_co_levels.items() if lvls},
+            question_evaluations=ese_evals,
+        )
+
+        # 5. Survey counts
+        survey_counts: Dict[str, Dict[int, int]] = {}
+        for resp in req.survey.responses:
+            survey_counts[resp.co_id] = {
+                3: resp.strongly_agree_3,
+                2: resp.agree_2,
+                1: resp.neutral_1,
+            }
+
+        # 6. Pipeline Execution & Excel Generation
+        report = NbaCopoPipeline.run_pipeline(
+            course_code=req.master.course_code,
+            course_name=req.master.course_name,
+            academic_year=req.master.academic_year,
+            semester=req.master.semester,
+            faculty_name=getattr(req.master, "faculty_name", "Course Instructor"),
+            target_attainment=req.master.target_attainment,
+            roster=roster,
+            direct_exams=[ise1_exam, ise2_exam, mse_exam, ese_exam],
+            survey_counts=survey_counts,
+            matrix=req.matrix.matrix,
+            direct_weight=0.80,
+            indirect_weight=0.20,
+        )
+
+        excel_bytes = NbaCopoPipeline.export_report_to_excel(
+            report=report,
+            roster=roster,
+            direct_exams=[ise1_exam, ise2_exam, mse_exam, ese_exam],
+            survey_counts=survey_counts,
+        )
+
+        filename = f"NBA_Attainment_{req.master.course_code}_{req.master.semester.replace(' ', '_')}.xlsx"
+        return Response(
+            content=excel_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to generate NBA Excel Report: {str(e)}")
+

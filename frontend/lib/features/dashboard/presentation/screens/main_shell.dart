@@ -8,6 +8,7 @@ import '../../../copo/presentation/screens/copo_attainment_screen.dart';
 import '../../../copo/presentation/screens/copo_mapping_screen.dart';
 import '../../../faculty_insights/presentation/screens/faculty_insights_screen.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
+import '../../../profile/presentation/screens/admin_dashboard_screen.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
 import '../../../timetable/presentation/screens/generate_timetable_screen.dart';
 import '../../../timetable/presentation/screens/timetable_hub_screen.dart';
@@ -212,7 +213,19 @@ class _MainShellState extends State<MainShell> {
                         Row(
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.smart_toy_outlined, color: AppColors.secondary, size: 20),
+                              icon: const Icon(Icons.admin_panel_settings_outlined, color: AppColors.secondary, size: 20),
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                              tooltip: 'Admin Console & Faculty Management',
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+                                );
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.smart_toy_outlined, color: Colors.white, size: 20),
                               visualDensity: VisualDensity.compact,
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -519,10 +532,48 @@ class _MainShellState extends State<MainShell> {
 
                   const SizedBox(width: 12),
 
-                  // Right Side Actions: AI Assistant + Quick Action + Profile Chip
+                  // Right Side Actions: Admin Console + AI Assistant + Quick Action + Profile Chip
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Admin Console Button
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.secondary.withOpacity(0.18),
+                              border: Border.all(color: AppColors.secondary),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.admin_panel_settings_outlined, size: 16, color: AppColors.secondary),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Admin Console',
+                                  style: AppTypography.bodyMedium.copyWith(
+                                    color: Colors.white,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(width: 10),
+
                       // AI Assistant Button
                       Material(
                         color: Colors.transparent,

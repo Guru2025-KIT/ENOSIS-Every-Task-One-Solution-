@@ -15,6 +15,6 @@ class CopoAttainmentScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const CopoWorkbenchScreen();
+    return const CopoWorkbenchScreen(initialMappingStarted: true);
   }
 }

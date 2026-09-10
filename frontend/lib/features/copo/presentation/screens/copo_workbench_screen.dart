@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../data/copo_pdf_service.dart';
 import '../../data/copo_repository.dart';
 import '../../data/copo_spreadsheet_service.dart';
 
@@ -10,7 +11,7 @@ class CopoWorkbenchScreen extends StatefulWidget {
 
   const CopoWorkbenchScreen({
     super.key,
-    this.initialMappingStarted = false,
+    this.initialMappingStarted = true,
   });
 
   @override
@@ -86,11 +87,29 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     });
   }
 
+  static const List<String> _stepNames = [
+    'Master Matrix',
+    'Roll Call',
+    'In-Sem (ISE)',
+    'Question-wise (MSE/ESE)',
+    'Exit Survey',
+    'Attainment Report',
+  ];
+
+  void _goToTab(int index) {
+    if (index >= 0 && index < 6) {
+      _tabController.animateTo(index);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _hasStartedMapping = widget.initialMappingStarted;
     _tabController = TabController(length: 6, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
     _repository.ensureInitialized();
     _selectedCourse = kitAimlCourses.firstWhere(
       (c) => c.code == 'UAMPC0403',
@@ -659,6 +678,27 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             );
           },
         ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.check_circle, color: AppColors.primary, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Year Selected: $_selectedYear · Next: Choose Semester in Step 2 below ➔',
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.primary),
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -711,6 +751,27 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               },
             );
           }).toList(),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.secondary.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.secondary.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.check_circle, color: AppColors.secondary, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Semester Selected: $_selectedSemester · Next: Pick Course in Step 3 below ➔',
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.secondary),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -993,32 +1054,61 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
         backgroundColor: AppColors.primary,
         elevation: 1,
         actions: [
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.secondary,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            icon: const Icon(Icons.tune_rounded, size: 15),
+            label: Text(
+              'Attainment Rules (${_repository.config.directWeightPercent.toInt()}/${_repository.config.indirectWeightPercent.toInt()} · Cutoff ${_repository.config.passingThresholdPercent.toInt()}%)',
+              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+            ),
+            onPressed: _showAttainmentConfigDialog,
+          ),
+          const SizedBox(width: 6),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white.withOpacity(0.18),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 15),
+            label: const Text('Export PDF', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+            onPressed: () => _exportPdfReport(report),
+          ),
+          const SizedBox(width: 6),
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.white,
               side: const BorderSide(color: Colors.white60),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             ),
-            icon: const Icon(Icons.school_outlined, size: 16),
-            label: const Text('Switch Course / Year', style: TextStyle(fontSize: 12)),
+            icon: const Icon(Icons.school_outlined, size: 15),
+            label: const Text('Switch Course', style: TextStyle(fontSize: 11.5)),
             onPressed: () {
               setState(() {
                 _hasStartedMapping = false;
               });
             },
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
+            icon: const Icon(Icons.functions_rounded, color: Colors.white, size: 20),
+            tooltip: 'View Formulas',
+            onPressed: _showFormulaGuideDialog,
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
             tooltip: 'Recalculate Attainment',
             onPressed: _recalculate,
           ),
-          IconButton(
-            icon: const Icon(Icons.playlist_add_check, color: Colors.white),
-            tooltip: 'Load Sample Course Data',
-            onPressed: _resetToSample,
-          ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
         ],
         bottom: TabBar(
           controller: _tabController,
@@ -1037,6 +1127,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           ],
         ),
       ),
+      bottomNavigationBar: _buildWorkbenchBottomBar(report),
       body: SafeArea(
         child: Column(
           children: [
@@ -1086,55 +1177,55 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Row 1: Academic Year & Semester Selectors
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(6),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'KITCoEK NEP',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5),
+                  ),
                 ),
-                child: const Text(
-                  'KITCoEK NEP',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5),
+                const SizedBox(width: 12),
+                const Text('1. Academic Year: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                const SizedBox(width: 6),
+                DropdownButton<String>(
+                  value: _selectedYear,
+                  isDense: true,
+                  underline: const SizedBox(),
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 12.5),
+                  items: ['F.Y. B.Tech', 'S.Y. B.Tech', 'T.Y. B.Tech', 'Final Year B.Tech']
+                      .map((y) => DropdownMenuItem(value: y, child: Text(y))).toList(),
+                  onChanged: (y) {
+                    if (y != null) _onYearChanged(y);
+                  },
                 ),
-              ),
-              const SizedBox(width: 12),
-              const Text('1. Academic Year: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-              const SizedBox(width: 6),
-              DropdownButton<String>(
-                value: _selectedYear,
-                isDense: true,
-                underline: const SizedBox(),
-                style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 12.5),
-                items: ['F.Y. B.Tech', 'S.Y. B.Tech', 'T.Y. B.Tech', 'Final Year B.Tech']
-                    .map((y) => DropdownMenuItem(value: y, child: Text(y))).toList(),
-                onChanged: (y) {
-                  if (y != null) _onYearChanged(y);
-                },
-              ),
-              const SizedBox(width: 18),
-              const Text('2. Semester: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-              const SizedBox(width: 6),
-              DropdownButton<String>(
-                value: _selectedSemester,
-                isDense: true,
-                underline: const SizedBox(),
-                style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 12.5),
-                items: _availableSemesters
-                    .map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                onChanged: (s) {
-                  if (s != null) _onSemesterChanged(s);
-                },
-              ),
-              const SizedBox(width: 18),
-              const Text('3. Course: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-              const SizedBox(width: 6),
-              Expanded(
-                child: DropdownButton<String>(
+                const SizedBox(width: 18),
+                const Text('2. Semester: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                const SizedBox(width: 6),
+                DropdownButton<String>(
+                  value: _selectedSemester,
+                  isDense: true,
+                  underline: const SizedBox(),
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 12.5),
+                  items: _availableSemesters
+                      .map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                  onChanged: (s) {
+                    if (s != null) _onSemesterChanged(s);
+                  },
+                ),
+                const SizedBox(width: 18),
+                const Text('3. Course: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                const SizedBox(width: 6),
+                DropdownButton<String>(
                   value: _selectedCourse.code,
                   isDense: true,
-                  isExpanded: true,
                   underline: const SizedBox(),
                   style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.secondary, fontSize: 12.5),
                   items: courses.map((c) {
@@ -1153,8 +1244,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     }
                   },
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 10),
           const Divider(height: 1),
@@ -1332,6 +1423,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               ),
             ),
           ),
+          const SizedBox(height: 24),
+          _buildTabStepFooter(0),
+          const SizedBox(height: 30),
         ],
       ),
     );
@@ -1522,6 +1616,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               },
             ),
           ),
+          const SizedBox(height: 24),
+          _buildTabStepFooter(1),
+          const SizedBox(height: 30),
         ],
       ),
     );
@@ -1671,6 +1768,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               ],
             ),
           ),
+          const SizedBox(height: 24),
+          _buildTabStepFooter(2),
+          const SizedBox(height: 30),
         ],
       ),
     );
@@ -1829,6 +1929,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               ),
             ),
           ),
+          const SizedBox(height: 24),
+          _buildTabStepFooter(3),
+          const SizedBox(height: 30),
         ],
       ),
     );
@@ -1923,6 +2026,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 ),
               ),
             ),
+          const SizedBox(height: 24),
+          _buildTabStepFooter(4),
+          const SizedBox(height: 30),
         ],
       ),
     );
@@ -1967,6 +2073,125 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ─── AUDIT REPORT EXPORT & RULES HUB ─────────────────────────────
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppColors.primary, AppColors.primary.withOpacity(0.85)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withOpacity(0.2),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.picture_as_pdf_rounded, color: Colors.white, size: 24),
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'NBA Compliance Audit Report Generator',
+                              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'Active Rules: Direct ${_repository.config.directWeightPercent.toInt()}% · Survey ${_repository.config.indirectWeightPercent.toInt()}% · Passing Cutoff ${_repository.config.passingThresholdPercent.toInt()}% · Target ${_repository.config.targetBenchmark.toStringAsFixed(2)}',
+                              style: const TextStyle(color: Colors.white70, fontSize: 11.5),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.white60),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      icon: const Icon(Icons.tune_rounded, size: 16),
+                      label: const Text('Configure Calculation %', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      onPressed: _showAttainmentConfigDialog,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1, color: Colors.white24),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  children: [
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.secondary,
+                        foregroundColor: Colors.white,
+                        elevation: 2,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.print_rounded, size: 18),
+                      label: const Text(
+                        'Print / Save as PDF Report 🖨️',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      onPressed: () => _exportPdfReport(report),
+                    ),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white.withOpacity(0.18),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.download_for_offline_outlined, size: 18),
+                      label: const Text(
+                        'Download HTML Audit Report',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                      ),
+                      onPressed: () {
+                        CopoPdfService.downloadReportHtml(
+                          report: report,
+                          config: _repository.config,
+                          course: _selectedCourse,
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Downloaded standalone HTML audit report file.'),
+                            backgroundColor: AppColors.success,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
           // Section 1: Final CO Attainment Table
           Card(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1980,13 +2205,16 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     children: [
                       Text('Final Course Outcome (CO) Attainment', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
                       Chip(
-                        label: Text('Target: ${report.master.targetAttainment} / 3.00'),
+                        label: Text('Target: ${_repository.config.targetBenchmark.toStringAsFixed(2)} / 3.00'),
                         backgroundColor: AppColors.primarySoft,
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text('Formula: Final CO Attainment = (0.9 × Direct Attainment) + (0.1 × Indirect Survey)', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                  Text(
+                    'Formula: Final CO Attainment = (${(_repository.config.directWeightPercent / 100).toStringAsFixed(2)} × Direct) + (${(_repository.config.indirectWeightPercent / 100).toStringAsFixed(2)} × Indirect Survey)',
+                    style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                  ),
                   const SizedBox(height: 16),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
@@ -2099,7 +2327,740 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               ),
             ),
           ),
+          const SizedBox(height: 24),
+          _buildTabStepFooter(5),
+          const SizedBox(height: 30),
         ],
+      ),
+    );
+  }
+
+  // ─── GUIDED STEP FOOTER & BOTTOM NAVIGATION ────────────────────────────────
+
+  Widget _buildTabStepFooter(int currentStep) {
+    final hasPrev = currentStep > 0;
+    final hasNext = currentStep < 5;
+    final prevTitle = hasPrev ? _stepNames[currentStep - 1] : null;
+    final nextTitle = hasNext ? _stepNames[currentStep + 1] : null;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.secondary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'STAGE ${currentStep + 1} OF 6',
+                  style: const TextStyle(
+                    color: AppColors.secondary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 10.5,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Current Step: ${_stepNames[currentStep]}',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.textPrimary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Divider(height: 1),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              if (hasPrev)
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textPrimary,
+                    side: const BorderSide(color: AppColors.border, width: 1.5),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                  label: Text('Back: $prevTitle', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  onPressed: () => _goToTab(currentStep - 1),
+                )
+              else
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    side: const BorderSide(color: AppColors.border),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: const Icon(Icons.school_outlined, size: 18),
+                  label: const Text('Change Course / Year'),
+                  onPressed: () => setState(() => _hasStartedMapping = false),
+                ),
+              if (hasNext)
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.secondary,
+                    foregroundColor: Colors.white,
+                    elevation: 2,
+                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                  label: Text(
+                    'Next: $nextTitle ➔',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, letterSpacing: 0.2),
+                  ),
+                  onPressed: () => _goToTab(currentStep + 1),
+                )
+              else
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.success,
+                    foregroundColor: Colors.white,
+                    elevation: 2,
+                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: const Icon(Icons.check_circle_outline, size: 18),
+                  label: const Text(
+                    'Attainment Finalized ✓',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                  ),
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('All 6 Stages completed! Attainment report is verified.'),
+                        backgroundColor: AppColors.success,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkbenchBottomBar(CopoAttainmentReport report) {
+    final currentIndex = _tabController.index;
+    final hasPrev = currentIndex > 0;
+    final hasNext = currentIndex < 5;
+    final prevTitle = hasPrev ? _stepNames[currentIndex - 1] : 'Course Selection';
+    final nextTitle = hasNext ? _stepNames[currentIndex + 1] : 'Recalculate';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: const Border(top: BorderSide(color: AppColors.border, width: 1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 10,
+            offset: const Offset(0, -3),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            // Prev Step
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textPrimary,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              icon: const Icon(Icons.arrow_back, size: 16),
+              label: Text(
+                hasPrev ? 'Back: $prevTitle' : 'Switch Course',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              onPressed: hasPrev
+                  ? () => _goToTab(currentIndex - 1)
+                  : () => setState(() => _hasStartedMapping = false),
+            ),
+            const Spacer(),
+            // Progress dots
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(6, (i) {
+                final isCurrent = i == currentIndex;
+                final isPast = i < currentIndex;
+                return InkWell(
+                  onTap: () => _goToTab(i),
+                  borderRadius: BorderRadius.circular(10),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: isCurrent ? 26 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: isCurrent
+                          ? AppColors.secondary
+                          : (isPast ? AppColors.primary : AppColors.divider),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '${currentIndex + 1}/6',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const Spacer(),
+            // Next Step
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: hasNext ? AppColors.secondary : AppColors.success,
+                foregroundColor: Colors.white,
+                elevation: 2,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              icon: Icon(hasNext ? Icons.arrow_forward : Icons.check, size: 16),
+              label: Text(
+                hasNext ? 'Next: $nextTitle ➔' : 'Report Ready ✓',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+              onPressed: () {
+                if (hasNext) {
+                  _goToTab(currentIndex + 1);
+                } else {
+                  _recalculate();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Attainment report is fully computed across all 6 stages.'),
+                      backgroundColor: AppColors.success,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showFormulaGuideDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 780, maxHeight: 680),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: const BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.calculate_rounded, color: Colors.white, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'NBA / DBE CO-PO Attainment Mathematical Formulas',
+                              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'Standard calculations implemented across all 6 stages of this workbench',
+                              style: TextStyle(color: Colors.white70, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.of(ctx).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildFormulaCard(
+                          title: '1. Single Exam / Question Attainment & KPI',
+                          formula: '• Threshold 50% = 0.50 × Max Marks\n• Attempted % = (Attempted Students / Total Strength) × 100\n• % Scoring ≥ 50% = (Count(Marks ≥ Threshold 50%) / Attempted Students) × 100\n• % Scoring ≥ 55% = (Count(Marks ≥ Threshold 55%) / Attempted Students) × 100',
+                          description: 'Evaluates percentage of enrolled students who appeared and achieved the benchmark threshold in ISE 1, ISE 2, or individual MSE/ESE questions.',
+                          color: const Color(0xFF0284C7),
+                        ),
+                        const SizedBox(height: 14),
+                        _buildFormulaCard(
+                          title: '2. NBA 40 / 60 / 80 Attainment Level Rule',
+                          formula: '• Level 3 (High): ≥ 80.5% (81-100%) of students scored ≥ 50%\n• Level 2 (Medium): 60.5% to 80.49% (61-80%) of students scored ≥ 50%\n• Level 1 (Low): 39.5% to 60.49% (40-60%) of students scored ≥ 50%\n• Level 0 (Unattained): < 39.5% of students scored ≥ 50%',
+                          description: 'Standard 40/60/80 rubric buckets percentages into discrete academic attainment levels from 0 to 3.',
+                          color: const Color(0xFF16A34A),
+                        ),
+                        const SizedBox(height: 14),
+                        _buildFormulaCard(
+                          title: '3. MSE & ESE Question-wise CO Level',
+                          formula: '• Question Level = Map40_60_80(% Scoring ≥ 50% in Question)\n• Exam CO Level = ∑ (Levels of Questions mapped to CO) / Count(Questions for CO)',
+                          description: 'Averages the attainment levels of all specific questions mapped to a particular Course Outcome in MSE or ESE.',
+                          color: const Color(0xFF7C3AED),
+                        ),
+                        const SizedBox(height: 14),
+                        _buildFormulaCard(
+                          title: '4. Course Exit Survey (Indirect Attainment)',
+                          formula: '• Weights: Strongly Agree = 3, Agree = 2, Neutral = 1\n• Indirect Attainment(CO) = (3 × SA + 2 × A + 1 × N) / (SA + A + N)',
+                          description: 'Quantifies qualitative student perception on a normalized 1.00 to 3.00 scale for each Course Outcome.',
+                          color: const Color(0xFFD97706),
+                        ),
+                        const SizedBox(height: 14),
+                        _buildFormulaCard(
+                          title: '5. Direct Attainment per CO',
+                          formula: '• Direct Attainment(CO) = Average of applicable [ISE 1, ISE 2, MSE Level, ESE Level]',
+                          description: 'Aggregates all direct in-semester and end-semester assessments that tested that specific CO.',
+                          color: const Color(0xFF0891B2),
+                        ),
+                        const SizedBox(height: 14),
+                        _buildFormulaCard(
+                          title: '6. Final CO Attainment & Target Benchmark',
+                          formula: '• Final CO Attainment = (0.90 × Direct Attainment) + (0.10 × Indirect Survey)\n• Status: ATTAINED if Final Attainment ≥ Target Level (e.g., 2.50), else NOT ATTAINED\n• Overall Course Attainment = ∑ Final CO Attainment (CO1..CO5) / 5',
+                          description: 'Applies standard 90% direct evaluation + 10% indirect survey weighting.',
+                          color: const Color(0xFF2563EB),
+                        ),
+                        const SizedBox(height: 14),
+                        _buildFormulaCard(
+                          title: '7. Program Outcome (PO & PSO) Attainment',
+                          formula: '• Correlation Sum = ∑ (Correlation_i) for i = 1..5\n• If Correlation Sum > 0:\n    PO Attainment = ∑ (Correlation_i × Final CO Attainment_i) / Correlation Sum\n• If Correlation Sum == 0:\n    Not Mapped (N/A)',
+                          description: 'Correlation weights (1: Low, 2: Medium, 3: High) from the master matrix weigh each CO’s final attainment to determine institutional PO attainment.',
+                          color: const Color(0xFFBE185D),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: const BoxDecoration(
+                    border: Border(top: BorderSide(color: AppColors.border)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: const Text('Got it!'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFormulaCard({
+    required String title,
+    required String formula,
+    required String description,
+    required Color color,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.35)),
+        boxShadow: [
+          BoxShadow(color: color.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 18,
+                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: color),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceVariant.withOpacity(0.4),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.border.withOpacity(0.5)),
+            ),
+            child: Text(
+              formula,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+                height: 1.45,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            description,
+            style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary, height: 1.3),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── DYNAMIC ATTAINMENT CALCULATION RULES MODAL ────────────────────────────
+
+  void _showAttainmentConfigDialog() {
+    final currentCfg = _repository.config;
+    double passingCutoff = currentCfg.passingThresholdPercent;
+    double directWeight = currentCfg.directWeightPercent;
+    double indirectWeight = currentCfg.indirectWeightPercent;
+    double level3 = currentCfg.level3CutoffPercent;
+    double level2 = currentCfg.level2CutoffPercent;
+    double level1 = currentCfg.level1CutoffPercent;
+    double target = currentCfg.targetBenchmark;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 640),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      decoration: const BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.tune_rounded, color: Colors.white, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Dynamic Attainment Rules & Calculation %',
+                                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                ),
+                                Text(
+                                  'Faculty customizable passing cutoff, direct/indirect weighting & rubric cutoffs',
+                                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white),
+                            onPressed: () => Navigator.of(ctx).pop(),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 1. Student Passing Threshold
+                            _buildConfigSectionTitle('1. Student Passing Cutoff (% of Max Marks)', 'Students scoring ≥ this % are counted as benchmark achievers.'),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [40.0, 50.0, 55.0, 60.0].map((val) {
+                                final isSelected = (passingCutoff - val).abs() < 0.5;
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: ChoiceChip(
+                                    label: Text('${val.toInt()}% Cutoff'),
+                                    selected: isSelected,
+                                    selectedColor: AppColors.primarySoft,
+                                    labelStyle: TextStyle(
+                                      color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                    onSelected: (sel) {
+                                      if (sel) setDialogState(() => passingCutoff = val);
+                                    },
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                            Slider(
+                              value: passingCutoff,
+                              min: 30.0,
+                              max: 75.0,
+                              divisions: 9,
+                              label: '${passingCutoff.toInt()}%',
+                              activeColor: AppColors.primary,
+                              onChanged: (v) => setDialogState(() => passingCutoff = v),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 2. Direct vs Indirect Split
+                            _buildConfigSectionTitle('2. Direct Assessment vs. Indirect Exit Survey Split', 'Standard Autonomous institutes use 90:10 or 80:20.'),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      backgroundColor: directWeight == 90.0 ? AppColors.primarySoft : null,
+                                      side: BorderSide(color: directWeight == 90.0 ? AppColors.primary : AppColors.border),
+                                    ),
+                                    onPressed: () => setDialogState(() {
+                                      directWeight = 90.0;
+                                      indirectWeight = 10.0;
+                                    }),
+                                    child: const Text('90% Direct : 10% Survey', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      backgroundColor: directWeight == 80.0 ? AppColors.primarySoft : null,
+                                      side: BorderSide(color: directWeight == 80.0 ? AppColors.primary : AppColors.border),
+                                    ),
+                                    onPressed: () => setDialogState(() {
+                                      directWeight = 80.0;
+                                      indirectWeight = 20.0;
+                                    }),
+                                    child: const Text('80% Direct : 20% Survey', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Text('Active Split: Direct ${directWeight.toInt()}%  ·  Survey ${indirectWeight.toInt()}%', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                            Slider(
+                              value: directWeight,
+                              min: 60.0,
+                              max: 100.0,
+                              divisions: 8,
+                              label: '${directWeight.toInt()}% Direct',
+                              activeColor: AppColors.secondary,
+                              onChanged: (v) => setDialogState(() {
+                                directWeight = v;
+                                indirectWeight = 100.0 - v;
+                              }),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 3. Target Attainment Benchmark
+                            _buildConfigSectionTitle('3. NBA Target Attainment Benchmark', 'Target performance score on a 1.00 to 3.00 scale (e.g., 2.50).'),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Slider(
+                                    value: target,
+                                    min: 1.50,
+                                    max: 3.00,
+                                    divisions: 15,
+                                    label: target.toStringAsFixed(2),
+                                    activeColor: AppColors.success,
+                                    onChanged: (v) => setDialogState(() => target = double.parse(v.toStringAsFixed(2))),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primarySoft,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '${target.toStringAsFixed(2)} / 3.00',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 4. Live Formula Summary Preview
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.verified, color: AppColors.secondary, size: 20),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'Active Formula: Final CO = (${(directWeight / 100).toStringAsFixed(2)} × Direct) + (${(indirectWeight / 100).toStringAsFixed(2)} × Survey)\nPassing Benchmark: ${passingCutoff.toInt()}% of Max Marks · Target: ${target.toStringAsFixed(2)}',
+                                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                      decoration: const BoxDecoration(
+                        border: Border(top: BorderSide(color: AppColors.border)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              setDialogState(() {
+                                passingCutoff = 50.0;
+                                directWeight = 90.0;
+                                indirectWeight = 10.0;
+                                target = 2.50;
+                              });
+                            },
+                            child: const Text('Reset Defaults'),
+                          ),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.secondary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            ),
+                            icon: const Icon(Icons.check_circle_outline, size: 18),
+                            label: const Text('Apply & Recalculate Now', style: TextStyle(fontWeight: FontWeight.bold)),
+                            onPressed: () {
+                              final newConfig = AttainmentConfig(
+                                passingThresholdPercent: passingCutoff,
+                                directWeightPercent: directWeight,
+                                indirectWeightPercent: indirectWeight,
+                                level3CutoffPercent: level3,
+                                level2CutoffPercent: level2,
+                                level1CutoffPercent: level1,
+                                targetBenchmark: target,
+                              );
+                              _repository.updateConfig(newConfig);
+                              _recalculate();
+                              Navigator.of(ctx).pop();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Attainment Rules Updated: Direct ${directWeight.toInt()}%, Survey ${indirectWeight.toInt()}%, Cutoff ${passingCutoff.toInt()}%. Recalculated!'),
+                                  backgroundColor: AppColors.success,
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildConfigSectionTitle(String title, String subtitle) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.textPrimary)),
+        Text(subtitle, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+      ],
+    );
+  }
+
+  void _exportPdfReport(CopoAttainmentReport report) {
+    CopoPdfService.generateAndOpenReportPdf(
+      report: report,
+      config: _repository.config,
+      course: _selectedCourse,
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Opening printable CO-PO Attainment Report. Use "Print / Save as PDF" in your browser.'),
+        backgroundColor: AppColors.primary,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }

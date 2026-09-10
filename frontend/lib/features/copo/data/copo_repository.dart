@@ -515,6 +515,11 @@ class CourseMaster {
   String semester;
   String academicYear;
   double targetAttainment;
+  String facultyInCharge;
+  String ise1Name;
+  String ise1MappedCo;
+  String ise2Name;
+  String ise2MappedCo;
 
   CourseMaster({
     this.courseCode = 'CS201',
@@ -523,6 +528,11 @@ class CourseMaster {
     this.semester = 'Semester IV',
     this.academicYear = '2025-2026',
     this.targetAttainment = 2.25,
+    this.facultyInCharge = 'Dr. Priya Sharma',
+    this.ise1Name = 'Assignment 1',
+    this.ise1MappedCo = 'CO1',
+    this.ise2Name = 'Unit Test 1',
+    this.ise2MappedCo = 'CO2',
   });
 
   Map<String, dynamic> toJson() => {
@@ -532,6 +542,11 @@ class CourseMaster {
     'semester': semester,
     'academic_year': academicYear,
     'target_attainment': targetAttainment,
+    'faculty_in_charge': facultyInCharge,
+    'ise1_name': ise1Name,
+    'ise1_mapped_co': ise1MappedCo,
+    'ise2_name': ise2Name,
+    'ise2_mapped_co': ise2MappedCo,
   };
 }
 
@@ -766,12 +781,62 @@ class CopoAttainmentReport {
   });
 }
 
+// ─── ATTAINMENT CONFIGURATION & FACULTY RULES ──────────────────────────────
+
+class AttainmentConfig {
+  final double passingThresholdPercent; // e.g. 50.0% of max marks
+  final double directWeightPercent;     // e.g. 90.0% or 80.0%
+  final double indirectWeightPercent;   // e.g. 10.0% or 20.0%
+  final double level3CutoffPercent;     // e.g. 80.0%
+  final double level2CutoffPercent;     // e.g. 60.0%
+  final double level1CutoffPercent;     // e.g. 40.0%
+  final double targetBenchmark;         // e.g. 2.50 out of 3.0
+
+  const AttainmentConfig({
+    this.passingThresholdPercent = 50.0,
+    this.directWeightPercent = 90.0,
+    this.indirectWeightPercent = 10.0,
+    this.level3CutoffPercent = 80.0,
+    this.level2CutoffPercent = 60.0,
+    this.level1CutoffPercent = 40.0,
+    this.targetBenchmark = 2.50,
+  });
+
+  AttainmentConfig copyWith({
+    double? passingThresholdPercent,
+    double? directWeightPercent,
+    double? indirectWeightPercent,
+    double? level3CutoffPercent,
+    double? level2CutoffPercent,
+    double? level1CutoffPercent,
+    double? targetBenchmark,
+  }) {
+    return AttainmentConfig(
+      passingThresholdPercent: passingThresholdPercent ?? this.passingThresholdPercent,
+      directWeightPercent: directWeightPercent ?? this.directWeightPercent,
+      indirectWeightPercent: indirectWeightPercent ?? this.indirectWeightPercent,
+      level3CutoffPercent: level3CutoffPercent ?? this.level3CutoffPercent,
+      level2CutoffPercent: level2CutoffPercent ?? this.level2CutoffPercent,
+      level1CutoffPercent: level1CutoffPercent ?? this.level1CutoffPercent,
+      targetBenchmark: targetBenchmark ?? this.targetBenchmark,
+    );
+  }
+}
+
 // ─── DART ENGINE & REPOSITORY ────────────────────────────────────────────────
 
 class CopoRepository {
   static final CopoRepository _instance = CopoRepository._internal();
   factory CopoRepository() => _instance;
   CopoRepository._internal();
+
+  // Dynamic faculty attainment calculation configuration
+  AttainmentConfig config = const AttainmentConfig();
+
+  void updateConfig(AttainmentConfig newConfig) {
+    config = newConfig;
+    master.targetAttainment = newConfig.targetBenchmark;
+  }
 
   // Active state
   CourseMaster master = CourseMaster();
@@ -929,44 +994,50 @@ class CopoRepository {
 
   // ─── LOCAL DBE CALCULATION ENGINE ──────────────────────────────────────────
 
-  static (int, String) mapPercentageToLevel(double percentage) {
-    if (percentage >= 80.5) {
-      return (3, 'Level 3: 81-100% students scored >= threshold');
-    } else if (percentage >= 60.5) {
-      return (2, 'Level 2: 61-80% students scored >= threshold');
-    } else if (percentage >= 39.5) {
-      return (1, 'Level 1: 40-60% students scored >= threshold');
+  static (int, String) mapPercentageToLevel(double percentage, [AttainmentConfig? cfg]) {
+    final l3 = cfg?.level3CutoffPercent ?? 80.0;
+    final l2 = cfg?.level2CutoffPercent ?? 60.0;
+    final l1 = cfg?.level1CutoffPercent ?? 40.0;
+
+    if (percentage >= (l3 + 0.5)) {
+      return (3, 'Level 3: ≥${l3.toStringAsFixed(0)}% students scored ≥ cutoff');
+    } else if (percentage >= (l2 + 0.5)) {
+      return (2, 'Level 2: ${l2.toStringAsFixed(0)}-${l3.toStringAsFixed(0)}% students scored ≥ cutoff');
+    } else if (percentage >= (l1 - 0.5)) {
+      return (1, 'Level 1: ${l1.toStringAsFixed(0)}-${l2.toStringAsFixed(0)}% students scored ≥ cutoff');
     } else {
-      return (0, 'Level 0: Below 40% students scored >= threshold');
+      return (0, 'Level 0: Below ${l1.toStringAsFixed(0)}% students scored ≥ cutoff');
     }
   }
 
   static ExamKpiStats calculateExamStats(
     List<double?> rawScores,
     double maxMarks,
-    int totalStrength,
-  ) {
+    int totalStrength, [
+    AttainmentConfig? cfg,
+  ]) {
     final valid = rawScores.where((s) => s != null && s >= 0).map((s) => s!).toList();
     final attempted = valid.length;
     final strength = totalStrength > 0 ? totalStrength : (attempted > 0 ? attempted : 1);
     final attemptedPct = double.parse(((attempted * 100.0) / strength).toStringAsFixed(1));
 
-    final thresh50 = 0.5 * maxMarks;
+    final passingFrac = (cfg?.passingThresholdPercent ?? 50.0) / 100.0;
+    final threshPassing = passingFrac * maxMarks;
     final thresh55 = 0.55 * maxMarks;
 
-    final c50 = valid.where((s) => s >= thresh50).length;
+    final cPassing = valid.where((s) => s >= threshPassing).length;
     final c55 = valid.where((s) => s >= thresh55).length;
 
-    final pct50 = attempted > 0 ? double.parse(((c50 * 100.0) / attempted).toStringAsFixed(1)) : 0.0;
+    final pctPassing = attempted > 0 ? double.parse(((cPassing * 100.0) / attempted).toStringAsFixed(1)) : 0.0;
     final pct55 = attempted > 0 ? double.parse(((c55 * 100.0) / attempted).toStringAsFixed(1)) : 0.0;
 
-    final (level, desc) = mapPercentageToLevel(pct50);
+    final (level, desc) = mapPercentageToLevel(pctPassing, cfg);
 
     return ExamKpiStats(
       attemptedCount: attempted,
       attemptedPercentage: attemptedPct,
-      scoring50Count: c50,
-      scoring50Percentage: pct50,
+      scoring50Count: cPassing,
+      scoring50Percentage: pctPassing,
       scoring55Count: c55,
       scoring55Percentage: pct55,
       attainmentLevel: level,
@@ -974,8 +1045,10 @@ class CopoRepository {
     );
   }
 
-  CopoAttainmentReport calculateLocalReport() {
+  CopoAttainmentReport calculateLocalReport([AttainmentConfig? customConfig]) {
     ensureInitialized();
+    final currentCfg = customConfig ?? config;
+    master.targetAttainment = currentCfg.targetBenchmark;
     final totalStrength = roster.length > 0 ? roster.length : 30;
 
     // 1. ISE 1 & 2
@@ -983,11 +1056,13 @@ class CopoRepository {
       ise1.scores.map((s) => s.marks).toList(),
       ise1.maxMarks,
       totalStrength,
+      currentCfg,
     );
     final ise2Stats = calculateExamStats(
       ise2.scores.map((s) => s.marks).toList(),
       ise2.maxMarks,
       totalStrength,
+      currentCfg,
     );
 
     // 2. MSE Questions
@@ -995,7 +1070,7 @@ class CopoRepository {
     final mseCoMap = <String, List<int>>{};
     for (final q in mse.questions) {
       final qScores = mse.studentScores.map((s) => s.scores[q.questionId]).toList();
-      final stat = calculateExamStats(qScores, q.maxMarks, totalStrength);
+      final stat = calculateExamStats(qScores, q.maxMarks, totalStrength, currentCfg);
       mseQStats.add(QuestionStatItem(
         questionId: q.questionId,
         coTag: q.coTag,
@@ -1015,7 +1090,7 @@ class CopoRepository {
     final eseCoMap = <String, List<int>>{};
     for (final q in ese.questions) {
       final qScores = ese.studentScores.map((s) => s.scores[q.questionId]).toList();
-      final stat = calculateExamStats(qScores, q.maxMarks, totalStrength);
+      final stat = calculateExamStats(qScores, q.maxMarks, totalStrength, currentCfg);
       eseQStats.add(QuestionStatItem(
         questionId: q.questionId,
         coTag: q.coTag,
@@ -1046,6 +1121,9 @@ class CopoRepository {
     const cos = ['CO1', 'CO2', 'CO3', 'CO4', 'CO5'];
     final coBreakdowns = <CoAttainmentBreakdown>[];
 
+    final directWeight = currentCfg.directWeightPercent / 100.0;
+    final indirectWeight = currentCfg.indirectWeightPercent / 100.0;
+
     for (final co in cos) {
       final ise1Lvl = ise1.mappedCo == co ? ise1Stats.attainmentLevel : null;
       final ise2Lvl = ise2.mappedCo == co ? ise2Stats.attainmentLevel : null;
@@ -1058,8 +1136,8 @@ class CopoRepository {
           : 0.0;
 
       final indirect = surveyMap[co] ?? 2.50;
-      final finalAtt = double.parse(((0.9 * direct) + (0.1 * indirect)).toStringAsFixed(2));
-      final isAtt = finalAtt >= master.targetAttainment;
+      final finalAtt = double.parse(((directWeight * direct) + (indirectWeight * indirect)).toStringAsFixed(2));
+      final isAtt = finalAtt >= currentCfg.targetBenchmark;
 
       coBreakdowns.add(CoAttainmentBreakdown(
         coId: co,
