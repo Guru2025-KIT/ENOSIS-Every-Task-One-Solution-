@@ -217,6 +217,8 @@ class FacultyInsightsScreen extends StatelessWidget {
                         'icon': Icons.record_voice_over_outlined,
                         'color': const Color(0xFF0284C7),
                         'active': true,
+                        'actionText': 'Open Student Perception',
+                        'route': 'PRE',
                       },
                       {
                         'step': '02',
@@ -224,7 +226,9 @@ class FacultyInsightsScreen extends StatelessWidget {
                         'desc': 'ML models identify diverging trends between perceived grasp and continuous assessments.',
                         'icon': Icons.troubleshoot_outlined,
                         'color': const Color(0xFF7C3AED),
-                        'active': false,
+                        'active': true,
+                        'actionText': 'Detect Learning Gaps',
+                        'route': 'GAP_DETECTION',
                       },
                       {
                         'step': '03',
@@ -232,7 +236,9 @@ class FacultyInsightsScreen extends StatelessWidget {
                         'desc': 'Recommended pedagogical adjustments, remedial sessions, and lab emphasis.',
                         'icon': Icons.touch_app_outlined,
                         'color': const Color(0xFFF4791E),
-                        'active': false,
+                        'active': true,
+                        'actionText': 'Take Action & Intervene',
+                        'route': 'ACTION',
                       },
                       {
                         'step': '04',
@@ -240,7 +246,9 @@ class FacultyInsightsScreen extends StatelessWidget {
                         'desc': 'End-term summative attainment matrix validates effectiveness for the next cycle.',
                         'icon': Icons.verified_outlined,
                         'color': const Color(0xFF16A34A),
-                        'active': false,
+                        'active': true,
+                        'actionText': 'Verify Outcomes',
+                        'route': 'END',
                       },
                     ];
 
@@ -251,15 +259,15 @@ class FacultyInsightsScreen extends StatelessWidget {
                             padding: const EdgeInsets.only(bottom: 12),
                             child: _StageCard(
                               stage: st,
-                              onTap: st['active'] == true
-                                  ? () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (_) => const TeachingContextsScreen(),
-                                        ),
-                                      );
-                                    }
-                                  : null,
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => TeachingContextsScreen(
+                                      stage: st['route'] as String,
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                           );
                         }).toList(),
@@ -274,15 +282,15 @@ class FacultyInsightsScreen extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 6),
                             child: _StageCard(
                               stage: st,
-                              onTap: st['active'] == true
-                                  ? () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (_) => const TeachingContextsScreen(),
-                                        ),
-                                      );
-                                    }
-                                  : null,
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => TeachingContextsScreen(
+                                      stage: st['route'] as String,
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                           ),
                         );
@@ -321,7 +329,7 @@ class FacultyInsightsScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Stage 01 Assessment Active',
+                              'Full Academic Cycle Pipeline Active',
                               style: AppTypography.bodyMedium.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.textPrimary,
@@ -329,7 +337,7 @@ class FacultyInsightsScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'PRE-Semester assessment data collection is active. MID and END cycle evaluations will activate during teaching sessions.',
+                              'All 4 stages are connected: Student Perception (PRE), Gap Detection (ML Analytics), Faculty Action (Interventions), and Verified Outcomes (END Assessment).',
                               style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
                             ),
                           ],
@@ -717,7 +725,7 @@ class _StageCard extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    'Open Assessment',
+                    (stage['actionText'] as String?) ?? 'Open Assessment',
                     style: AppTypography.captionBold.copyWith(
                       color: color,
                       fontSize: 11,

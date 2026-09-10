@@ -126,14 +126,18 @@ class MlRiskCard extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Estimated Academic Risk Probability',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
+                        const Expanded(
+                          child: Text(
+                            'Estimated Academic Risk Probability',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        const SizedBox(width: 8),
                         Text(
                           '${(prediction.riskProbability * 100).toStringAsFixed(1)}%',
                           style: TextStyle(

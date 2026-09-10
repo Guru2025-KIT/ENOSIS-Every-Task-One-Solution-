@@ -16,7 +16,7 @@ class AssessmentFunnelCard extends StatelessWidget {
     final fullPct = funnel.totalEnrolled > 0 ? (funnel.fullyAssessed / funnel.totalEnrolled * 100).round() : 0;
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
@@ -26,15 +26,19 @@ class AssessmentFunnelCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Longitudinal Assessment Funnel',
-                style: AppTypography.h4.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+              Expanded(
+                child: Text(
+                  'Longitudinal Assessment Funnel',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.h4.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -42,7 +46,7 @@ class AssessmentFunnelCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  '${funnel.totalEnrolled} Total Enrolled',
+                  '${funnel.totalEnrolled} Enrolled',
                   style: const TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.bold,
@@ -53,16 +57,49 @@ class AssessmentFunnelCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(child: _buildFunnelStep('PRE Baseline', funnel.preCompleted, prePct, const Color(0xFF4F46E5))),
-              const Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 20),
-              Expanded(child: _buildFunnelStep('MID Progress', funnel.midCompleted, midPct, const Color(0xFF0284C7))),
-              const Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 20),
-              Expanded(child: _buildFunnelStep('END Outcome', funnel.endCompleted, endPct, const Color(0xFF16A34A))),
-              const Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 20),
-              Expanded(child: _buildFunnelStep('Fully Assessed', funnel.fullyAssessed, fullPct, const Color(0xFF7C3AED))),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 420;
+              if (isNarrow) {
+                return Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: _buildFunnelStep('PRE Baseline', funnel.preCompleted, prePct, const Color(0xFF4F46E5))),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 4),
+                          child: Icon(Icons.arrow_forward, color: AppColors.textSecondary, size: 16),
+                        ),
+                        Expanded(child: _buildFunnelStep('MID Progress', funnel.midCompleted, midPct, const Color(0xFF0284C7))),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(child: _buildFunnelStep('END Outcome', funnel.endCompleted, endPct, const Color(0xFF16A34A))),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 4),
+                          child: Icon(Icons.arrow_forward, color: AppColors.textSecondary, size: 16),
+                        ),
+                        Expanded(child: _buildFunnelStep('Fully Assessed', funnel.fullyAssessed, fullPct, const Color(0xFF7C3AED))),
+                      ],
+                    ),
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: _buildFunnelStep('PRE Baseline', funnel.preCompleted, prePct, const Color(0xFF4F46E5))),
+                  const Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 18),
+                  Expanded(child: _buildFunnelStep('MID Progress', funnel.midCompleted, midPct, const Color(0xFF0284C7))),
+                  const Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 18),
+                  Expanded(child: _buildFunnelStep('END Outcome', funnel.endCompleted, endPct, const Color(0xFF16A34A))),
+                  const Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 18),
+                  Expanded(child: _buildFunnelStep('Fully Assessed', funnel.fullyAssessed, fullPct, const Color(0xFF7C3AED))),
+                ],
+              );
+            },
           ),
         ],
       ),

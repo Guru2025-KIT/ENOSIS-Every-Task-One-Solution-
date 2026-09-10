@@ -60,22 +60,23 @@ class _StudentRosterScreenState extends State<StudentRosterScreen> {
           appBar: AppBar(
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      stageTitle,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
+                Text(
+                  stageTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Colors.white,
+                  ),
                 ),
                 if (contextItem != null)
                   Text(
                     '${contextItem.subjectName} (${contextItem.yearDisplay} • Div ${contextItem.divisionCode})',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 12,
                       color: Colors.white70,

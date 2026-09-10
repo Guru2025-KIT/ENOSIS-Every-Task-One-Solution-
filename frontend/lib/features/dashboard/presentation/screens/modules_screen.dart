@@ -7,6 +7,7 @@ import '../../../ai_assistant/presentation/screens/ai_assistant_screen.dart';
 import '../../../career/presentation/screens/career_advancement_screen.dart';
 import '../../../copo/presentation/screens/copo_attainment_screen.dart';
 import '../../../copo/presentation/screens/copo_mapping_screen.dart';
+import '../../../faculty_insights/presentation/screens/faculty_insights_screen.dart';
 import '../../../timetable/presentation/screens/generate_timetable_screen.dart';
 import '../../../timetable/presentation/screens/timetable_hub_screen.dart';
 import '../../../todo/presentation/screens/my_day_screen.dart';
@@ -18,6 +19,12 @@ class ModulesScreen extends StatelessWidget {
 
   void _handleModuleTap(BuildContext context, String label) {
     switch (label) {
+      case 'Faculty Insights':
+      case 'Student Learning Intelligence':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const FacultyInsightsScreen()),
+        );
+        break;
       case 'Reports':
         Navigator.of(context).push(
           MaterialPageRoute(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/models/analytics_models.dart';
+import '../../data/models/sli_ml_models.dart';
 import '../../data/services/sli_analytics_service.dart';
 import '../../data/services/sli_service.dart';
 
@@ -36,6 +37,28 @@ class SliAnalyticsProvider extends ChangeNotifier {
   ContextAttentionRoster? get attentionRoster => _attentionRoster;
   bool get isLoadingRoster => _isLoadingRoster;
   String? get rosterError => _rosterError;
+
+  // ─── ML Predictions State ──────────────────────────────────────────────────
+  List<SliMlPrediction>? _mlPredictions;
+  bool _isLoadingMlPredictions = false;
+  String? _mlPredictionsError;
+
+  List<SliMlPrediction>? get mlPredictions => _mlPredictions;
+  bool get isLoadingMlPredictions => _isLoadingMlPredictions;
+  String? get mlPredictionsError => _mlPredictionsError;
+
+  @visibleForTesting
+  void setContextAnalyticsForTesting(ContextAnalytics? analytics) {
+    _contextAnalytics = analytics;
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  void setMlPredictionsForTesting(List<SliMlPrediction>? predictions, {bool isLoading = false}) {
+    _mlPredictions = predictions;
+    _isLoadingMlPredictions = isLoading;
+    notifyListeners();
+  }
 
   // ─── Operations ───────────────────────────────────────────────────────────
 
@@ -109,6 +132,32 @@ class SliAnalyticsProvider extends ChangeNotifier {
       _rosterError = 'Failed to load attention roster: $e';
     } finally {
       _isLoadingRoster = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchContextMlPredictions({
+    required int classId,
+    required String subjectId,
+    required int semesterId,
+  }) async {
+    _isLoadingMlPredictions = true;
+    _mlPredictionsError = null;
+    notifyListeners();
+
+    try {
+      _mlPredictions = await _service.getContextMlPredictions(
+        classId: classId,
+        subjectId: subjectId,
+        semesterId: semesterId,
+      );
+      _mlPredictionsError = null;
+    } on SliApiException catch (e) {
+      _mlPredictionsError = e.message;
+    } catch (e) {
+      _mlPredictionsError = 'Failed to load ML predictions: $e';
+    } finally {
+      _isLoadingMlPredictions = false;
       notifyListeners();
     }
   }

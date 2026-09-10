@@ -186,29 +186,32 @@ class _MainShellState extends State<MainShell> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Image.asset(
-                              'assets/branding/enosis_logo.png',
-                              width: 26,
-                              height: 26,
-                              errorBuilder: (_, __, ___) => const Icon(
-                                Icons.school_outlined,
-                                color: Colors.white,
-                                size: 24,
+                        Flexible(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Image.asset(
+                                'assets/branding/enosis_logo.png',
+                                width: 26,
+                                height: 26,
+                                errorBuilder: (_, __, ___) => const Icon(
+                                  Icons.school_outlined,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'ENOSIS',
-                              style: AppTypography.h3.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 1.2,
-                                fontSize: 15,
+                              const SizedBox(width: 8),
+                              Text(
+                                'ENOSIS',
+                                style: AppTypography.h3.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.2,
+                                  fontSize: 15,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                         Row(
                           children: [

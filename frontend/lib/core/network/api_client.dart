@@ -7,10 +7,11 @@ class ApiClient {
   ApiClient._();
 
   /// API Backend Base URL
-  static const String baseUrl = 'http://localhost:8000';
+  static const String baseUrl = 'http://192.168.10.38:8000';
 
   /// Configurable public application base URL for shareable links
-  static const String appBaseUrl = 'http://localhost:5000';
+  static const String appBaseUrl = 'http://192.168.10.38:5000';
+
 
   /// Resolves the absolute shareable URL for a student assessment
   static String getAssessmentShareUrl(String accessToken) {

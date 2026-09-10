@@ -399,6 +399,18 @@ class SliService {
         .toList();
   }
 
+  /// Alias for getContextMlPredictions.
+  Future<List<SliMlPrediction>> getContextPredictions({
+    required int classId,
+    required String subjectId,
+    required int semesterId,
+  }) =>
+      getContextMlPredictions(
+        classId: classId,
+        subjectId: subjectId,
+        semesterId: semesterId,
+      );
+
   /// Trigger ML Model Retraining
   Future<SliMlTrainingResult> triggerMlTraining({
     bool calibrateBaselines = true,

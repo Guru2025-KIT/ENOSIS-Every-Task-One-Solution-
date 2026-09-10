@@ -3,6 +3,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../data/models/analytics_models.dart';
+import '../../data/models/sli_ml_models.dart';
 import '../providers/sli_analytics_provider.dart';
 import '../widgets/analytics_widgets.dart';
 import '../widgets/cohort_trend_chart_card.dart';
@@ -13,6 +14,8 @@ class ClassAnalyticsDashboardScreen extends StatefulWidget {
   final String subjectId;
   final String subjectName;
   final int semesterId;
+  final int initialTabIndex;
+  final SliAnalyticsProvider? provider;
 
   const ClassAnalyticsDashboardScreen({
     super.key,
@@ -20,6 +23,8 @@ class ClassAnalyticsDashboardScreen extends StatefulWidget {
     required this.subjectId,
     required this.subjectName,
     required this.semesterId,
+    this.initialTabIndex = 0,
+    this.provider,
   });
 
   @override
@@ -29,14 +34,21 @@ class ClassAnalyticsDashboardScreen extends StatefulWidget {
 class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final SliAnalyticsProvider _provider = SliAnalyticsProvider();
+  late final SliAnalyticsProvider _provider;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(
+      length: 5,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, 4),
+    );
+    _provider = widget.provider ?? SliAnalyticsProvider();
     _provider.addListener(_onProviderUpdate);
-    _loadData();
+    if (widget.provider == null) {
+      _loadData();
+    }
   }
 
   @override
@@ -61,6 +73,11 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
       subjectId: widget.subjectId,
       semesterId: widget.semesterId,
     );
+    _provider.fetchContextMlPredictions(
+      classId: widget.classId,
+      subjectId: widget.subjectId,
+      semesterId: widget.semesterId,
+    );
   }
 
   @override
@@ -73,9 +90,12 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               'Cohort Analytics & Insights',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: AppTypography.h4.copyWith(
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
@@ -83,6 +103,8 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
             ),
             Text(
               widget.subjectName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 12, color: Color(0xFFE0E7FF)),
             ),
           ],
@@ -192,13 +214,15 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
+                            Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 6,
+                              runSpacing: 4,
                               children: [
                                 const Text(
                                   'ML Risk & Early Warning Engine',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                                 ),
-                                const SizedBox(width: 8),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
@@ -227,23 +251,160 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
                     ],
                   ),
                   const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _provider.attentionRoster != null && _provider.attentionRoster!.students.isNotEmpty
-                            ? '${_provider.attentionRoster!.students.length} Students Flagged for Intervention'
-                            : 'Students Tracked for MID Evaluation',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                      TextButton.icon(
-                        icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-                        label: const Text('View Attention Roster', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                        onPressed: () {
-                          _tabController.animateTo(4);
-                        },
-                      ),
-                    ],
+                  Builder(
+                    builder: (context) {
+                      final mlPredictions = _provider.mlPredictions;
+                      final isMlLoading = _provider.isLoadingMlPredictions;
+
+                      if (isMlLoading && mlPredictions == null) {
+                        return const Row(
+                          children: [
+                            SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6366F1)),
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Analyzing ML Risk Predictions...',
+                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        );
+                      }
+
+                      if (mlPredictions != null) {
+                        int highRiskCount = 0;
+                        int moderateRiskCount = 0;
+                        int insufficientCount = 0;
+
+                        for (final pred in mlPredictions) {
+                          final isInsufficient = pred.predictionStatus == 'INSUFFICIENT_DATA';
+                          final isHigh = !isInsufficient && (pred.riskCategory == 'HIGH_RISK' || pred.riskProbability >= 0.70);
+                          final isModerate = !isInsufficient && !isHigh && (pred.riskCategory == 'MODERATE_RISK' || pred.riskProbability >= 0.40);
+
+                          if (isInsufficient) {
+                            insufficientCount++;
+                          } else if (isHigh) {
+                            highRiskCount++;
+                          } else if (isModerate) {
+                            moderateRiskCount++;
+                          }
+                        }
+
+                        final totalActionableRisk = highRiskCount + moderateRiskCount;
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 8,
+                              runSpacing: 4,
+                              children: [
+                                Text(
+                                  totalActionableRisk > 0
+                                      ? '$totalActionableRisk Students Flagged for Intervention'
+                                      : 'All Evaluated Students on Track',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                                TextButton.icon(
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                                  label: const Text('View Attention Roster', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                  onPressed: () {
+                                    _tabController.animateTo(4);
+                                  },
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEE2E2),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFFFCA5A5)),
+                                  ),
+                                  child: Text(
+                                    '$highRiskCount High Risk',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFFDC2626),
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF3C7),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFFFCD34D)),
+                                  ),
+                                  child: Text(
+                                    '$moderateRiskCount Moderate Risk',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFFD97706),
+                                    ),
+                                  ),
+                                ),
+                                if (insufficientCount > 0)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF3F4F6),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                                    ),
+                                    child: Text(
+                                      '$insufficientCount Pending MID',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF6B7280),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        );
+                      }
+
+                      // Safe fallback if ML predictions are not available
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _provider.attentionRoster != null && _provider.attentionRoster!.students.isNotEmpty
+                                  ? '${_provider.attentionRoster!.students.length} Students Flagged for Intervention'
+                                  : 'Students Tracked for MID Evaluation',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ),
+                          TextButton.icon(
+                            icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                            label: const Text('View Attention Roster', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            onPressed: () {
+                              _tabController.animateTo(4);
+                            },
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -643,13 +804,44 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
   }
 
   Widget _buildAttentionRosterTab(bool isMobile) {
-    final roster = _provider.attentionRoster;
-
-    if (_provider.isLoadingRoster && roster == null) {
+    if (_provider.isLoadingMlPredictions && _provider.mlPredictions == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (roster == null || roster.students.isEmpty) {
+    if (_provider.mlPredictionsError != null && _provider.mlPredictions == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+              const SizedBox(height: 12),
+              Text(
+                _provider.mlPredictionsError!,
+                textAlign: TextAlign.center,
+                style: AppTypography.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () {
+                  _provider.fetchContextMlPredictions(
+                    classId: widget.classId,
+                    subjectId: widget.subjectId,
+                    semesterId: widget.semesterId,
+                  );
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final rawPredictions = _provider.mlPredictions ?? [];
+    if (rawPredictions.isEmpty) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
@@ -659,7 +851,7 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
               Icon(Icons.check_circle_outline, size: 48, color: Color(0xFF16A34A)),
               SizedBox(height: 12),
               Text(
-                'No Attention Areas Identified',
+                'No Students Require Immediate Intervention',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               SizedBox(height: 6),
@@ -674,20 +866,58 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
       );
     }
 
+    // Sort descending by risk probability
+    final predictions = List<SliMlPrediction>.from(rawPredictions)
+      ..sort((a, b) => b.riskProbability.compareTo(a.riskProbability));
+
     return ListView.builder(
       padding: EdgeInsets.all(isMobile ? 16 : 24),
-      itemCount: roster.students.length,
+      itemCount: predictions.length,
       itemBuilder: (ctx, idx) {
-        final student = roster.students[idx];
-        final isCritical = student.highestSeverity == 'CRITICAL';
+        final item = predictions[idx];
+        final isInsufficient = item.predictionStatus == 'INSUFFICIENT_DATA';
+        final isHigh = !isInsufficient && (item.riskCategory == 'HIGH_RISK' || item.riskProbability >= 0.70);
+        final isModerate = !isInsufficient && !isHigh && (item.riskCategory == 'MODERATE_RISK' || item.riskProbability >= 0.40);
+
+        final Color badgeBg;
+        final Color badgeBorder;
+        final Color badgeText;
+        final String badgeLabel;
+        final IconData statusIcon;
+
+        if (isInsufficient) {
+          badgeBg = const Color(0xFFF3F4F6);
+          badgeBorder = const Color(0xFFD1D5DB);
+          badgeText = const Color(0xFF4B5563);
+          badgeLabel = item.statusReason.isNotEmpty ? item.statusReason : 'MID Assessment Pending';
+          statusIcon = Icons.hourglass_empty;
+        } else if (isHigh) {
+          badgeBg = const Color(0xFFFEF2F2);
+          badgeBorder = const Color(0xFFFCA5A5);
+          badgeText = const Color(0xFF991B1B);
+          badgeLabel = 'HIGH RISK';
+          statusIcon = Icons.error_outline;
+        } else if (isModerate) {
+          badgeBg = const Color(0xFFFFFBEB);
+          badgeBorder = const Color(0xFFFCD34D);
+          badgeText = const Color(0xFF92400E);
+          badgeLabel = 'MODERATE RISK';
+          statusIcon = Icons.warning_amber_rounded;
+        } else {
+          badgeBg = const Color(0xFFF0FDF4);
+          badgeBorder = const Color(0xFF86EFAC);
+          badgeText = const Color(0xFF166534);
+          badgeLabel = 'LOW RISK';
+          statusIcon = Icons.check_circle_outline;
+        }
+
+        final probPercent = (item.riskProbability * 100).toStringAsFixed(0);
 
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: isCritical ? const Color(0xFFFCA5A5) : const Color(0xFFFCD34D),
-            ),
+            side: BorderSide(color: badgeBorder),
           ),
           child: InkWell(
             borderRadius: BorderRadius.circular(12),
@@ -695,7 +925,7 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => StudentAnalyticsDetailScreen(
-                    enrollmentId: student.enrollmentId,
+                    enrollmentId: item.enrollmentId,
                   ),
                 ),
               );
@@ -709,12 +939,8 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
                     children: [
                       CircleAvatar(
                         radius: 16,
-                        backgroundColor: isCritical ? const Color(0xFFFEE2E2) : const Color(0xFFFEF3C7),
-                        child: Icon(
-                          isCritical ? Icons.error_outline : Icons.warning_amber_rounded,
-                          color: isCritical ? const Color(0xFF991B1B) : const Color(0xFF92400E),
-                          size: 18,
-                        ),
+                        backgroundColor: badgeBg,
+                        child: Icon(statusIcon, color: badgeText, size: 18),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -722,50 +948,84 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              student.studentName,
+                              item.studentName.isNotEmpty ? item.studentName : 'Student #${item.studentId}',
                               style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            if (student.rollNumber != null)
-                              Text(student.rollNumber!, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                            if (item.rollNumber != null && item.rollNumber!.isNotEmpty)
+                              Text(
+                                item.rollNumber!,
+                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                              ),
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: isCritical ? const Color(0xFFFEF2F2) : const Color(0xFFFFFBEB),
+                          color: badgeBg,
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: isCritical ? const Color(0xFFFCA5A5) : const Color(0xFFFCD34D)),
+                          border: Border.all(color: badgeBorder),
                         ),
                         child: Text(
-                          student.highestSeverity,
+                          badgeLabel,
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
-                            color: isCritical ? const Color(0xFF991B1B) : const Color(0xFF92400E),
+                            color: badgeText,
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  ...student.riskFindings.map(
-                    (f) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
-                          Expanded(
-                            child: Text(
-                              f.explanation,
-                              style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
-                            ),
-                          ),
-                        ],
+                  const SizedBox(height: 10),
+                  if (!isInsufficient)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        '$probPercent% risk probability',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isHigh
+                              ? const Color(0xFFDC2626)
+                              : (isModerate ? const Color(0xFFD97706) : const Color(0xFF16A34A)),
+                        ),
                       ),
                     ),
-                  ),
+                  if (item.topRiskFactors.isNotEmpty) ...[
+                    ...item.topRiskFactors.map(
+                      (factor) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
+                            Expanded(
+                              child: Text(
+                                factor,
+                                style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ] else if (isInsufficient)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        item.statusReason.isNotEmpty
+                            ? item.statusReason
+                            : 'Inference requires both PRE and MID assessment data.',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,

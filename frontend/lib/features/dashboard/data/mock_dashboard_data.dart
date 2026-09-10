@@ -298,6 +298,11 @@ class MockDashboardData {
       subtitle: 'Automated schedule engine',
     ),
     QuickAccessItem(
+      icon: Icons.psychology_outlined,
+      label: 'Faculty Insights',
+      subtitle: 'Student Learning Intelligence',
+    ),
+    QuickAccessItem(
       icon: Icons.workspace_premium_outlined,
       label: 'Career Advancement',
       subtitle: 'Track your professional growth',
