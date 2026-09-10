@@ -416,6 +416,403 @@ void main() {
       // Verifies fallback text is rendered cleanly without crash
       expect(find.text('Students Tracked for MID Evaluation'), findsOneWidget);
     });
+
+    testWidgets('Attention Roster Search filters students by name, PRN, and roll number', (tester) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final provider = SliAnalyticsProvider();
+      final analytics = ContextAnalytics.fromJson({
+        'class_id': 1,
+        'subject_id': 'SUB_DBMS',
+        'subject_name': 'Database Management Systems',
+        'semester_id': 4,
+        'funnel': {
+          'total_enrolled': 4,
+          'pre_completed': 4,
+          'mid_completed': 3,
+          'end_completed': 0,
+          'fully_assessed': 0,
+        },
+        'trajectories': {
+          'confidence': {'pre': 3.0, 'mid': 3.2, 'end': 0.0, 'delta_end_pre': 0.2},
+          'interest': {'pre': 3.0, 'mid': 3.2, 'end': 0.0, 'delta_end_pre': 0.2},
+          'difficulty': {'pre': 3.0, 'mid': 3.2, 'end': 0.0, 'delta_end_pre': 0.2},
+          'avg_learning_satisfaction': 4.0,
+          'avg_overall_experience': 4.0,
+        },
+        'topics': [],
+        'skills': {
+          'total_tracked_skills': 0,
+          'mastered_count': 0,
+          'mastered_pct': 0.0,
+          'improved_count': 0,
+          'improved_pct': 0.0,
+          'in_progress_count': 0,
+          'in_progress_pct': 0.0,
+          'not_started_count': 0,
+          'not_started_pct': 0.0,
+          'stagnant_skills_count': 0,
+        },
+        'learning_experience': {
+          'pace_friction_mid_pct': 0.0,
+          'pace_friction_end_pct': 0.0,
+          'barriers_frequency': <String, dynamic>{},
+          'effective_formats_frequency': <String, dynamic>{},
+        },
+        'risk_findings': [],
+      });
+
+      final predictions = [
+        const SliMlPrediction(
+          enrollmentId: 1,
+          studentId: '23CS001',
+          studentName: 'Aarav Sharma',
+          rollNumber: '01',
+          predictionStatus: 'PREDICTED',
+          statusReason: '',
+          riskCategory: 'HIGH_RISK',
+          isAtRisk: true,
+          riskProbability: 0.88,
+          confidenceScore: 0.95,
+          predictionPoint: 'MID',
+          modelUsed: 'Champion',
+          topRiskFactors: ['Drop in self-efficacy'],
+          recommendations: ['Remedial tutoring'],
+          modelVersion: '1.0.0',
+        ),
+        const SliMlPrediction(
+          enrollmentId: 2,
+          studentId: '23CS041',
+          studentName: 'Priya Patel',
+          rollNumber: '12',
+          predictionStatus: 'PREDICTED',
+          statusReason: '',
+          riskCategory: 'MODERATE_RISK',
+          isAtRisk: false,
+          riskProbability: 0.55,
+          confidenceScore: 0.85,
+          predictionPoint: 'MID',
+          modelUsed: 'Champion',
+          topRiskFactors: ['Low practice score'],
+          recommendations: [],
+          modelVersion: '1.0.0',
+        ),
+        const SliMlPrediction(
+          enrollmentId: 3,
+          studentId: '23CS099',
+          studentName: 'Rohan Gupta',
+          rollNumber: '25',
+          predictionStatus: 'PREDICTED',
+          statusReason: '',
+          riskCategory: 'LOW_RISK',
+          isAtRisk: false,
+          riskProbability: 0.15,
+          confidenceScore: 0.9,
+          predictionPoint: 'MID',
+          modelUsed: 'Champion',
+          topRiskFactors: [],
+          recommendations: [],
+          modelVersion: '1.0.0',
+        ),
+        const SliMlPrediction(
+          enrollmentId: 4,
+          studentId: '23CS120',
+          studentName: 'Ananya Sen',
+          rollNumber: '40',
+          predictionStatus: 'INSUFFICIENT_DATA',
+          statusReason: 'MID assessment pending',
+          riskCategory: 'LOW_RISK',
+          isAtRisk: false,
+          riskProbability: 0.0,
+          confidenceScore: 0.0,
+          predictionPoint: 'MID',
+          modelUsed: 'Champion',
+          topRiskFactors: [],
+          recommendations: [],
+          modelVersion: '1.0.0',
+        ),
+      ];
+
+      provider.setContextAnalyticsForTesting(analytics);
+      provider.setMlPredictionsForTesting(predictions);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ClassAnalyticsDashboardScreen(
+            classId: 1,
+            subjectId: 'SUB_DBMS',
+            subjectName: 'Database Management Systems',
+            semesterId: 4,
+            initialTabIndex: 4, // Attention Roster
+            provider: provider,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Verify all 4 students are initially rendered
+      expect(find.text('Aarav Sharma'), findsOneWidget);
+      expect(find.text('Priya Patel'), findsOneWidget);
+      expect(find.text('Rohan Gupta'), findsOneWidget);
+      expect(find.text('Ananya Sen'), findsOneWidget);
+      expect(find.text('Showing all 4 students'), findsOneWidget);
+
+      // 1. Search by name (case-insensitive: "aarav")
+      final searchField = find.byKey(const Key('attention_roster_search_field'));
+      expect(searchField, findsOneWidget);
+      await tester.enterText(searchField, 'aarav');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Aarav Sharma'), findsOneWidget);
+      expect(find.text('Priya Patel'), findsNothing);
+      expect(find.text('Rohan Gupta'), findsNothing);
+      expect(find.text('Ananya Sen'), findsNothing);
+      expect(find.text('Showing 1 of 4 students'), findsOneWidget);
+
+      // 2. Search by PRN ("23CS041")
+      await tester.enterText(searchField, '23CS041');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Priya Patel'), findsOneWidget);
+      expect(find.text('Aarav Sharma'), findsNothing);
+
+      // 3. Search by roll number ("25")
+      await tester.enterText(searchField, '25');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Rohan Gupta'), findsOneWidget);
+      expect(find.text('Priya Patel'), findsNothing);
+
+      // 4. Search no match
+      await tester.enterText(searchField, 'NonExistentStudent');
+      await tester.pumpAndSettle();
+
+      expect(find.text('No students match the selected filter.'), findsOneWidget);
+      expect(find.text('Showing 0 of 4 students'), findsOneWidget);
+
+      // Clear search
+      await tester.enterText(searchField, '');
+      await tester.pumpAndSettle();
+      expect(find.text('Showing all 4 students'), findsOneWidget);
+    });
+
+    testWidgets('Attention Roster Risk Filters isolate HIGH, MODERATE, LOW, and PENDING MID', (tester) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final provider = SliAnalyticsProvider();
+      final analytics = ContextAnalytics.fromJson({
+        'class_id': 1,
+        'subject_id': 'SUB_DBMS',
+        'subject_name': 'Database Management Systems',
+        'semester_id': 4,
+        'funnel': {'total_enrolled': 4, 'pre_completed': 4, 'mid_completed': 3, 'end_completed': 0, 'fully_assessed': 0},
+        'trajectories': {'confidence': {'pre': 3.0, 'mid': 3.2, 'end': 0.0, 'delta_end_pre': 0.2}, 'interest': {'pre': 3.0, 'mid': 3.2, 'end': 0.0, 'delta_end_pre': 0.2}, 'difficulty': {'pre': 3.0, 'mid': 3.2, 'end': 0.0, 'delta_end_pre': 0.2}, 'avg_learning_satisfaction': 4.0, 'avg_overall_experience': 4.0},
+        'topics': [],
+        'skills': {'total_tracked_skills': 0, 'mastered_count': 0, 'mastered_pct': 0.0, 'improved_count': 0, 'improved_pct': 0.0, 'in_progress_count': 0, 'in_progress_pct': 0.0, 'not_started_count': 0, 'not_started_pct': 0.0, 'stagnant_skills_count': 0},
+        'learning_experience': {'pace_friction_mid_pct': 0.0, 'pace_friction_end_pct': 0.0, 'barriers_frequency': <String, dynamic>{}, 'effective_formats_frequency': <String, dynamic>{}},
+        'risk_findings': [],
+      });
+
+      final predictions = [
+        const SliMlPrediction(
+          enrollmentId: 1,
+          studentId: '23CS001',
+          studentName: 'Aarav Sharma',
+          predictionStatus: 'PREDICTED',
+          statusReason: '',
+          riskCategory: 'HIGH_RISK',
+          isAtRisk: true,
+          riskProbability: 0.88,
+          confidenceScore: 0.95,
+          predictionPoint: 'MID',
+          modelUsed: 'Champion',
+          topRiskFactors: [],
+          recommendations: [],
+          modelVersion: '1.0.0',
+        ),
+        const SliMlPrediction(
+          enrollmentId: 2,
+          studentId: '23CS041',
+          studentName: 'Priya Patel',
+          predictionStatus: 'PREDICTED',
+          statusReason: '',
+          riskCategory: 'MODERATE_RISK',
+          isAtRisk: false,
+          riskProbability: 0.55,
+          confidenceScore: 0.85,
+          predictionPoint: 'MID',
+          modelUsed: 'Champion',
+          topRiskFactors: [],
+          recommendations: [],
+          modelVersion: '1.0.0',
+        ),
+        const SliMlPrediction(
+          enrollmentId: 3,
+          studentId: '23CS099',
+          studentName: 'Rohan Gupta',
+          predictionStatus: 'PREDICTED',
+          statusReason: '',
+          riskCategory: 'LOW_RISK',
+          isAtRisk: false,
+          riskProbability: 0.15,
+          confidenceScore: 0.9,
+          predictionPoint: 'MID',
+          modelUsed: 'Champion',
+          topRiskFactors: [],
+          recommendations: [],
+          modelVersion: '1.0.0',
+        ),
+        const SliMlPrediction(
+          enrollmentId: 4,
+          studentId: '23CS120',
+          studentName: 'Ananya Sen',
+          predictionStatus: 'INSUFFICIENT_DATA',
+          statusReason: 'MID assessment pending',
+          riskCategory: 'LOW_RISK',
+          isAtRisk: false,
+          riskProbability: 0.0,
+          confidenceScore: 0.0,
+          predictionPoint: 'MID',
+          modelUsed: 'Champion',
+          topRiskFactors: [],
+          recommendations: [],
+          modelVersion: '1.0.0',
+        ),
+      ];
+
+      provider.setContextAnalyticsForTesting(analytics);
+      provider.setMlPredictionsForTesting(predictions);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ClassAnalyticsDashboardScreen(
+            classId: 1,
+            subjectId: 'SUB_DBMS',
+            subjectName: 'Database Management Systems',
+            semesterId: 4,
+            initialTabIndex: 4,
+            provider: provider,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 1. Filter: HIGH RISK
+      await tester.tap(find.byKey(const Key('filter_chip_HIGH RISK')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Aarav Sharma'), findsOneWidget);
+      expect(find.text('Priya Patel'), findsNothing);
+      expect(find.text('Rohan Gupta'), findsNothing);
+      expect(find.text('Ananya Sen'), findsNothing);
+      expect(find.text('Showing 1 of 4 students'), findsOneWidget);
+
+      // 2. Filter: MODERATE RISK
+      await tester.tap(find.byKey(const Key('filter_chip_MODERATE RISK')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Priya Patel'), findsOneWidget);
+      expect(find.text('Aarav Sharma'), findsNothing);
+      expect(find.text('Showing 1 of 4 students'), findsOneWidget);
+
+      // 3. Filter: LOW RISK
+      await tester.tap(find.byKey(const Key('filter_chip_LOW RISK')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Rohan Gupta'), findsOneWidget);
+      expect(find.text('Aarav Sharma'), findsNothing);
+      expect(find.text('Showing 1 of 4 students'), findsOneWidget);
+
+      // 4. Filter: PENDING MID
+      await tester.tap(find.byKey(const Key('filter_chip_PENDING MID')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ananya Sen'), findsOneWidget);
+      expect(find.text('Rohan Gupta'), findsNothing);
+      expect(find.text('Showing 1 of 4 students'), findsOneWidget);
+
+      // 5. Combined: PENDING MID + search "Ananya"
+      final searchField = find.byKey(const Key('attention_roster_search_field'));
+      await tester.enterText(searchField, 'Ananya');
+      await tester.pumpAndSettle();
+      expect(find.text('Ananya Sen'), findsOneWidget);
+
+      // Combined: PENDING MID + search "Aarav" (mismatch category)
+      await tester.enterText(searchField, 'Aarav');
+      await tester.pumpAndSettle();
+      expect(find.text('No students match the selected filter.'), findsOneWidget);
+
+      // Reset filters
+      await tester.tap(find.text('Clear Search & Filters'));
+      await tester.pumpAndSettle();
+      expect(find.text('Showing all 4 students'), findsOneWidget);
+    });
+
+    testWidgets('Attention Roster renders without overflow on 360px mobile width', (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final provider = SliAnalyticsProvider();
+      final analytics = ContextAnalytics.fromJson({
+        'class_id': 1,
+        'subject_id': 'SUB_DBMS',
+        'subject_name': 'Database Management Systems',
+        'semester_id': 4,
+        'funnel': {'total_enrolled': 2, 'pre_completed': 2, 'mid_completed': 2, 'end_completed': 0, 'fully_assessed': 0},
+        'trajectories': {'confidence': {'pre': 3.0, 'mid': 3.2, 'end': 0.0, 'delta_end_pre': 0.2}, 'interest': {'pre': 3.0, 'mid': 3.2, 'end': 0.0, 'delta_end_pre': 0.2}, 'difficulty': {'pre': 3.0, 'mid': 3.2, 'end': 0.0, 'delta_end_pre': 0.2}, 'avg_learning_satisfaction': 4.0, 'avg_overall_experience': 4.0},
+        'topics': [],
+        'skills': {'total_tracked_skills': 0, 'mastered_count': 0, 'mastered_pct': 0.0, 'improved_count': 0, 'improved_pct': 0.0, 'in_progress_count': 0, 'in_progress_pct': 0.0, 'not_started_count': 0, 'not_started_pct': 0.0, 'stagnant_skills_count': 0},
+        'learning_experience': {'pace_friction_mid_pct': 0.0, 'pace_friction_end_pct': 0.0, 'barriers_frequency': <String, dynamic>{}, 'effective_formats_frequency': <String, dynamic>{}},
+        'risk_findings': [],
+      });
+
+      final predictions = [
+        const SliMlPrediction(
+          enrollmentId: 1,
+          studentId: '23CS001',
+          studentName: 'Aarav Sharma',
+          rollNumber: '01',
+          predictionStatus: 'PREDICTED',
+          statusReason: '',
+          riskCategory: 'HIGH_RISK',
+          isAtRisk: true,
+          riskProbability: 0.88,
+          confidenceScore: 0.95,
+          predictionPoint: 'MID',
+          modelUsed: 'Champion',
+          topRiskFactors: ['Drop in self-efficacy'],
+          recommendations: ['Remedial tutoring'],
+          modelVersion: '1.0.0',
+        ),
+      ];
+
+      provider.setContextAnalyticsForTesting(analytics);
+      provider.setMlPredictionsForTesting(predictions);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ClassAnalyticsDashboardScreen(
+            classId: 1,
+            subjectId: 'SUB_DBMS',
+            subjectName: 'Database Management Systems',
+            semesterId: 4,
+            initialTabIndex: 4,
+            provider: provider,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('attention_roster_search_field')), findsOneWidget);
+      expect(find.byKey(const Key('filter_chip_ALL')), findsOneWidget);
+      expect(find.text('Aarav Sharma'), findsOneWidget);
+    });
   });
 }
 

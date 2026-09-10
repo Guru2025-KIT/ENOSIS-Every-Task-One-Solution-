@@ -36,6 +36,18 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
   late TabController _tabController;
   late final SliAnalyticsProvider _provider;
 
+  final TextEditingController _rosterSearchController = TextEditingController();
+  String _rosterSearchQuery = '';
+  String _selectedRiskFilter = 'ALL';
+
+  static bool _isInsufficient(SliMlPrediction p) => p.predictionStatus == 'INSUFFICIENT_DATA';
+  static bool _isHighRisk(SliMlPrediction p) =>
+      !_isInsufficient(p) && (p.riskCategory == 'HIGH_RISK' || p.riskProbability >= 0.70);
+  static bool _isModerateRisk(SliMlPrediction p) =>
+      !_isInsufficient(p) && !_isHighRisk(p) && (p.riskCategory == 'MODERATE_RISK' || p.riskProbability >= 0.40);
+  static bool _isLowRisk(SliMlPrediction p) =>
+      !_isInsufficient(p) && !_isHighRisk(p) && !_isModerateRisk(p);
+
   @override
   void initState() {
     super.initState();
@@ -55,6 +67,7 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
   void dispose() {
     _provider.removeListener(_onProviderUpdate);
     _tabController.dispose();
+    _rosterSearchController.dispose();
     super.dispose();
   }
 
@@ -99,13 +112,17 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
               style: AppTypography.h4.copyWith(
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
+                fontSize: isMobile ? 15 : null,
               ),
             ),
             Text(
               widget.subjectName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, color: Color(0xFFE0E7FF)),
+              style: TextStyle(
+                fontSize: isMobile ? 11 : 12,
+                color: const Color(0xFFE0E7FF),
+              ),
             ),
           ],
         ),
@@ -870,183 +887,466 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
     final predictions = List<SliMlPrediction>.from(rawPredictions)
       ..sort((a, b) => b.riskProbability.compareTo(a.riskProbability));
 
-    return ListView.builder(
-      padding: EdgeInsets.all(isMobile ? 16 : 24),
-      itemCount: predictions.length,
-      itemBuilder: (ctx, idx) {
-        final item = predictions[idx];
-        final isInsufficient = item.predictionStatus == 'INSUFFICIENT_DATA';
-        final isHigh = !isInsufficient && (item.riskCategory == 'HIGH_RISK' || item.riskProbability >= 0.70);
-        final isModerate = !isInsufficient && !isHigh && (item.riskCategory == 'MODERATE_RISK' || item.riskProbability >= 0.40);
+    // Calculate category counts across the cohort
+    int highRiskCount = 0;
+    int moderateRiskCount = 0;
+    int lowRiskCount = 0;
+    int pendingMidCount = 0;
 
-        final Color badgeBg;
-        final Color badgeBorder;
-        final Color badgeText;
-        final String badgeLabel;
-        final IconData statusIcon;
+    for (final p in predictions) {
+      if (_isInsufficient(p)) {
+        pendingMidCount++;
+      } else if (_isHighRisk(p)) {
+        highRiskCount++;
+      } else if (_isModerateRisk(p)) {
+        moderateRiskCount++;
+      } else {
+        lowRiskCount++;
+      }
+    }
 
-        if (isInsufficient) {
-          badgeBg = const Color(0xFFF3F4F6);
-          badgeBorder = const Color(0xFFD1D5DB);
-          badgeText = const Color(0xFF4B5563);
-          badgeLabel = item.statusReason.isNotEmpty ? item.statusReason : 'MID Assessment Pending';
-          statusIcon = Icons.hourglass_empty;
-        } else if (isHigh) {
-          badgeBg = const Color(0xFFFEF2F2);
-          badgeBorder = const Color(0xFFFCA5A5);
-          badgeText = const Color(0xFF991B1B);
-          badgeLabel = 'HIGH RISK';
-          statusIcon = Icons.error_outline;
-        } else if (isModerate) {
-          badgeBg = const Color(0xFFFFFBEB);
-          badgeBorder = const Color(0xFFFCD34D);
-          badgeText = const Color(0xFF92400E);
-          badgeLabel = 'MODERATE RISK';
-          statusIcon = Icons.warning_amber_rounded;
-        } else {
-          badgeBg = const Color(0xFFF0FDF4);
-          badgeBorder = const Color(0xFF86EFAC);
-          badgeText = const Color(0xFF166534);
-          badgeLabel = 'LOW RISK';
-          statusIcon = Icons.check_circle_outline;
-        }
+    // Filter by risk chip and search text
+    final filteredPredictions = predictions.where((p) {
+      // 1. Risk filter
+      final matchesFilter = switch (_selectedRiskFilter) {
+        'HIGH RISK' => _isHighRisk(p),
+        'MODERATE RISK' => _isModerateRisk(p),
+        'LOW RISK' => _isLowRisk(p),
+        'PENDING MID' => _isInsufficient(p),
+        _ => true,
+      };
+      if (!matchesFilter) return false;
 
-        final probPercent = (item.riskProbability * 100).toStringAsFixed(0);
+      // 2. Search query (name, studentId/PRN, roll number)
+      if (_rosterSearchQuery.trim().isEmpty) return true;
+      final query = _rosterSearchQuery.trim().toLowerCase();
+      final name = p.studentName.toLowerCase();
+      final id = p.studentId.toLowerCase();
+      final roll = (p.rollNumber ?? '').toLowerCase();
 
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: badgeBorder),
+      return name.contains(query) || id.contains(query) || roll.contains(query);
+    }).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Controls Header: Search + Filter Chips + Results Count
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            isMobile ? 16 : 24,
+            isMobile ? 14 : 18,
+            isMobile ? 16 : 24,
+            8,
           ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => StudentAnalyticsDetailScreen(
-                    enrollmentId: item.enrollmentId,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Search Input Field
+              TextField(
+                key: const Key('attention_roster_search_field'),
+                controller: _rosterSearchController,
+                style: const TextStyle(fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Search by student name, PRN, or roll number...',
+                  hintStyle: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                  prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
+                  suffixIcon: _rosterSearchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            _rosterSearchController.clear();
+                            setState(() {
+                              _rosterSearchQuery = '';
+                            });
+                          },
+                        )
+                      : null,
+                  isDense: true,
+                  filled: true,
+                  fillColor: AppColors.surface,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
                   ),
                 ),
-              );
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                onChanged: (val) {
+                  setState(() {
+                    _rosterSearchQuery = val;
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+
+              // Filter Chips (Scrollable horizontally)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildRiskFilterChip('ALL', predictions.length, AppColors.primary),
+                    _buildRiskFilterChip('HIGH RISK', highRiskCount, const Color(0xFFDC2626)),
+                    _buildRiskFilterChip('MODERATE RISK', moderateRiskCount, const Color(0xFFD97706)),
+                    _buildRiskFilterChip('LOW RISK', lowRiskCount, const Color(0xFF16A34A)),
+                    _buildRiskFilterChip('PENDING MID', pendingMidCount, const Color(0xFF4B5563)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Results Count Bar
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 16,
-                        backgroundColor: badgeBg,
-                        child: Icon(statusIcon, color: badgeText, size: 18),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.studentName.isNotEmpty ? item.studentName : 'Student #${item.studentId}',
-                              style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (item.rollNumber != null && item.rollNumber!.isNotEmpty)
-                              Text(
-                                item.rollNumber!,
-                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: badgeBg,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: badgeBorder),
-                        ),
-                        child: Text(
-                          badgeLabel,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: badgeText,
-                          ),
-                        ),
-                      ),
-                    ],
+                  Text(
+                    filteredPredictions.length == predictions.length
+                        ? 'Showing all ${predictions.length} students'
+                        : 'Showing ${filteredPredictions.length} of ${predictions.length} students',
+                    style: AppTypography.captionBold.copyWith(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
                   ),
-                  const SizedBox(height: 10),
-                  if (!isInsufficient)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        '$probPercent% risk probability',
+                  if (_rosterSearchQuery.isNotEmpty || _selectedRiskFilter != 'ALL')
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _rosterSearchController.clear();
+                          _rosterSearchQuery = '';
+                          _selectedRiskFilter = 'ALL';
+                        });
+                      },
+                      child: const Text(
+                        'Reset Filters',
                         style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: isHigh
-                              ? const Color(0xFFDC2626)
-                              : (isModerate ? const Color(0xFFD97706) : const Color(0xFF16A34A)),
-                        ),
-                      ),
-                    ),
-                  if (item.topRiskFactors.isNotEmpty) ...[
-                    ...item.topRiskFactors.map(
-                      (factor) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
-                            Expanded(
-                              child: Text(
-                                factor,
-                                style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ] else if (isInsufficient)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Text(
-                        item.statusReason.isNotEmpty
-                            ? item.statusReason
-                            : 'Inference requires both PRE and MID assessment data.',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontStyle: FontStyle.italic,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Text(
-                        'View 360° Student Profile',
-                        style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: FontWeight.bold,
                           color: AppColors.primary,
                         ),
                       ),
-                      const Icon(Icons.chevron_right, size: 16, color: AppColors.primary),
-                    ],
-                  ),
+                    ),
                 ],
               ),
-            ),
+            ],
           ),
-        );
-      },
+        ),
+
+        const Divider(height: 1, color: AppColors.border),
+
+        // List of Cards or Empty State
+        Expanded(
+          child: filteredPredictions.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.search_off_rounded, size: 36, color: AppColors.primary),
+                        ),
+                        const SizedBox(height: 14),
+                        const Text(
+                          'No students match the selected filter.',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _rosterSearchQuery.trim().isNotEmpty
+                              ? 'No students matching "${_rosterSearchQuery.trim()}" found with filter "$_selectedRiskFilter".'
+                              : 'Try choosing another risk category or clearing search.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        ),
+                        const SizedBox(height: 16),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _rosterSearchController.clear();
+                              _rosterSearchQuery = '';
+                              _selectedRiskFilter = 'ALL';
+                            });
+                          },
+                          icon: const Icon(Icons.refresh, size: 16),
+                          label: const Text('Clear Search & Filters'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  padding: EdgeInsets.fromLTRB(
+                    isMobile ? 16 : 24,
+                    12,
+                    isMobile ? 16 : 24,
+                    24,
+                  ),
+                  itemCount: filteredPredictions.length,
+                  itemBuilder: (ctx, idx) {
+                    final item = filteredPredictions[idx];
+                    final isInsufficient = _isInsufficient(item);
+                    final isHigh = _isHighRisk(item);
+                    final isModerate = _isModerateRisk(item);
+
+                    final Color badgeBg;
+                    final Color badgeBorder;
+                    final Color badgeText;
+                    final String badgeLabel;
+                    final IconData statusIcon;
+
+                    if (isInsufficient) {
+                      badgeBg = const Color(0xFFF3F4F6);
+                      badgeBorder = const Color(0xFFD1D5DB);
+                      badgeText = const Color(0xFF4B5563);
+                      badgeLabel = item.statusReason.isNotEmpty ? item.statusReason : 'MID Assessment Pending';
+                      statusIcon = Icons.hourglass_empty;
+                    } else if (isHigh) {
+                      badgeBg = const Color(0xFFFEF2F2);
+                      badgeBorder = const Color(0xFFFCA5A5);
+                      badgeText = const Color(0xFF991B1B);
+                      badgeLabel = 'HIGH RISK';
+                      statusIcon = Icons.error_outline;
+                    } else if (isModerate) {
+                      badgeBg = const Color(0xFFFFFBEB);
+                      badgeBorder = const Color(0xFFFCD34D);
+                      badgeText = const Color(0xFF92400E);
+                      badgeLabel = 'MODERATE RISK';
+                      statusIcon = Icons.warning_amber_rounded;
+                    } else {
+                      badgeBg = const Color(0xFFF0FDF4);
+                      badgeBorder = const Color(0xFF86EFAC);
+                      badgeText = const Color(0xFF166534);
+                      badgeLabel = 'LOW RISK';
+                      statusIcon = Icons.check_circle_outline;
+                    }
+
+                    final probPercent = (item.riskProbability * 100).toStringAsFixed(0);
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: badgeBorder),
+                      ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => StudentAnalyticsDetailScreen(
+                                enrollmentId: item.enrollmentId,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 16,
+                                    backgroundColor: badgeBg,
+                                    child: Icon(statusIcon, color: badgeText, size: 18),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          item.studentName.isNotEmpty ? item.studentName : 'Student #${item.studentId}',
+                                          style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        if (item.rollNumber != null && item.rollNumber!.isNotEmpty)
+                                          Text(
+                                            item.rollNumber!,
+                                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: badgeBg,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: badgeBorder),
+                                    ),
+                                    child: Text(
+                                      badgeLabel,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: badgeText,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              if (!isInsufficient)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Text(
+                                    '$probPercent% risk probability',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: isHigh
+                                          ? const Color(0xFFDC2626)
+                                          : (isModerate ? const Color(0xFFD97706) : const Color(0xFF16A34A)),
+                                    ),
+                                  ),
+                                ),
+                              if (item.topRiskFactors.isNotEmpty) ...[
+                                ...item.topRiskFactors.map(
+                                  (factor) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
+                                        Expanded(
+                                          child: Text(
+                                            factor,
+                                            style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ] else if (isInsufficient)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Text(
+                                    item.statusReason.isNotEmpty
+                                        ? item.statusReason
+                                        : 'Inference requires both PRE and MID assessment data.',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontStyle: FontStyle.italic,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                              const SizedBox(height: 8),
+                              const Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      'View 360° Student Profile',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: 2),
+                                  Icon(Icons.chevron_right, size: 16, color: AppColors.primary),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRiskFilterChip(String label, int count, Color color) {
+    final isSelected = _selectedRiskFilter == label;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: InkWell(
+        key: Key('filter_chip_$label'),
+        onTap: () {
+          setState(() {
+            _selectedRiskFilter = label;
+          });
+        },
+        borderRadius: BorderRadius.circular(20),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? color : AppColors.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSelected ? color : AppColors.border,
+              width: isSelected ? 1.5 : 1.0,
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.25),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  color: isSelected ? Colors.white : AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(width: 5),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.white.withValues(alpha: 0.25) : color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: isSelected ? Colors.white : color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
