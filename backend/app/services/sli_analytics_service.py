@@ -6,15 +6,16 @@ from sqlalchemy.orm import Session
 
 from app.models.academic import Division, Subject
 from app.models.sli import (
-    AcademicClass, EndSemesterResponse, Enrollment, Intervention, MidSemesterResponse,
-    PreSemesterResponse, Semester, Student, StudentTopicFeedback, Topic,
+    AcademicClass, EndSemesterResponse, Enrollment, Intervention, InterventionOutcome,
+    MidSemesterResponse, PreSemesterResponse, Semester, Student, StudentTopicFeedback, Topic,
 )
 from app.schemas.sli import InterventionLogRequest, InterventionOut, SkillProgressStatus, TopicProgressStatus
 from app.schemas.sli_analytics import (
     AssessmentFunnelOut, AttentionRosterItemOut, CohortTrajectorySummaryOut,
-    ContextAnalyticsOut, ContextAttentionRosterOut, LearningExperienceAnalyticsOut,
-    MetricTrajectoryOut, PaceDistributionOut, RiskFindingOut, SkillCohortSummaryOut,
-    StudentCompetenciesOut, StudentLongitudinalAnalyticsOut, StudentSkillProgressionOut,
+    ContextAnalyticsOut, ContextAttentionRosterOut, ContextInterventionOut,
+    LearningExperienceAnalyticsOut, MetricTrajectoryOut, PaceDistributionOut,
+    RiskFindingOut, SkillCohortSummaryOut, StudentCompetenciesOut,
+    StudentLongitudinalAnalyticsOut, StudentSkillProgressionOut,
     StudentTopicProgressionOut, TopicCohortSummaryOut,
 )
 from app.services.sli_pre_service import authorize_faculty_teaching_assignment
@@ -909,3 +910,89 @@ def get_enrollment_interventions(
     ).order_by(Intervention.implementation_date.desc(), Intervention.created_at.desc()).all()
 
     return [InterventionOut.model_validate(inv) for inv in interventions]
+
+
+def get_context_interventions(
+    db: Session,
+    faculty_id: str,
+    class_id: int,
+    subject_id: str,
+    semester_id: int,
+    status_filter: str | None = None,
+    is_admin: bool = False,
+) -> list[ContextInterventionOut]:
+    """
+    Retrieves all interventions recorded for students in an authorized teaching context.
+    Includes student name, student PRN/roll number, intervention details, and measured outcome.
+    Supports optional status filtering ('ALL', 'PENDING', 'COMPLETED').
+    """
+    academic_class = db.query(AcademicClass).filter(AcademicClass.class_id == class_id).first()
+    if not academic_class:
+        raise HTTPException(status_code=404, detail="Class not found.")
+
+    subject = db.query(Subject).filter(Subject.id == subject_id).first()
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found.")
+
+    semester = db.query(Semester).filter(Semester.semester_id == semester_id).first()
+    if not semester:
+        raise HTTPException(status_code=404, detail="Semester not found.")
+
+    division_id = academic_class.division_id
+    if not division_id:
+        div = db.query(Division).filter(
+            Division.year == academic_class.year_level,
+            Division.division_code == academic_class.division,
+        ).first()
+        division_id = div.id if div else None
+
+    authorize_faculty_teaching_assignment(db, faculty_id, subject.id, division_id, is_admin)
+
+    query = (
+        db.query(Intervention, Student, InterventionOutcome.effectiveness)
+        .join(Enrollment, Intervention.enrollment_id == Enrollment.enrollment_id)
+        .join(Student, Enrollment.student_id == Student.student_id)
+        .outerjoin(InterventionOutcome, Intervention.intervention_id == InterventionOutcome.intervention_id)
+        .filter(
+            Enrollment.class_id == class_id,
+            Enrollment.subject_id == subject.id,
+            Enrollment.semester_id == semester.semester_id,
+        )
+    )
+
+    if status_filter:
+        norm_status = status_filter.strip().upper()
+        if norm_status == "PENDING":
+            query = query.filter(Intervention.status.in_(["PLANNED", "IN_PROGRESS"]))
+        elif norm_status == "COMPLETED":
+            query = query.filter(Intervention.status == "COMPLETED")
+        elif norm_status != "ALL":
+            query = query.filter(Intervention.status == norm_status)
+
+    results = query.order_by(
+        Intervention.implementation_date.desc(),
+        Intervention.created_at.desc(),
+    ).all()
+
+    interventions_out: list[ContextInterventionOut] = []
+    for inv, student, effectiveness in results:
+        interventions_out.append(
+            ContextInterventionOut(
+                intervention_id=inv.intervention_id,
+                enrollment_id=inv.enrollment_id,
+                student_id=student.student_id,
+                student_name=student.name,
+                roll_number=student.student_id,
+                faculty_id=inv.faculty_id,
+                intervention_type=inv.intervention_type,
+                status=inv.status,
+                implemented=bool(inv.implemented),
+                implementation_date=inv.implementation_date,
+                notes=inv.notes,
+                outcome_effectiveness=effectiveness,
+                created_at=inv.created_at,
+                updated_at=inv.updated_at,
+            )
+        )
+
+    return interventions_out

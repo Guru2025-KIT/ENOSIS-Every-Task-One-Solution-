@@ -47,6 +47,24 @@ class SliAnalyticsProvider extends ChangeNotifier {
   bool get isLoadingMlPredictions => _isLoadingMlPredictions;
   String? get mlPredictionsError => _mlPredictionsError;
 
+  // ─── Context Interventions State ──────────────────────────────────────────
+  List<ContextIntervention>? _contextInterventions;
+  bool _isLoadingInterventions = false;
+  String? _interventionsError;
+
+  List<ContextIntervention>? get contextInterventions => _contextInterventions;
+  bool get isLoadingInterventions => _isLoadingInterventions;
+  String? get interventionsError => _interventionsError;
+
+  // ─── END Competency Summary State ─────────────────────────────────────────
+  EndCompetencySummary? _endCompetencySummary;
+  bool _isLoadingCompetency = false;
+  String? _competencyError;
+
+  EndCompetencySummary? get endCompetencySummary => _endCompetencySummary;
+  bool get isLoadingCompetency => _isLoadingCompetency;
+  String? get competencyError => _competencyError;
+
   @visibleForTesting
   void setContextAnalyticsForTesting(ContextAnalytics? analytics) {
     _contextAnalytics = analytics;
@@ -57,6 +75,30 @@ class SliAnalyticsProvider extends ChangeNotifier {
   void setMlPredictionsForTesting(List<SliMlPrediction>? predictions, {bool isLoading = false}) {
     _mlPredictions = predictions;
     _isLoadingMlPredictions = isLoading;
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  void setContextInterventionsForTesting(
+    List<ContextIntervention>? interventions, {
+    bool isLoading = false,
+    String? error,
+  }) {
+    _contextInterventions = interventions;
+    _isLoadingInterventions = isLoading;
+    _interventionsError = error;
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  void setEndCompetencySummaryForTesting(
+    EndCompetencySummary? summary, {
+    bool isLoading = false,
+    String? error,
+  }) {
+    _endCompetencySummary = summary;
+    _isLoadingCompetency = isLoading;
+    _competencyError = error;
     notifyListeners();
   }
 
@@ -161,4 +203,59 @@ class SliAnalyticsProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<void> fetchContextInterventions({
+    required int classId,
+    required String subjectId,
+    required int semesterId,
+    String? status,
+  }) async {
+    _isLoadingInterventions = true;
+    _interventionsError = null;
+    notifyListeners();
+
+    try {
+      _contextInterventions = await _service.getContextInterventions(
+        classId: classId,
+        subjectId: subjectId,
+        semesterId: semesterId,
+        status: status,
+      );
+      _interventionsError = null;
+    } on SliApiException catch (e) {
+      _interventionsError = e.message;
+    } catch (e) {
+      _interventionsError = 'Failed to load context interventions: $e';
+    } finally {
+      _isLoadingInterventions = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchEndCompetencySummary({
+    required int classId,
+    required String subjectId,
+    required int semesterId,
+  }) async {
+    _isLoadingCompetency = true;
+    _competencyError = null;
+    notifyListeners();
+
+    try {
+      _endCompetencySummary = await _service.getEndCompetencySummary(
+        classId: classId,
+        subjectId: subjectId,
+        semesterId: semesterId,
+      );
+      _competencyError = null;
+    } on SliApiException catch (e) {
+      _competencyError = e.message;
+    } catch (e) {
+      _competencyError = 'Failed to load END competency summary: $e';
+    } finally {
+      _isLoadingCompetency = false;
+      notifyListeners();
+    }
+  }
 }
+

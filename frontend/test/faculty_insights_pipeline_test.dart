@@ -124,10 +124,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Verify TeachingContextsScreen opened with END stage
+      // Verify TeachingContextsScreen opened with VERIFIED_OUTCOME stage
       expect(find.byType(TeachingContextsScreen), findsOneWidget);
       final screen = tester.widget<TeachingContextsScreen>(find.byType(TeachingContextsScreen));
-      expect(screen.stage, 'END');
+      expect(screen.stage, 'VERIFIED_OUTCOME');
     });
 
     testWidgets('Existing PRE, MID, END action cards navigate correctly (Regression test)', (tester) async {

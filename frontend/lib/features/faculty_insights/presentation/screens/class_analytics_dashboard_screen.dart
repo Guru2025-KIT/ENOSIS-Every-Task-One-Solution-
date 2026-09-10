@@ -4,6 +4,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../data/models/analytics_models.dart';
 import '../../data/models/sli_ml_models.dart';
+import '../../data/services/sli_service.dart';
 import '../providers/sli_analytics_provider.dart';
 import '../widgets/analytics_widgets.dart';
 import '../widgets/cohort_trend_chart_card.dart';
@@ -62,6 +63,29 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
       _loadData();
     }
   }
+
+  void _showMlTransparencySheet(BuildContext ctx) {
+    showModalBottomSheet(
+      context: ctx,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => DraggableScrollableSheet(
+        initialChildSize: 0.65,
+        minChildSize: 0.35,
+        maxChildSize: 0.9,
+        builder: (_, scrollController) {
+          return Container(
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: MlTransparencyContent(scrollController: scrollController),
+          );
+        },
+      ),
+    );
+  }
+
 
   @override
   void dispose() {
@@ -129,6 +153,11 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
         backgroundColor: AppColors.primary,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, color: Colors.white),
+            tooltip: 'ML Model Information',
+            onPressed: () => _showMlTransparencySheet(context),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             tooltip: 'Refresh Data',
@@ -1348,5 +1377,403 @@ class _ClassAnalyticsDashboardScreenState extends State<ClassAnalyticsDashboardS
         ),
       ),
     );
+  }
+}
+
+/// Bottom sheet content that displays ML model governance/transparency information.
+/// Uses the existing SliService.getMlModelInfo() — no new backend endpoints.
+class MlTransparencyContent extends StatefulWidget {
+  final ScrollController scrollController;
+  final SliService? sliService;
+  final SliMlModelInfo? initialModelInfo;
+
+  const MlTransparencyContent({
+    super.key,
+    required this.scrollController,
+    this.sliService,
+    this.initialModelInfo,
+  });
+
+  @override
+  State<MlTransparencyContent> createState() => MlTransparencyContentState();
+}
+
+class MlTransparencyContentState extends State<MlTransparencyContent> {
+  SliMlModelInfo? _modelInfo;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialModelInfo != null) {
+      _modelInfo = widget.initialModelInfo;
+      _isLoading = false;
+    } else {
+      _fetchModelInfo();
+    }
+  }
+
+  Future<void> _fetchModelInfo() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final service = widget.sliService ?? SliService();
+      final info = await service.getMlModelInfo();
+      if (mounted) {
+        setState(() {
+          _modelInfo = info;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      controller: widget.scrollController,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      children: [
+        // Drag handle
+        Center(
+          child: Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: AppColors.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+
+        // Title
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF7C3AED).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.psychology_outlined, color: Color(0xFF7C3AED), size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'ML Model Transparency',
+                    style: AppTypography.h4.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    'Active prediction model information',
+                    style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 20),
+
+        if (_isLoading)
+          const Center(child: Padding(
+            padding: EdgeInsets.all(32),
+            child: CircularProgressIndicator(),
+          ))
+        else if (_error != null)
+          _buildErrorState()
+        else if (_modelInfo != null)
+          ..._buildModelInfoSections()
+        else
+          const Center(child: Text('No model information available.')),
+      ],
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.error.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.error.withOpacity(0.2)),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.error_outline, color: AppColors.error, size: 36),
+          const SizedBox(height: 8),
+          Text('Failed to load model info', style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(_error!, style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+          const SizedBox(height: 12),
+          TextButton.icon(
+            onPressed: _fetchModelInfo,
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildModelInfoSections() {
+    final info = _modelInfo!;
+    final isActive = info.status == 'ACTIVE';
+    final isNotTrained = info.status == 'NOT_TRAINED';
+
+    return [
+      // Status badge
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive
+              ? const Color(0xFF16A34A).withOpacity(0.08)
+              : const Color(0xFFD97706).withOpacity(0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isActive
+                ? const Color(0xFF16A34A).withOpacity(0.3)
+                : const Color(0xFFD97706).withOpacity(0.3),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isActive ? Icons.check_circle_outline : Icons.info_outline,
+              color: isActive ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                isActive
+                    ? 'Model is active and generating predictions'
+                    : isNotTrained
+                        ? 'Operating on rule-calibrated baseline (no model trained yet)'
+                        : info.status,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: isActive ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+
+      if (isActive) ...[
+        const SizedBox(height: 16),
+
+        // Model details
+        _infoRow('Champion Model', info.championModel),
+        _infoRow('Prediction Point', info.predictionPoint.toUpperCase()),
+        _infoRow('Target Variable', info.target),
+        if (info.trainedAt != null) _infoRow('Trained At', _formatTimestamp(info.trainedAt!)),
+        if (info.featuresCount > 0) _infoRow('Feature Count', '${info.featuresCount} features'),
+
+        const SizedBox(height: 16),
+
+        // Evaluation Metrics
+        if (info.championMetrics.isNotEmpty) ...[
+          Text(
+            'Evaluation Metrics',
+            style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: info.championMetrics.entries.map((e) {
+              final pct = ((e.value as num).toDouble() * 100).toStringAsFixed(1);
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '$pct%',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF7C3AED)),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _humanizeMetricName(e.key),
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+        ],
+
+        // Feature importances
+        if (info.featureImportances.isNotEmpty) ...[
+          Text(
+            'Top Risk Drivers',
+            style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Features most influential in risk prediction',
+            style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          ...info.featureImportances.entries.take(8).map((e) {
+            final importance = (e.value as num).toDouble();
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      _humanizeFeatureName(e.key),
+                      style: const TextStyle(fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: importance.clamp(0.0, 1.0),
+                        backgroundColor: AppColors.border,
+                        color: const Color(0xFF7C3AED),
+                        minHeight: 4,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 40,
+                    child: Text(
+                      importance.toStringAsFixed(3),
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      textAlign: TextAlign.right,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+
+        const SizedBox(height: 16),
+      ],
+
+      // "What does this mean?" section
+      Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F9FF),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFBAE6FD)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.help_outline, size: 16, color: Color(0xFF0284C7)),
+                const SizedBox(width: 6),
+                Text(
+                  'What does this mean?',
+                  style: AppTypography.bodyMedium.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF0284C7),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Risk predictions are generated at the MID stage using PRE and MID assessment data. '
+              'Students are classified as High Risk (≥70%), Moderate Risk (≥40%), or Low Risk (<40%) '
+              'based on their learning trajectory. Predictions help faculty prioritize early intervention '
+              'and are not deterministic outcomes.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF1E40AF), height: 1.4),
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTimestamp(String raw) {
+    try {
+      final dt = DateTime.parse(raw);
+      return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
+          '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} UTC';
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  String _humanizeMetricName(String key) {
+    return key
+        .replaceAll('_', ' ')
+        .replaceAll('roc auc', 'ROC-AUC')
+        .replaceAll('f1 score', 'F1 Score')
+        .split(' ')
+        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
+  }
+
+  String _humanizeFeatureName(String key) {
+    return key
+        .replaceAll('_', ' ')
+        .split(' ')
+        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
   }
 }

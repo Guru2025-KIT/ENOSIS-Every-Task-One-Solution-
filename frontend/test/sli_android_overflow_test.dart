@@ -3,13 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:enosis/features/faculty_insights/data/models/analytics_models.dart';
 import 'package:enosis/features/faculty_insights/presentation/widgets/analytics_widgets.dart';
-import 'package:enosis/features/faculty_insights/presentation/screens/class_analytics_dashboard_screen.dart';
 import 'package:enosis/features/faculty_insights/presentation/screens/teaching_contexts_screen.dart';
 import 'package:enosis/features/faculty_insights/presentation/screens/student_roster_screen.dart';
 import 'package:enosis/features/faculty_insights/presentation/providers/sli_pre_provider.dart';
 import 'package:enosis/features/faculty_insights/presentation/providers/sli_mid_provider.dart';
 import 'package:enosis/features/faculty_insights/presentation/providers/sli_end_provider.dart';
-import 'package:enosis/features/faculty_insights/presentation/providers/sli_analytics_provider.dart';
 
 void main() {
   group('Mobile RenderFlex Overflow Regression Tests', () {

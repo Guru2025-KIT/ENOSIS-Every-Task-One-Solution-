@@ -11,7 +11,9 @@ import '../providers/sli_mid_provider.dart';
 import '../providers/sli_pre_provider.dart';
 import 'assessment_management_screen.dart';
 import 'class_analytics_dashboard_screen.dart';
+import 'context_interventions_screen.dart';
 import 'student_roster_screen.dart';
+import 'verified_outcome_screen.dart';
 
 /// Screen displaying the faculty's authorized teaching contexts for PRE, MID, or END assessment.
 class TeachingContextsScreen extends StatefulWidget {
@@ -90,16 +92,19 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
     final isEnd = widget.stage == 'END';
     final isGapDetection = widget.stage == 'GAP_DETECTION';
     final isAction = widget.stage == 'ACTION';
+    final isVerifiedOutcome = widget.stage == 'VERIFIED_OUTCOME';
 
-    final stageTitle = isEnd
-        ? 'Teaching Contexts • END Assessment'
-        : isGapDetection
-            ? 'Teaching Contexts • Gap Detection'
-            : isAction
-                ? 'Teaching Contexts • Faculty Action'
-                : isMid
-                    ? 'Teaching Contexts • MID Assessment'
-                    : 'Teaching Contexts • PRE Assessment';
+    final stageTitle = isVerifiedOutcome
+        ? 'Teaching Contexts • Verified Outcome'
+        : isEnd
+            ? 'Teaching Contexts • END Assessment'
+            : isGapDetection
+                ? 'Teaching Contexts • Gap Detection'
+                : isAction
+                    ? 'Teaching Contexts • Faculty Action'
+                    : isMid
+                        ? 'Teaching Contexts • MID Assessment'
+                        : 'Teaching Contexts • PRE Assessment';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -238,7 +243,7 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: isEnd
+                              color: isVerifiedOutcome || isEnd
                                   ? const Color(0xFF16A34A).withOpacity(0.12)
                                   : isGapDetection
                                       ? const Color(0xFFE11D48).withOpacity(0.12)
@@ -250,7 +255,7 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Icon(
-                              isEnd
+                              isVerifiedOutcome || isEnd
                                   ? Icons.verified_outlined
                                   : isGapDetection
                                       ? Icons.radar_outlined
@@ -259,7 +264,7 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
                                           : isMid
                                               ? Icons.trending_up
                                               : Icons.fact_check_outlined,
-                              color: isEnd
+                              color: isVerifiedOutcome || isEnd
                                   ? const Color(0xFF16A34A)
                                   : isGapDetection
                                       ? const Color(0xFFE11D48)
@@ -277,18 +282,20 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  isEnd
-                                      ? 'END-Semester Student Assessment'
-                                      : isGapDetection
-                                          ? 'Stage 02 • Gap Detection & ML Roster'
-                                          : isAction
-                                              ? 'Stage 03 • Faculty Action & Interventions'
-                                              : isMid
-                                                  ? 'MID-Semester Student Assessment'
-                                                  : 'PRE-Semester Student Assessment',
+                                  isVerifiedOutcome
+                                      ? 'Stage 04 • Verified Outcome'
+                                      : isEnd
+                                          ? 'END-Semester Student Assessment'
+                                          : isGapDetection
+                                              ? 'Stage 02 • Gap Detection & ML Roster'
+                                              : isAction
+                                                  ? 'Stage 03 • Faculty Action & Interventions'
+                                                  : isMid
+                                                      ? 'MID-Semester Student Assessment'
+                                                      : 'PRE-Semester Student Assessment',
                                   style: AppTypography.bodyMedium.copyWith(
                                     fontWeight: FontWeight.bold,
-                                    color: isEnd
+                                    color: isVerifiedOutcome || isEnd
                                         ? const Color(0xFF16A34A)
                                         : isGapDetection
                                             ? const Color(0xFFE11D48)
@@ -301,15 +308,17 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  isEnd
-                                      ? 'Select a teaching context below to view student learning outcomes and record end-of-semester assessments.'
-                                      : isGapDetection
-                                          ? 'Select a teaching context below to inspect ML risk predictions, risk drivers, and the Attention Roster.'
-                                          : isAction
-                                              ? 'Select a teaching context below to view student profiles, assess progress, and log pedagogical interventions.'
-                                              : isMid
-                                                  ? 'Select a teaching context below to view student progress and record mid-semester assessments.'
-                                                  : 'Select a teaching context below to view the enrolled student roster and record baseline assessments.',
+                                  isVerifiedOutcome
+                                      ? 'Select a teaching context below to view END competency outcomes and CO-PO attainment status.'
+                                      : isEnd
+                                          ? 'Select a teaching context below to view student learning outcomes and record end-of-semester assessments.'
+                                          : isGapDetection
+                                              ? 'Select a teaching context below to inspect ML risk predictions, risk drivers, and the Attention Roster.'
+                                              : isAction
+                                                  ? 'Select a teaching context below to view student profiles, assess progress, and log pedagogical interventions.'
+                                                  : isMid
+                                                      ? 'Select a teaching context below to track mid-semester student progress and learning barriers.'
+                                                      : 'Select a teaching context below to begin capturing pre-semester student perceptions.',
                                   style: AppTypography.caption.copyWith(
                                     color: AppColors.textSecondary,
                                   ),
@@ -390,7 +399,8 @@ class _TeachingContextCard extends StatelessWidget {
     final isEnd = stage == 'END';
     final isGapDetection = stage == 'GAP_DETECTION';
     final isAction = stage == 'ACTION';
-    final assessedCount = isEnd
+    final isVerifiedOutcome = stage == 'VERIFIED_OUTCOME';
+    final assessedCount = isVerifiedOutcome || isEnd
         ? contextItem.endAssessedStudents
         : (isMid || isAction)
             ? contextItem.midAssessedStudents
@@ -400,7 +410,7 @@ class _TeachingContextCard extends StatelessWidget {
         : 0.0;
     final int percent = (progress * 100).round();
 
-    final cardThemeColor = isEnd
+    final cardThemeColor = isVerifiedOutcome || isEnd
         ? const Color(0xFF16A34A)
         : isGapDetection
             ? const Color(0xFFE11D48)
@@ -578,7 +588,15 @@ class _TeachingContextCard extends StatelessWidget {
                   context.read<SliMidProvider>().selectContext(contextItem);
                   context.read<SliEndProvider>().selectContext(contextItem);
 
-                  if (isGapDetection) {
+                  if (isVerifiedOutcome) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => VerifiedOutcomeScreen(
+                          contextItem: contextItem,
+                        ),
+                      ),
+                    );
+                  } else if (isGapDetection) {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => ClassAnalyticsDashboardScreen(
@@ -593,7 +611,9 @@ class _TeachingContextCard extends StatelessWidget {
                   } else if (isAction) {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => const StudentRosterScreen(stage: 'MID'),
+                        builder: (_) => ContextInterventionsScreen(
+                          contextItem: contextItem,
+                        ),
                       ),
                     );
                   } else {
@@ -605,23 +625,27 @@ class _TeachingContextCard extends StatelessWidget {
                   }
                 },
                 icon: Icon(
-                  isGapDetection
-                      ? Icons.radar_outlined
-                      : isAction
-                          ? Icons.psychology_outlined
-                          : Icons.group_outlined,
+                  isVerifiedOutcome
+                      ? Icons.verified_outlined
+                      : isGapDetection
+                          ? Icons.radar_outlined
+                          : isAction
+                              ? Icons.assignment_turned_in_outlined
+                              : Icons.group_outlined,
                   size: 18,
                 ),
                 label: Text(
-                  isEnd
-                      ? 'Open END Survey & Roster'
-                      : isGapDetection
-                          ? 'Open ML Gap Detection & Roster'
-                          : isAction
-                              ? 'Open Roster to Log Interventions'
-                              : isMid
-                                  ? 'Open MID Survey & Roster'
-                                  : 'Open PRE Survey & Roster',
+                  isVerifiedOutcome
+                      ? 'View Verified Outcomes'
+                      : isEnd
+                          ? 'Open END Survey & Roster'
+                          : isGapDetection
+                              ? 'Open ML Gap Detection & Roster'
+                              : isAction
+                                  ? 'Open Context Intervention Tracker'
+                                  : isMid
+                                      ? 'Open MID Survey & Roster'
+                                      : 'Open PRE Survey & Roster',
                   style: AppTypography.button,
                 ),
               ),
@@ -640,18 +664,29 @@ class _TeachingContextCard extends StatelessWidget {
                       ),
                     ),
                     onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => AssessmentManagementScreen(
-                            teachingContext: contextItem,
+                      if (isAction) {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const StudentRosterScreen(stage: 'MID'),
                           ),
-                        ),
-                      );
+                        );
+                      } else {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => AssessmentManagementScreen(
+                              teachingContext: contextItem,
+                            ),
+                          ),
+                        );
+                      }
                     },
-                    icon: const Icon(Icons.edit_calendar_outlined, size: 16),
-                    label: const Text(
-                      'Manage & Share',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    icon: Icon(
+                      isAction ? Icons.group_outlined : Icons.edit_calendar_outlined,
+                      size: 16,
+                    ),
+                    label: Text(
+                      isAction ? 'Student Roster' : 'Manage & Share',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                   ),
                 ),

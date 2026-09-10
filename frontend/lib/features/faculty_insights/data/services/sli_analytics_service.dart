@@ -93,6 +93,51 @@ class SliAnalyticsService {
         semesterId: semesterId,
       );
 
+  /// Fetch context-wide interventions for an authorized teaching context.
+  Future<List<ContextIntervention>> getContextInterventions({
+    required int classId,
+    required String subjectId,
+    required int semesterId,
+    String? status,
+  }) async {
+    final queryParams = <String, String>{};
+    if (status != null && status.isNotEmpty && status != 'ALL') {
+      queryParams['status'] = status;
+    }
+    final queryString = queryParams.isNotEmpty
+        ? '?${Uri(queryParameters: queryParams).query}'
+        : '';
+    final response = await ApiClient.get(
+      '/sli/faculty/analytics/context/$classId/$subjectId/$semesterId/interventions$queryString',
+      token: _token,
+    );
+
+    _handleCommonErrors(response.statusCode, response.body);
+
+    final List<dynamic> data = jsonDecode(response.body) as List<dynamic>;
+    return data
+        .map((item) => ContextIntervention.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Fetch END competency summary for an authorized teaching context.
+  /// Uses the existing backend integration export endpoint.
+  Future<EndCompetencySummary> getEndCompetencySummary({
+    required int classId,
+    required String subjectId,
+    required int semesterId,
+  }) async {
+    final response = await ApiClient.get(
+      '/sli/integration/export/end-competency-summary/$classId/$subjectId/$semesterId',
+      token: _token,
+    );
+
+    _handleCommonErrors(response.statusCode, response.body);
+
+    final Map<String, dynamic> data = jsonDecode(response.body) as Map<String, dynamic>;
+    return EndCompetencySummary.fromJson(data);
+  }
+
   void _handleCommonErrors(int statusCode, String body) {
     if (statusCode == 200 || statusCode == 201) return;
 

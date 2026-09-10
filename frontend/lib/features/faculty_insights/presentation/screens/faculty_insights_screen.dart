@@ -248,7 +248,7 @@ class FacultyInsightsScreen extends StatelessWidget {
                         'color': const Color(0xFF16A34A),
                         'active': true,
                         'actionText': 'Verify Outcomes',
-                        'route': 'END',
+                        'route': 'VERIFIED_OUTCOME',
                       },
                     ];
 
