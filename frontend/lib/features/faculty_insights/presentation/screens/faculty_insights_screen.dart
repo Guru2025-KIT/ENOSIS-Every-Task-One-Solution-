@@ -724,11 +724,15 @@ class _StageCard extends StatelessWidget {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  Text(
-                    (stage['actionText'] as String?) ?? 'Open Assessment',
-                    style: AppTypography.captionBold.copyWith(
-                      color: color,
-                      fontSize: 11,
+                  Flexible(
+                    child: Text(
+                      (stage['actionText'] as String?) ?? 'Open Assessment',
+                      style: AppTypography.captionBold.copyWith(
+                        color: color,
+                        fontSize: 11,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const SizedBox(width: 4),

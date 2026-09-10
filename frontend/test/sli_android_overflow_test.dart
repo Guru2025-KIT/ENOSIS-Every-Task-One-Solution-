@@ -38,7 +38,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Longitudinal Assessment Funnel'), findsOneWidget);
-      expect(find.text('64 Enrolled'), findsOneWidget);
+      expect(find.text('64 Total Enrolled'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 

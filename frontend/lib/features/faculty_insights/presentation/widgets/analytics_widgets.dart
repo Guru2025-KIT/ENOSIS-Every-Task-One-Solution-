@@ -46,7 +46,7 @@ class AssessmentFunnelCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  '${funnel.totalEnrolled} Enrolled',
+                  '${funnel.totalEnrolled} Total Enrolled',
                   style: const TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.bold,
