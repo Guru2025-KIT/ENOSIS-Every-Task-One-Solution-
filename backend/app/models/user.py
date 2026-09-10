@@ -27,6 +27,9 @@ class User(Base):
     full_name = Column(String(255), nullable=False)
     employee_id = Column(String(50), unique=True, nullable=True)
     department = Column(String(100), nullable=True)
+    designation = Column(String(100), nullable=True)
+    phone = Column(String(30), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
     role = Column(Enum(UserRole), default=UserRole.FACULTY, nullable=False)
 
     # Lets an admin delegate "can generate the timetable" to a specific

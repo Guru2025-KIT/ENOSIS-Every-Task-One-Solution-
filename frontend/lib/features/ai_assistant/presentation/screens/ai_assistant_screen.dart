@@ -160,7 +160,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                         suggestion,
                         style: const TextStyle(fontSize: 12, color: AppColors.primary),
                       ),
-                      backgroundColor: AppColors.primary.withOpacity(0.06),
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.06),
                       onPressed: () => _sendMessage(suggestion),
                     );
                   },

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 
 import '../../../core/auth/auth_session.dart';
 import '../../../core/network/api_client.dart';
@@ -36,9 +37,7 @@ class AuthRepository {
     } on AuthException {
       rethrow;
     } catch (e) {
-      // Deliberately generic (not dart:io's SocketException) — that type
-      // doesn't exist on Flutter Web, and this project targets both
-      // Android and Web (see the original architecture doc).
+      debugPrint('[AuthRepository] Login error: $e (resolved baseUrl=${ApiClient.baseUrl})');
       throw AuthException(
         'Could not reach the ENOSIS server. Make sure the backend is running '
         'and ApiClient.baseUrl is set correctly for how you\'re running the app.',

@@ -38,6 +38,11 @@ class ScheduleConfig(Base):
     # works in period-index space, not clock time)
     period_duration_minutes = Column(Integer, nullable=False, default=60)
 
+    # Specific session durations configured by the user
+    lecture_duration_minutes = Column(Integer, nullable=False, default=60)
+    lab_duration_minutes = Column(Integer, nullable=False, default=120)
+    tutorial_duration_minutes = Column(Integer, nullable=False, default=60)
+
     # Wall-clock start time of period 0, e.g. "09:00"
     start_time = Column(String(5), nullable=False, default="09:00")
 
@@ -60,6 +65,7 @@ class ScheduleConfig(Base):
     department_name = Column(String(255), nullable=True)
     academic_year = Column(String(20), nullable=True)   # e.g. "2025-26"
     semester = Column(String(20), nullable=True)         # e.g. "Odd 2025"
+    hod_name = Column(String(255), nullable=True)
 
     # Solver time budget in seconds
     time_limit_seconds = Column(Integer, nullable=False, default=30)

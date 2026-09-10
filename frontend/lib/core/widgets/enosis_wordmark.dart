@@ -19,7 +19,7 @@ class EnosisWordmark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final foreground = onDarkBackground ? Colors.white : AppColors.primary;
-    final background = onDarkBackground ? Colors.white.withOpacity(0.12) : AppColors.primary.withOpacity(0.08);
+    final background = onDarkBackground ? Colors.white.withValues(alpha: 0.12) : AppColors.primary.withValues(alpha: 0.08);
 
     return Container(
       width: size,
@@ -27,7 +27,7 @@ class EnosisWordmark extends StatelessWidget {
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(size * 0.22),
-        border: Border.all(color: foreground.withOpacity(0.6), width: 2),
+        border: Border.all(color: foreground.withValues(alpha: 0.6), width: 2),
       ),
       alignment: Alignment.center,
       child: Text(

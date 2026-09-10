@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -20,7 +19,7 @@ class TtsService {
     try {
       await _flutterTts.setVolume(1.0);
       await _flutterTts.setPitch(1.0);
-      await _flutterTts.setSpeechRate(0.70);
+      await _flutterTts.setSpeechRate(0.62);
       await _flutterTts.setLanguage('en-IN');
     } catch (e) {
       debugPrint('TTS initialization error: $e');

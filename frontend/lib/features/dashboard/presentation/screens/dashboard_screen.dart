@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/auth/auth_session.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../ai_assistant/presentation/screens/ai_assistant_screen.dart';
+import '../../../career/presentation/screens/career_advancement_screen.dart';
 import '../../../copo/presentation/screens/copo_attainment_screen.dart';
 import '../../../copo/presentation/screens/copo_mapping_screen.dart';
 import '../../../faculty_insights/presentation/screens/faculty_insights_screen.dart';
@@ -11,14 +13,18 @@ import '../../../timetable/presentation/screens/generate_timetable_screen.dart';
 import '../../../timetable/presentation/screens/timetable_hub_screen.dart';
 import '../../../todo/presentation/screens/my_day_screen.dart';
 import '../../data/mock_dashboard_data.dart';
+import '../../data/models/dashboard_summary_model.dart';
+import '../providers/attendance_provider.dart';
+import '../providers/dashboard_provider.dart';
+import '../widgets/lecture_attendance_sheet.dart';
 
 /// Redesigned ENOSIS Faculty Dashboard UI
 ///
 /// Features:
 /// - Clean Welcome Header with faculty name & dynamic current date
-/// - 4 Compact Summary Metric Cards (Classes Today, CO-PO Attainment, Syllabus Progress, Pending Tasks)
-/// - Main Content Layout (Today's Schedule + Dynamic Academic Calendar)
-/// - Academic Insights with meaningful course attainment progress
+/// - 4 Compact Summary Metric Cards (Classes Today, Pending Tasks, SLI Attention, Achievements)
+/// - Main Content Layout (Today's Live Schedule + Interactive Attendance + Dynamic Academic Calendar)
+/// - Academic Insights with continuous evaluation progress
 /// - Premium Faculty Insights "From Perception to Proven Outcomes" Intelligence Section
 /// - "Your Workspace" with actionable cards (CO-PO Progress, Generate Timetable, Tasks, Reports)
 /// - ENOSIS AI Assistant quick banner & Recent Academic Activity feed
@@ -38,6 +44,14 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   DateTime _selectedDate = DateTime.now();
   DateTime _calendarMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<DashboardProvider>().loadDashboard(targetDate: _selectedDate);
+    });
+  }
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
@@ -95,6 +109,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           );
         }
         break;
+      case 'Career Advancement':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const CareerAdvancementScreen()),
+        );
+        break;
       default:
         break;
     }
@@ -103,7 +122,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final greetingPrefix = _getGreeting();
-    final facultyName = AuthSession.fullName ?? 'Rachana Patil';
+    final dashboardProvider = context.watch<DashboardProvider>();
+    final summary = dashboardProvider.summary;
+    final facultyName = AuthSession.fullName ?? summary?.facultyName ?? 'Rachana Patil';
     final isMobile = Responsive.isMobile(context);
     final isTablet = Responsive.isTablet(context);
 
@@ -185,8 +206,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
 
-    // ─── 2. Summary Metric Cards (No Attendance) ─────────────────────────
-    final summaryMetrics = MockDashboardData.summaryMetrics;
+    // ─── 2. Summary Metric Cards (Dynamic Live Aggregates) ────────────────
+    final summaryMetrics = [
+      SummaryMetric(
+        title: 'Classes Today',
+        value: '${summary?.classesTodayCount ?? 0}',
+        subtitle: summary != null
+            ? '${summary.classesCompletedCount} completed · ${summary.classesUpcomingCount} upcoming'
+            : (dashboardProvider.isLoading ? 'Loading...' : '0 scheduled'),
+        icon: Icons.school_outlined,
+        accentColor: const Color(0xFF0284C7),
+      ),
+      SummaryMetric(
+        title: 'Pending Tasks',
+        value: '${summary?.pendingTasksCount ?? 0}',
+        subtitle: summary != null
+            ? '${summary.highPriorityTasksCount} high priority'
+            : 'Personal to-dos',
+        icon: Icons.task_alt_outlined,
+        accentColor: const Color(0xFFF4791E),
+      ),
+      SummaryMetric(
+        title: 'SLI Attention',
+        value: '${(summary?.sliAttentionStudentsCount ?? 0) + (summary?.sliCriticalStudentsCount ?? 0)}',
+        subtitle: summary != null
+            ? '${summary.sliCriticalStudentsCount} critical gaps'
+            : 'Student risk alerts',
+        icon: Icons.psychology_outlined,
+        accentColor: const Color(0xFF8B5CF6),
+      ),
+      SummaryMetric(
+        title: 'Achievements',
+        value: '${summary?.verifiedAchievementsCount ?? 0}',
+        subtitle: 'Verified career milestones',
+        icon: Icons.emoji_events_outlined,
+        accentColor: const Color(0xFF16A34A),
+      ),
+    ];
+
     final summaryCardsSection = LayoutBuilder(
       builder: (context, constraints) {
         if (isMobile) {
@@ -235,6 +292,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
 
     // ─── 3. Left Section: Today's Schedule ───────────────────────────────
+    final scheduleSlots = summary?.todaySchedule ?? [];
     final scheduleSection = Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -280,7 +338,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            '4 Sessions · 2 Completed',
+                            summary != null
+                                ? '${summary.classesTodayCount} Sessions · ${summary.classesCompletedCount} Completed'
+                                : 'Daily timetable lectures & labs',
                             style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -315,23 +375,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 16),
           const Divider(height: 1, color: AppColors.divider),
           const SizedBox(height: 14),
-          ...MockDashboardData.todaysScheduleSlots.map((slot) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _ScheduleSlotTile(
-                slot: slot,
-                onTap: () {
-                  if (widget.onNavigateTab != null) {
-                    widget.onNavigateTab!(1);
-                  } else {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const TimetableHubScreen()),
-                    );
-                  }
-                },
+          if (dashboardProvider.isLoading && summary == null)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 32),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (scheduleSlots.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+              alignment: Alignment.center,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.event_available_outlined, size: 40, color: Colors.grey.shade400),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No lectures scheduled for ${_formatDate(_selectedDate)}',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                ],
               ),
-            );
-          }),
+            )
+          else
+            ...scheduleSlots.map((slot) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _ScheduleSlotTile(
+                  slot: slot,
+                  onAttendanceTap: () {
+                    LectureAttendanceSheet.show(
+                      context,
+                      slot: slot,
+                      sessionDate: _selectedDate,
+                      provider: context.read<AttendanceProvider>(),
+                      onAttendanceSaved: () => dashboardProvider.refresh(),
+                    );
+                  },
+                ),
+              );
+            }),
         ],
       ),
     );
@@ -417,7 +500,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _MiniCalendarGrid(
             month: _calendarMonth,
             selectedDate: _selectedDate,
-            onSelectDate: (d) => setState(() => _selectedDate = d),
+            onSelectDate: (d) {
+              setState(() => _selectedDate = d);
+              dashboardProvider.setSelectedDate(d);
+            },
           ),
           const SizedBox(height: 16),
           const Divider(height: 1, color: AppColors.divider),
@@ -441,7 +527,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    '${_formatShortMonthDay(_selectedDate)}: Regular Teaching Day (4 Lectures)',
+                    '${_formatShortMonthDay(_selectedDate)}: ${scheduleSlots.length} Scheduled Lecture${scheduleSlots.length == 1 ? '' : 's'}',
                     style: AppTypography.captionBold.copyWith(
                       color: AppColors.primary,
                       fontSize: 12,
@@ -597,6 +683,142 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             );
           }),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.primary.withOpacity(0.06),
+                  AppColors.secondary.withOpacity(0.08),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.secondary.withOpacity(0.3)),
+            ),
+            child: LayoutBuilder(
+              builder: (context, bannerConstraints) {
+                final isNarrow = bannerConstraints.maxWidth < 500;
+                if (isNarrow) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.secondary,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.auto_stories_rounded, color: Colors.white, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Guided 6-Stage CO-PO Attainment Wizard',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.textPrimary),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '1. Matrix ➔ 2. Roll Call ➔ 3. ISE ➔ 4. MSE/ESE ➔ 5. Survey ➔ 6. Attainment',
+                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.secondary,
+                          foregroundColor: Colors.white,
+                          elevation: 1,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                        label: const Text('Start Workflow ➔', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        onPressed: () {
+                          if (widget.onNavigateTab != null) {
+                            widget.onNavigateTab!(2);
+                          } else {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const CopoAttainmentScreen(courseId: 'CS201', semester: 'Sem 4'),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.secondary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.auto_stories_rounded, color: Colors.white, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Guided 6-Stage CO-PO Attainment Wizard',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.textPrimary),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '1. Matrix ➔ 2. Roll Call ➔ 3. ISE ➔ 4. MSE/ESE ➔ 5. Survey ➔ 6. Attainment',
+                            style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.secondary,
+                        foregroundColor: Colors.white,
+                        elevation: 1,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                      label: const Text('Start Workflow ➔', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      onPressed: () {
+                        if (widget.onNavigateTab != null) {
+                          widget.onNavigateTab!(2);
+                        } else {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const CopoAttainmentScreen(courseId: 'CS201', semester: 'Sem 4'),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
         ],
       ),
     );
@@ -636,10 +858,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: isMobile ? 2 : (isTablet ? 2 : 4),
+            crossAxisCount: isMobile ? 2 : (isTablet ? 3 : 5),
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            childAspectRatio: isMobile ? 0.92 : 1.12,
+            childAspectRatio: isMobile ? 0.90 : (isTablet ? 1.05 : 1.10),
           ),
           itemCount: workspaceItems.length,
           itemBuilder: (context, index) {
@@ -942,21 +1164,29 @@ class _WorkspaceActionCard extends StatelessWidget {
 
 // ─── Schedule Slot Tile Widget ──────────────────────────────────────────
 class _ScheduleSlotTile extends StatelessWidget {
-  final ScheduleSlot slot;
-  final VoidCallback onTap;
+  final TodayScheduleSlotModel slot;
+  final VoidCallback onAttendanceTap;
 
   const _ScheduleSlotTile({
     required this.slot,
-    required this.onTap,
+    required this.onAttendanceTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isRecorded = slot.attendanceRecorded;
+    final statusColor = isRecorded
+        ? const Color(0xFF16A34A)
+        : (slot.status == 'COMPLETED' ? const Color(0xFF0D9488) : const Color(0xFF0284C7));
+    final statusLabel = isRecorded
+        ? 'Recorded'
+        : (slot.status == 'COMPLETED' ? 'Completed' : 'Upcoming');
+
     return Material(
       color: AppColors.background,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        onTap: onTap,
+        onTap: onAttendanceTap,
         borderRadius: BorderRadius.circular(12),
         hoverColor: AppColors.primarySoft.withOpacity(0.5),
         child: Container(
@@ -969,9 +1199,9 @@ class _ScheduleSlotTile extends StatelessWidget {
             children: [
               Container(
                 width: 4,
-                height: 40,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: slot.statusColor,
+                  color: statusColor,
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
@@ -986,7 +1216,7 @@ class _ScheduleSlotTile extends StatelessWidget {
                       runSpacing: 4,
                       children: [
                         Text(
-                          slot.time,
+                          slot.timeRange,
                           style: AppTypography.captionBold.copyWith(
                             color: AppColors.secondary,
                             fontSize: 11.5,
@@ -996,23 +1226,32 @@ class _ScheduleSlotTile extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
-                            color: slot.statusColor.withOpacity(0.1),
+                            color: statusColor.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: Text(
-                            slot.status,
-                            style: TextStyle(
-                              color: slot.statusColor,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isRecorded) ...[
+                                Icon(Icons.check, size: 11, color: statusColor),
+                                const SizedBox(width: 3),
+                              ],
+                              Text(
+                                statusLabel,
+                                style: TextStyle(
+                                  color: statusColor,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      slot.title,
+                      slot.subjectName,
                       style: AppTypography.bodyMedium.copyWith(
                         fontWeight: FontWeight.w700,
                         color: AppColors.textPrimary,
@@ -1021,7 +1260,7 @@ class _ScheduleSlotTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${slot.batch} · ${slot.room}',
+                      '${slot.divisionName} · ${slot.roomName} · Slot ${slot.slotNumber}',
                       style: AppTypography.caption.copyWith(
                         color: AppColors.textSecondary,
                         fontSize: 12,
@@ -1030,7 +1269,32 @@ class _ScheduleSlotTile extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, size: 20, color: AppColors.textTertiary),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: onAttendanceTap,
+                icon: Icon(
+                  isRecorded ? Icons.edit_outlined : Icons.fact_check_outlined,
+                  size: 14,
+                  color: isRecorded ? const Color(0xFF16A34A) : AppColors.primary,
+                ),
+                label: Text(
+                  isRecorded ? 'Edit Attendance' : 'Take Attendance',
+                  style: TextStyle(
+                    color: isRecorded ? const Color(0xFF16A34A) : AppColors.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  side: BorderSide(
+                    color: isRecorded
+                        ? const Color(0xFF86EFAC)
+                        : AppColors.primary.withOpacity(0.3),
+                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
             ],
           ),
         ),

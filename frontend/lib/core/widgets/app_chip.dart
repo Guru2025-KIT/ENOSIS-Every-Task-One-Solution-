@@ -30,6 +30,9 @@ class AppChip extends StatelessWidget {
   factory AppChip.priority(String priority) {
     final Color chipColor;
     switch (priority.toLowerCase()) {
+      case 'urgent':
+        chipColor = const Color(0xFFB71C1C); // Deep Crimson for URGENT
+        break;
       case 'high':
         chipColor = AppColors.error;
         break;
@@ -79,7 +82,7 @@ class AppChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(

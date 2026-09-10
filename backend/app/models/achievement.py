@@ -21,6 +21,8 @@ class AchievementCategory(str, enum.Enum):
     RESEARCH = "research"
     SEMINAR = "seminar"
     TRAINING = "training"
+    WEBINAR = "webinar"
+    COURSE = "course"
     OTHER = "other"
 
 
@@ -45,3 +47,4 @@ class Achievement(Base):
     document_id = Column(String(36), ForeignKey("documents.id"), nullable=True)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
