@@ -2,10 +2,11 @@ class TeachingAssignment {
   final String facultyName;
   final String subjectName;
   final String subjectCode;
-  final String className; // e.g., "SY-A"
-  final String batch; // e.g., "A1, A2" (Leave empty for Theory)
+  final String className;
+  final String batch;
   final int weeklyHours;
-  final String type; // "Theory" or "Lab"
+  final String type;
+  final String jointGroupId; // ✅ NEW FIELD FOR COMBINED CLASSES
 
   TeachingAssignment({
     required this.facultyName,
@@ -15,5 +16,6 @@ class TeachingAssignment {
     required this.batch,
     required this.weeklyHours,
     required this.type,
+    this.jointGroupId = '', // Defaults to empty (no joint group)
   });
 }

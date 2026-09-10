@@ -9,7 +9,6 @@ import '../../../../core/theme/app_typography.dart';
 import '../../models/teaching_assignment.dart';
 import '../../providers/timetable_provider.dart';
 
-// Helper class for Pass 1 parsing
 class _RawRowData {
   final String faculty, rawCode, rawName;
   final int theoryHours, pracHours;
@@ -85,7 +84,6 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
     }
   }
 
-  // ✅ 100% DYNAMIC PARSER (No Hardcoded AIML or Divisions)
   List<String> _extractClasses(String rawClass) {
     if (rawClass.isEmpty) return [];
     String c = rawClass.toUpperCase();
@@ -143,7 +141,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
             results.add('$baseName-$d');
           }
         } else {
-          results.add(baseName); // e.g., "TY-IT". Will be expanded in Pass 2.
+          results.add(baseName);
         }
       }
     }
@@ -220,7 +218,6 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
 
         String lastFaculty = '';
 
-        // PASS 1: Read raw data and extract base classes
         for (int i = headerRowIdx + 1; i < rows.length; i++) {
           final row = rows[i];
           
@@ -249,7 +246,6 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
         break;
       }
 
-      // PASS 2: Build dynamic division map and expand combined classes
       Map<String, Set<String>> deptDivisions = {};
       for (var row in rawRows) {
         for (var cName in row.classNames) {
@@ -261,23 +257,25 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
         }
       }
 
-      final List<TeachingAssignment> parsedAssignments = [];
+            final List<TeachingAssignment> parsedAssignments = [];
       for (var row in rawRows) {
         List<String> finalClassNames = [];
         
         for (var cName in row.classNames) {
           if (cName.split('-').length == 3) {
-            finalClassNames.add(cName); // Already has division
+            finalClassNames.add(cName);
           } else if (deptDivisions.containsKey(cName)) {
-            // Expand combined class (e.g., "TY-IT" -> "TY-IT-A", "TY-IT-B")
             for (var div in deptDivisions[cName]!) {
               finalClassNames.add('$cName-$div');
             }
           } else {
-            // Standalone class with no divisions in the whole sheet (e.g., "TY-DS")
             finalClassNames.add(cName);
           }
         }
+
+        // ✅ DETECT JOINT CLASSES: If there are multiple classes for the same row, they are joint!
+        bool isJoint = finalClassNames.length > 1 && row.theoryHours > 0;
+        String jointId = isJoint ? 'joint_${DateTime.now().millisecondsSinceEpoch}_${row.faculty.hashCode}' : '';
 
         for (String className in finalClassNames) {
           if (row.pracHours > 0) {
@@ -305,6 +303,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
             parsedAssignments.add(TeachingAssignment(
               facultyName: row.faculty, subjectName: row.rawName, subjectCode: row.rawCode,
               className: className, batch: '-', weeklyHours: row.theoryHours, type: 'Theory',
+              jointGroupId: jointId, // ✅ PASS JOINT ID HERE
             ));
           }
         }
@@ -329,7 +328,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Loaded ${parsedAssignments.length} assignments dynamically!'),
+          content: Text('Loaded ${parsedAssignments.length} assignments! Joint classes linked.'),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
         ),

@@ -82,3 +82,20 @@ def require_timetable_manager(current_user: User = Depends(get_current_user)) ->
         status_code=status.HTTP_403_FORBIDDEN,
         detail="This action requires admin access or delegated timetable-management permission.",
     )
+
+
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
+
+
+def get_optional_current_user(
+    token: str | None = Depends(oauth2_scheme_optional),
+    db: Session = Depends(get_db)
+) -> User | None:
+    """Optional authentication dependency — returns User if valid token provided, else None."""
+    if not token:
+        return None
+    user_id = decode_access_token(token)
+    if not user_id:
+        return None
+    return db.query(User).filter(User.id == user_id).first()
+

@@ -1,286 +1,254 @@
-import 'dart:math';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../../../core/network/api_client.dart';
 import '../models/teaching_assignment.dart';
 import '../models/time_slot.dart';
 import '../models/timetable_constraint.dart';
+import 'package:flutter/foundation.dart';
+
 
 class TimetableProvider extends ChangeNotifier {
-  List<TimeSlot> _timeSlots = [];
-  List<TeachingAssignment> _assignments = [];
-  List<TimetableConstraint> _constraints = [];
-
-  Map<String, Map<String, List<String>>> _generatedTimetable = {};
+  final List<TimeSlot> _timeSlots = [];
+  final List<TeachingAssignment> _assignments = [];
+  final List<TimetableConstraint> _constraints = [];
+  final Map<String, Map<String, List<String>>> _generatedTimetable = {};
   bool isTimetableSaved = false;
+  bool _isGenerating = false;
+  String? _generationError;
+  List<String> _conflictingConstraints = [];
 
   List<TimeSlot> get timeSlots => _timeSlots;
   List<TeachingAssignment> get assignments => _assignments;
   List<TimetableConstraint> get constraints => _constraints;
   Map<String, Map<String, List<String>>> get generatedTimetable => _generatedTimetable;
+  bool get isGenerating => _isGenerating;
+  String? get generationError => _generationError;
+  List<String> get conflictingConstraints => _conflictingConstraints;
 
-  List<String> get facultyNames =>
-      _assignments.map((a) => a.facultyName).toSet().toList()..sort();
-      
-  List<String> get subjectNames =>
-      _assignments.map((a) => a.subjectName).toSet().toList()..sort();
+  List<String> get facultyNames => _assignments.map((a) => a.facultyName).toSet().toList()..sort();
+  List<String> get subjectNames => _assignments.map((a) => a.subjectName).toSet().toList()..sort();
+  List<String> get classesAndBatches => _assignments.map((a) => a.className).where((c) => c.isNotEmpty).toSet().toList()..sort();
 
-  List<String> get classesAndBatches {
-    return _assignments.map((a) => a.className).where((c) => c.isNotEmpty).toSet().toList()..sort();
+  void setTimeSlots(List<TimeSlot> slots) { _timeSlots.clear(); _timeSlots.addAll(slots); notifyListeners(); }
+  void setAssignments(List<TeachingAssignment> assignments) { _assignments.clear(); _assignments.addAll(assignments); notifyListeners(); }
+  void addConstraint(TimetableConstraint constraint) { _constraints.add(constraint); notifyListeners(); }
+  void removeConstraint(String id) { _constraints.removeWhere((c) => c.id == id); notifyListeners(); }
+
+  bool _stringMatches(String a, String b) {
+    if (a.isEmpty || b.isEmpty) return false;
+    final t1 = a.toLowerCase().trim();
+    final t2 = b.toLowerCase().trim();
+    if (t1 == t2) return true;
+
+    // Check abbreviation in parentheses e.g. "Data Structures (DS)" -> "ds"
+    final abbrRe = RegExp(r'\(([^)]+)\)');
+    for (final m in [abbrRe.firstMatch(t1), abbrRe.firstMatch(t2)]) {
+      if (m == null) continue;
+      final inner = m.group(1)!.toLowerCase().trim();
+      if (inner.length >= 2 && (t1 == inner || t2 == inner || RegExp('\\b$inner\\b').hasMatch(t1) || RegExp('\\b$inner\\b').hasMatch(t2))) {
+        return true;
+      }
+    }
+
+    const stopWords = {
+      'the', 'and', 'for', 'all', 'should', 'keep', 'lectures', 'lecture',
+      'slot', 'slots', 'between', 'rule', 'have', 'on', 'in', 'at', 'to', 'of',
+      'with', 'if', 'is', 'present', 'free', 'replace', 'fill', 'as',
+      'set', 'from', 'first', 'last', 'only', 'not', 'no', 'avoid'
+    };
+    final w1 = t1.split(RegExp(r'[\s\-_,.]')).map((w) => w.trim()).where((w) => w.length >= 3 && !stopWords.contains(w)).toSet();
+    final w2 = t2.split(RegExp(r'[\s\-_,.]')).map((w) => w.trim()).where((w) => w.length >= 3 && !stopWords.contains(w)).toSet();
+    
+    // Match only full token words (e.g. "MDM" matches "mdm", "Java" matches "java")
+    for (final wa in w1) {
+      if (w2.contains(wa)) return true;
+    }
+    return false;
   }
 
-  void setTimeSlots(List<TimeSlot> slots) {
-    _timeSlots = slots;
-    notifyListeners();
+  String _detectNlpIntent(String text) {
+    final t = text.toLowerCase();
+    if (t.contains('replace') || t.contains('fill')) return 'fill';
+    if (t.contains('between') || t.contains('only in') || t.contains('only at')) return 'whitelist';
+    if (t.contains('not ') || t.contains("don't") || t.contains('unavailable') || t.contains('avoid') || t.contains('no lecture') || t.contains("shouldn't") || t.contains('no theory after lunch')) return 'blacklist';
+    if (t.contains('1st') || t.contains('first') || t.contains('last') || t.contains('keep') || t.contains('fix') || t.contains('assign') || t.contains('schedule') || t.contains('always') || t.contains('set')) return 'fixed';
+    return 'fixed';
   }
 
-  void setAssignments(List<TeachingAssignment> assignments) {
-    _assignments = assignments;
-    notifyListeners();
-  }
-
-  void addConstraint(TimetableConstraint constraint) {
-    _constraints.add(constraint);
-    notifyListeners();
-  }
-
-  void removeConstraint(String id) {
-    _constraints.removeWhere((c) => c.id == id);
-    notifyListeners();
-  }
-
-  // ✅ FIX 1: NLP Parser now searches for Subject Names too!
   void addNaturalLanguageConstraint(String text) {
-    String lowerText = text.toLowerCase();
-    List<String> foundFaculties = facultyNames.where((f) => lowerText.contains(f.toLowerCase())).toList();
-    List<String> foundClasses = classesAndBatches.where((c) => lowerText.contains(c.toLowerCase())).toList();
-    
-    // Search for subjects (check if any part of the text matches a subject)
-    List<String> foundSubjects = subjectNames.where((s) {
-      if (s.isEmpty) return false;
-      return lowerText.contains(s.toLowerCase());
-    }).toList();
+    final intent = _detectNlpIntent(text);
+    final lower = text.toLowerCase();
 
-    List<String> days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    List<String> foundDays = days.where((d) => lowerText.contains(d)).map((d) => d[0].toUpperCase() + d.substring(1)).toList();
-    
-    List<int> foundSlots = [];
-    if (lowerText.contains('1st') || lowerText.contains('first')) foundSlots.add(1);
-    if (lowerText.contains('2nd') || lowerText.contains('second')) foundSlots.add(2);
-    if (lowerText.contains('3rd') || lowerText.contains('third')) foundSlots.add(3);
-    if (lowerText.contains('4th') || lowerText.contains('fourth')) foundSlots.add(4);
-    if (lowerText.contains('last')) {
-      int lastSlot = timeSlots.where((s) => !s.isBreak).length;
-      if (lastSlot > 0) foundSlots.add(lastSlot);
+    // If intent is 'fill' (e.g. "Replace free lecture with leetcode"), don't attach random subjects/faculties
+    final foundFaculties = intent == 'fill'
+        ? <String>[]
+        : facultyNames.where((f) => f.isNotEmpty && _stringMatches(f, text)).toList();
+    final foundSubjects = intent == 'fill'
+        ? <String>[]
+        : subjectNames.where((s) => s.isNotEmpty && _stringMatches(s, text)).toList();
+    final foundClasses = intent == 'fill'
+        ? <String>[]
+        : classesAndBatches.where((c) {
+            if (c.isEmpty) return false;
+            final cNorm = c.toLowerCase().replaceAll(RegExp(r'[-_]'), ' ');
+            return lower.contains(cNorm) || _stringMatches(c, text);
+          }).toSet().toList();
+
+    const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    final foundDays = dayNames.where((d) => lower.contains(d)).map((d) => '${d[0].toUpperCase()}${d.substring(1)}').toList();
+
+    final foundSlots = <int>[];
+    final rangeRe = RegExp(r'(?:lecture|slot)?\s*([1-8])\s*(?:to|-|and)\s*([1-8])');
+    final rm = rangeRe.firstMatch(lower);
+    if (rm != null) {
+      final start = int.parse(rm.group(1)!);
+      final end = int.parse(rm.group(2)!);
+      if (start <= end) { for (int s = start; s <= end; s++) { foundSlots.add(s); } }
+    }
+    if (foundSlots.isEmpty) {
+      const ords = {'1st': 1, 'first': 1, '2nd': 2, 'second': 2, '3rd': 3, 'third': 3, '4th': 4, 'fourth': 4, '5th': 5, 'fifth': 5, '6th': 6, 'sixth': 6, '7th': 7, 'seventh': 7, '8th': 8, 'eighth': 8};
+      for (final e in ords.entries) { if (lower.contains(e.key)) foundSlots.add(e.value); }
+      if (lower.contains('last')) {
+        final last = _timeSlots.where((s) => !s.isBreak).length;
+        if (last > 0) foundSlots.add(last);
+      }
     }
 
     _constraints.add(TimetableConstraint(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      category: 'NLP Rule: "$text"',
+      category: 'NLP|$intent|$text',
       facultyNames: foundFaculties,
-      subjectNames: foundSubjects, // Now populated!
+      subjectNames: foundSubjects,
       classNames: foundClasses,
       days: foundDays,
-      slotNumbers: foundSlots.isNotEmpty ? foundSlots : [1, 2, 3, 4, 5, 6, 7, 8],
+      slotNumbers: foundSlots.isNotEmpty ? foundSlots : [],
     ));
     notifyListeners();
   }
 
-  void generateTimetable() {
+  // ─────────────────────────────────────────────────────────────────────────
+  // generateTimetable — calls POST /timetable/generate (CP-SAT solver)
+  // ─────────────────────────────────────────────────────────────────────────
+   Future<void> generateTimetable() async {
     _generatedTimetable.clear();
+    _generationError = null;
+    _conflictingConstraints = [];
     isTimetableSaved = false;
-
-    List<String> classesToGenerate = _assignments.map((a) => a.className).toSet().toList();
-    List<String> allDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    
-    Map<String, bool> facultySchedule = {};
-    final random = Random();
-
-    List<String> holidays = [];
-    for (var con in _constraints) {
-      if (con.category.contains('Holiday')) {
-        holidays.addAll(con.days);
-      }
-    }
-    
-    List<String> workingDays = allDays.where((d) => !holidays.contains(d)).toList();
-
-    // 1. INITIALIZE GRIDS
-    for (String className in classesToGenerate) {
-      _generatedTimetable[className] = {};
-      for (var day in allDays) {
-        for (var slot in _timeSlots) {
-          if (holidays.contains(day)) {
-            _generatedTimetable[className]!['${day}_${slot.lectureNumber}'] = ['Holiday', '', ''];
-          } else if (slot.isBreak) {
-            _generatedTimetable[className]!['${day}_${slot.lectureNumber}'] = ['Break', '', ''];
-          } else {
-            _generatedTimetable[className]!['${day}_${slot.lectureNumber}'] = ['Free', '', ''];
-          }
-        }
-      }
-    }
-
-    // 2. APPLY FIXED CONSTRAINTS & NLP RULES FIRST
-    for (var con in _constraints) {
-      if (con.category.contains('Fixed Subject Slot') || con.category.contains('NLP Rule')) {
-        
-        List<String> daysToApply = con.days.isEmpty ? workingDays : con.days;
-        
-        for (String day in daysToApply) {
-          if (holidays.contains(day)) continue;
-          for (int slotNum in con.slotNumbers) {
-            String cellKey = '${day}_$slotNum';
-            
-            List<String> targetClasses = classesToGenerate.where((c) {
-              if (con.classNames.isEmpty) return true;
-              return con.classNames.any((cn) => c == cn || c.startsWith(cn));
-            }).toList();
-
-            for (String className in targetClasses) {
-              var cellData = _generatedTimetable[className]?[cellKey];
-              if (cellData == null || cellData[0] != 'Free') continue;
-
-              String combinedClassName = className.contains('-') ? className.substring(0, className.lastIndexOf('-')) : className;
-              var classAssignments = _assignments.where((a) => 
-                a.className == className || a.className == combinedClassName
-              ).toList();
-
-              TeachingAssignment? assignToPlace;
-
-              // ✅ Now it will look for Subjects extracted from NLP
-              if (con.subjectNames.isNotEmpty) {
-                assignToPlace = classAssignments.cast<TeachingAssignment?>().firstWhere(
-                  (a) => con.subjectNames.contains(a!.subjectName), 
-                  orElse: () => null
-                );
-              } else if (con.facultyNames.isNotEmpty) {
-                assignToPlace = classAssignments.cast<TeachingAssignment?>().firstWhere(
-                  (a) => con.facultyNames.contains(a!.facultyName), 
-                  orElse: () => null
-                );
-              }
-
-              if (assignToPlace != null) {
-                bool isCombined = assignToPlace.className == combinedClassName;
-                String facKey = '${assignToPlace.facultyName}_$cellKey';
-                
-                if (isCombined || !facultySchedule.containsKey(facKey)) {
-                   _generatedTimetable[className]![cellKey] = [assignToPlace.subjectName, assignToPlace.facultyName, 'Fixed'];
-                   facultySchedule[facKey] = true;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // 3. SCHEDULE LABS (2 consecutive slots)
-    for (String className in classesToGenerate) {
-      String combinedClassName = className.contains('-') ? className.substring(0, className.lastIndexOf('-')) : className;
-      var classAssignments = _assignments.where((a) => 
-        a.className == className || a.className == combinedClassName
-      ).toList();
-
-      var labAssignments = classAssignments.where((a) => a.type == 'Lab').toList();
-      for (var lab in labAssignments) {
-        String targetBatch = lab.batch == 'Single Batch' ? (random.nextBool() ? 'Batch 1' : 'Batch 2') : lab.batch;
-        int scheduled = 0;
-        int attempts = 0;
-
-        while (scheduled < 2 && attempts < 100) {
-          attempts++;
-          String randomDay = workingDays[random.nextInt(workingDays.length)];
-          var freeSlots = _timeSlots.where((s) => !s.isBreak).toList();
-          if (freeSlots.length < 2) break;
-
-          int startIdx = random.nextInt(freeSlots.length - 1);
-          var slot1 = freeSlots[startIdx];
-          var slot2 = freeSlots[startIdx + 1];
-
-          if (slot1.lectureNumber + 1 != slot2.lectureNumber) continue;
-
-          String cellKey1 = '${randomDay}_${slot1.lectureNumber}';
-          String cellKey2 = '${randomDay}_${slot2.lectureNumber}';
-
-          var cell1Data = _generatedTimetable[className]?[cellKey1];
-          var cell2Data = _generatedTimetable[className]?[cellKey2];
-
-          if (cell1Data == null || cell2Data == null) continue;
-
-          bool cell1Free = cell1Data[0] == 'Free' || cell1Data[2] != targetBatch;
-          bool cell2Free = cell2Data[0] == 'Free' || cell2Data[2] != targetBatch;
-          
-          String facKey1 = '${lab.facultyName}_$cellKey1';
-          String facKey2 = '${lab.facultyName}_$cellKey2';
-          bool isCombined = lab.className == combinedClassName;
-          bool facFree = isCombined || (!facultySchedule.containsKey(facKey1) && !facultySchedule.containsKey(facKey2));
-
-          // ✅ FIX 2: Check ALL constraints for faculty unavailability (Structured + NLP)
-          bool isFacUnavailable = _constraints.any((con) {
-            if (con.facultyNames.contains(lab.facultyName)) {
-              return con.days.contains(randomDay) && (con.slotNumbers.contains(slot1.lectureNumber) || con.slotNumbers.contains(slot2.lectureNumber));
-            }
-            return false;
-          });
-
-          if (cell1Free && cell2Free && facFree && !isFacUnavailable) {
-            _generatedTimetable[className]![cellKey1] = [lab.subjectName, lab.facultyName, targetBatch];
-            _generatedTimetable[className]![cellKey2] = [lab.subjectName, lab.facultyName, targetBatch];
-            facultySchedule[facKey1] = true;
-            facultySchedule[facKey2] = true;
-            scheduled = 2;
-          }
-        }
-      }
-    }
-
-    // 4. SCHEDULE THEORY (1 slot per hour)
-    for (String className in classesToGenerate) {
-      String combinedClassName = className.contains('-') ? className.substring(0, className.lastIndexOf('-')) : className;
-      var classAssignments = _assignments.where((a) => 
-        a.className == className || a.className == combinedClassName
-      ).toList();
-
-      var theoryAssignments = classAssignments.where((a) => a.type == 'Theory').toList();
-      for (var assign in theoryAssignments) {
-        int scheduled = 0;
-        int attempts = 0;
-        while (scheduled < assign.weeklyHours && attempts < 100) {
-          attempts++;
-          String randomDay = workingDays[random.nextInt(workingDays.length)];
-          var freeSlots = _timeSlots.where((s) => !s.isBreak).toList();
-          var slot = freeSlots[random.nextInt(freeSlots.length)];
-          String cellKey = '${randomDay}_${slot.lectureNumber}';
-
-          var cellData = _generatedTimetable[className]?[cellKey];
-          if (cellData == null) continue;
-
-          bool classFree = cellData[0] == 'Free';
-          String facKey = '${assign.facultyName}_$cellKey';
-          bool isCombined = assign.className == combinedClassName;
-          bool facFree = isCombined || !facultySchedule.containsKey(facKey);
-
-          // ✅ FIX 2: Check ALL constraints for faculty unavailability (Structured + NLP)
-          bool isFacUnavailable = _constraints.any((con) {
-            if (con.facultyNames.contains(assign.facultyName)) {
-              return con.days.contains(randomDay) && con.slotNumbers.contains(slot.lectureNumber);
-            }
-            return false;
-          });
-
-          if (classFree && facFree && !isFacUnavailable) {
-            _generatedTimetable[className]![cellKey] = [assign.subjectName, assign.facultyName, 'All'];
-            facultySchedule[facKey] = true;
-            scheduled++;
-          }
-        }
-      }
-    }
+    _isGenerating = true;
     notifyListeners();
+
+    try {
+      // ── 1. Build request payload ──────────────────────────────────────────
+      final assignmentsPayload = _assignments.map((a) => {
+        'facultyName': a.facultyName,
+        'subjectName': a.subjectName,
+        'className': a.className,
+        'type': a.type,
+        'batch': a.batch,
+        'weeklyHours': a.weeklyHours,
+        'joint_group_id': a.jointGroupId,
+      }).toList();
+
+      final timeSlotsPayload = _timeSlots.map((s) => {
+        'slot_number': s.lectureNumber,
+        'slotNumber': s.lectureNumber,
+        'lectureNumber': s.lectureNumber,
+        'startTime': s.startTime,
+        'start_time': s.startTime,
+        'endTime': s.endTime,
+        'end_time': s.endTime,
+        'isBreak': s.isBreak,
+        'is_break': s.isBreak,
+      }).toList();
+
+            final constraintsPayload = _constraints.map((c) => {
+        'id': c.id,
+        'category': c.category,
+        'intent': _resolveIntent(c.category), // ✅ ADD THIS LINE
+        'facultyNames': c.facultyNames,
+        'subjectNames': c.subjectNames,
+        'classNames': c.classNames,
+        'days': c.days,
+        'slotNumbers': c.slotNumbers,
+      }).toList();
+      // ── 2. Detect combined / joint class groups ───────────────────────────
+      final groupMap = <String, Set<String>>{};
+      for (final a in _assignments) {
+        final parts = a.className.split('-');
+        if (parts.length == 3) {
+          final parentKey = '${parts[0]}-${parts[1]}';
+          groupMap.putIfAbsent(parentKey, () => <String>{}).add(a.className);
+        }
+      }
+      final combinedGroups = groupMap.values
+          .where((g) => g.length > 1)
+          .map((g) => g.toList())
+          .toList();
+
+      final payload = <String, dynamic>{
+        'assignments': assignmentsPayload,
+        'time_slots': timeSlotsPayload,
+        'constraints': constraintsPayload,
+        'combined_groups': combinedGroups,
+        'time_limit_seconds': 30,
+      };
+
+      // ── 3. Call the endpoint ──────────────────────────────────────────────
+      final response = await ApiClient.postJson('/timetable/generate', payload);
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+
+      final status = body['status'] as String? ?? 'UNKNOWN';
+
+      if (status == 'OPTIMAL' || status == 'FEASIBLE') {
+        // ── 4a. Parse timetable into _generatedTimetable ──────────────────
+        final raw = body['timetable'] as Map<String, dynamic>? ?? {};
+        for (final entry in raw.entries) {
+          final className = entry.key;
+          final slots = entry.value as Map<String, dynamic>;
+          final grid = <String, List<String>>{};
+          for (final slot in slots.entries) {
+            final cellList = slot.value as List<dynamic>;
+            grid[slot.key] = cellList.map((e) => e.toString()).toList();
+          }
+          _generatedTimetable[className] = grid;
+        }
+        _generationError = null;
+        _conflictingConstraints = [];
+      } else {
+        // ── 4b. INFEASIBLE / UNKNOWN ──────────────────────────────────────
+        final conflicts = body['conflictingConstraints'];
+        if (conflicts is List) {
+          _conflictingConstraints = conflicts.map((e) => e.toString()).toList();
+        }
+        final msg = body['message'] as String?;
+        _generationError = msg?.isNotEmpty == true
+            ? msg!
+            : 'The solver could not find a valid timetable with the current assignments and constraints.';
+      }
+    } catch (e) {
+      _generationError = 'Network or server error: $e';
+    } finally {
+      _isGenerating = false;
+      notifyListeners();
+    }
   }
 
-  void saveTimetable() {
-    isTimetableSaved = true;
-    notifyListeners();
+  String _resolveIntent(TimetableConstraint con) {
+    if (con.category.startsWith('fixed|')) return 'fixed';
+    if (con.category.startsWith('blacklist|')) return 'blacklist';
+    if (con.category.startsWith('whitelist|')) return 'whitelist';
+    if (con.category.startsWith('fill|')) return 'fill';
+    if (con.category.startsWith('holiday|')) return 'holiday';
+    if (con.category.startsWith('parallel|')) return 'parallel';
+    if (con.category.startsWith('NLP|')) {
+      final parts = con.category.split('|');
+      if (parts.length >= 2) return parts[1];
+    }
+    final cat = con.category.toLowerCase();
+    if (cat.contains('holiday')) return 'holiday';
+    if (cat.contains('fixed') || cat.contains('filled')) return 'fixed';
+    return 'blacklist';
   }
+
+  void saveTimetable() { isTimetableSaved = true; notifyListeners(); }
 }

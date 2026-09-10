@@ -42,17 +42,76 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
 
   Future<void> _startGeneration() async {
     setState(() => _isGenerating = true);
-    await Future.delayed(const Duration(seconds: 2)); // Simulate algorithm thinking
     
-    context.read<TimetableProvider>().generateTimetable();
+    final provider = context.read<TimetableProvider>();
+    await provider.generateTimetable(); // Calls backend
     
-    final classes = context.read<TimetableProvider>().generatedTimetable.keys.toList();
+    final classes = provider.generatedTimetable.keys.toList();
     if (classes.isNotEmpty) {
       _selectedClass = classes.first;
     }
 
     if (!mounted) return;
     setState(() => _isGenerating = false);
+
+    // ✅ SHOW POP-UP IF CONSTRAINTS WERE IGNORED
+    if (provider.generationError != null) {
+      _showInfeasibleDialog(provider.generationError!);
+    } else if (provider.conflictingConstraints.isNotEmpty) {
+      _showRelaxedDialog(provider.conflictingConstraints);
+    }
+  }
+
+  // ✅ Single, clean version of the Infeasible Dialog
+  void _showInfeasibleDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cannot Generate Timetable'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRelaxedDialog(List<String> conflicts) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Timetable Generated with Warnings'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: conflicts.length,
+            itemBuilder: (context, index) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(conflicts[index], style: const TextStyle(fontSize: 13))),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -89,7 +148,7 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
                   const SizedBox(height: 24),
                   Text('Generating Timetable...', style: AppTypography.h3),
                   const SizedBox(height: 8),
-                  Text('Splitting batches & assigning labs...', style: AppTypography.bodySecondary),
+                  Text('Applying CSP Algorithm & Constraints...', style: AppTypography.bodySecondary),
                 ],
               ),
             )
@@ -180,9 +239,9 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
           child: _selectedClass == null
               ? const Center(child: Text('Select a class'))
               : SingleChildScrollView(
-                  scrollDirection: Axis.vertical, // ✅ ADDED VERTICAL SCROLL
+                  scrollDirection: Axis.vertical, 
                   child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal, // ✅ KEPT HORIZONTAL SCROLL
+                    scrollDirection: Axis.horizontal, 
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Table(

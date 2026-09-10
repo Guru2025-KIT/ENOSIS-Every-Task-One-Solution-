@@ -16,12 +16,22 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
     'Faculty Unavailable',
     'Fixed Subject Slot',
     'No Theory After Lunch',
-    'Holiday / College Closed', // Added Holiday Option
+    'Holiday / College Closed',
     'Natural Language Rule', 
   ];
   
   String _selectedCategory = 'Faculty Unavailable';
   String _naturalLanguageText = '';
+
+  // ✅ FIX: Match the exact string used in initialization
+  String _selectedIntent = 'Block from Slot (Unavailable)'; 
+  final List<String> _intents = [
+    'Fix to Slot (Force)',
+    'Block from Slot (Unavailable)',
+    'Fill Empty Slots',
+    'Holiday / College Closed',
+    'Parallel / Combined Session' // NEW
+  ];
 
   final List<String> _selectedFaculties = [];
   final List<String> _selectedSubjects = [];
@@ -192,8 +202,8 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
     );
   }
 
+   
   void _addConstraint() {
-    // Handle Natural Language Rule separately
     if (_selectedCategory == 'Natural Language Rule') {
       if (_naturalLanguageText.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -215,15 +225,22 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
       return;
     }
 
-    // REMOVED compulsory validations. You can add a rule with just Days, or just Faculty, etc.
-    if (_selectedDays.isEmpty && _selectedCategory != 'Holiday / College Closed') {
+    if (_selectedDays.isEmpty && _selectedIntent != 'Holiday / College Closed' && _selectedIntent != 'Fill Empty Slots' && _selectedIntent != 'Parallel / Combined Session') {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select at least one day.')));
       return;
     }
 
+    // ✅ MAP INTENT TO CODE
+    String intentCode = 'blacklist';
+    if (_selectedIntent == 'Fix to Slot (Force)') intentCode = 'fixed';
+    if (_selectedIntent == 'Block from Slot (Unavailable)') intentCode = 'blacklist';
+    if (_selectedIntent == 'Fill Empty Slots') intentCode = 'fill';
+    if (_selectedIntent == 'Holiday / College Closed') intentCode = 'holiday';
+    if (_selectedIntent == 'Parallel / Combined Session') intentCode = 'parallel'; // NEW
+
     final newConstraint = TimetableConstraint(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      category: _selectedCategory,
+      category: '$intentCode|$_selectedCategory', 
       facultyNames: List.from(_selectedFaculties),
       subjectNames: List.from(_selectedSubjects),
       classNames: List.from(_selectedClasses),
@@ -249,8 +266,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
     final classList = provider.classesAndBatches; 
     final constraints = provider.constraints;
 
-    // Hide form fields if Holiday or NLP is selected
-    bool showStandardForm = _selectedCategory != 'Natural Language Rule' && _selectedCategory != 'Holiday / College Closed';
+    bool showStandardForm = _selectedCategory != 'Natural Language Rule' && _selectedIntent != 'Holiday / College Closed' && _selectedIntent != 'Fill Empty Slots';
 
     return Scaffold(
       appBar: AppBar(
@@ -273,11 +289,19 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
                     const SizedBox(height: 16),
                     
                     DropdownButtonFormField<String>(
+                      value: _selectedIntent,
+                      decoration: const InputDecoration(labelText: 'Rule Action', border: OutlineInputBorder()),
+                      items: _intents.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(),
+                      onChanged: (val) => setState(() => _selectedIntent = val!),
+                    ),
+                    const SizedBox(height: 16),
+
+                    DropdownButtonFormField<String>(
                       value: _selectedCategory,
-                      decoration: const InputDecoration(labelText: 'Constraint Type', border: OutlineInputBorder()),
+                      decoration: const InputDecoration(labelText: 'Constraint Category', border: OutlineInputBorder()),
                       items: [
                         ..._constraintCategories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
-                        const DropdownMenuItem(value: '__add_new__', child: Text('➕ Add Custom Type...', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold))),
+                        const DropdownMenuItem(value: '__add_new__', child: Text('➕ Add Custom Category...', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold))),
                       ],
                       onChanged: (val) {
                         if (val == '__add_new__') _addCustomCategory();
@@ -297,9 +321,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
                         ),
                         onChanged: (val) => _naturalLanguageText = val,
                       )
-                    else if (_selectedCategory == 'Holiday / College Closed')
-                      const Text('Select the days below that are holidays. The generator will leave these days blank.', style: TextStyle(color: Colors.grey))
-                    else ...[
+                    else if (showStandardForm) ...[
                       _buildMultiSelectField(label: 'Faculty / Guest', allOptions: facultyList, selectedItems: _selectedFaculties),
                       const SizedBox(height: 12),
                       _buildMultiSelectField(label: 'Subject', allOptions: subjectList, selectedItems: _selectedSubjects),
@@ -307,7 +329,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
                       _buildMultiSelectField(label: 'Class / Batch', allOptions: classList, selectedItems: _selectedClasses),
                     ],
 
-                    if (showStandardForm || _selectedCategory == 'Holiday / College Closed') ...[
+                    if (showStandardForm || _selectedIntent == 'Holiday / College Closed') ...[
                       const SizedBox(height: 16),
                       const Text('Select Days', style: TextStyle(fontSize: 12, color: Colors.grey)),
                       Wrap(
@@ -332,7 +354,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
 
                     if (showStandardForm) ...[
                       const SizedBox(height: 16),
-                      const Text('Applies to Slots (Optional: Select multiple for Labs)', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      const Text('Applies to Slots (Select multiple for Labs)', style: TextStyle(fontSize: 12, color: Colors.grey)),
                       Wrap(
                         spacing: 8.0,
                         runSpacing: 4.0,
@@ -387,7 +409,12 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
                   
                   return ListTile(
                     leading: const Icon(Icons.push_pin_outlined, color: AppColors.secondary),
-                    title: Text(c.category, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    title: Text(
+                      c.category.startsWith('NLP|')
+                          ? 'NLP Rule: "${c.category.split('|').last}"'
+                          : c.category.split('|').last, 
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     subtitle: Text(
                       details.isEmpty ? 'Applied to selected days/slots.' : '${details.join("\n")}\nDays: ${c.days.join(", ")} | Slots: ${c.slotNumbers.join(", ")}', 
                       style: const TextStyle(height: 1.4)
