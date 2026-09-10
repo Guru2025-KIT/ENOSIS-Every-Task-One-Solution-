@@ -1,17 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 import 'package:enosis/features/career/data/achievement_repository.dart';
 import 'package:enosis/features/career/presentation/screens/career_advancement_screen.dart';
 import 'package:enosis/features/dashboard/presentation/screens/dashboard_screen.dart';
+import 'package:enosis/features/dashboard/presentation/providers/dashboard_provider.dart';
+import 'package:enosis/features/dashboard/presentation/providers/attendance_provider.dart';
 import 'package:enosis/core/theme/app_theme.dart';
 
 void main() {
   Widget createTestWidget({required Size screenSize, required Widget child}) {
-    return MaterialApp(
-      theme: AppTheme.lightTheme,
-      home: MediaQuery(
-        data: MediaQueryData(size: screenSize),
-        child: child,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => DashboardProvider()),
+        ChangeNotifierProvider(create: (_) => AttendanceProvider()),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: MediaQuery(
+          data: MediaQueryData(size: screenSize),
+          child: child,
+        ),
       ),
     );
   }

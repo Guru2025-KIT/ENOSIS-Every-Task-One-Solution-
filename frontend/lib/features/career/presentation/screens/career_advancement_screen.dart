@@ -364,148 +364,700 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
               return const Center(child: CircularProgressIndicator());
             }
 
-          if (snapshot.hasError) {
-            final message = snapshot.error is AchievementException
-                ? (snapshot.error as AchievementException).message
-                : 'Something went wrong.';
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
+            final allAchievements = snapshot.data ?? [];
+
+            // Apply filter & search
+            final filteredAchievements = allAchievements.where((item) {
+              final matchesFilter = _selectedFilter == 'all' || item.achievementType == _selectedFilter;
+              final q = _searchQuery.toLowerCase().trim();
+              final matchesSearch = q.isEmpty ||
+                  item.title.toLowerCase().contains(q) ||
+                  (item.organization?.toLowerCase().contains(q) ?? false) ||
+                  (item.description?.toLowerCase().contains(q) ?? false);
+              return matchesFilter && matchesSearch;
+            }).toList();
+
+            // Compute summary metrics
+            final certsCount = allAchievements.where((a) => a.achievementType == 'certification' || a.achievementType == 'course').length;
+            final fdpCount = allAchievements.where((a) => a.achievementType == 'fdp' || a.achievementType == 'workshop' || a.achievementType == 'webinar').length;
+            final pubCount = allAchievements.where((a) => a.achievementType == 'publication' || a.achievementType == 'research' || a.achievementType == 'conference').length;
+
+            return SingleChildScrollView(
+              padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 12 : 24,
+                vertical: isMobile ? 14 : 20,
+              ),
+              child: ResponsiveCenter(
+                maxWidth: Responsive.maxWideContentWidth,
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(message, style: AppTypography.bodySecondary, textAlign: TextAlign.center),
-                    const SizedBox(height: 12),
-                    OutlinedButton(onPressed: _refresh, child: const Text('Retry')),
+                    // ─── Header Section (Title + Subtitle + Primary CTA) ────
+                    Container(
+                      padding: EdgeInsets.symmetric(vertical: isMobile ? 8 : 12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.secondary.withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: const Icon(
+                                        Icons.workspace_premium_outlined,
+                                        color: AppColors.secondary,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'Career Advancement',
+                                        style: (isMobile ? AppTypography.h3 : AppTypography.h1).copyWith(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Track your professional achievements and growth.',
+                                  style: AppTypography.bodySecondary.copyWith(
+                                    color: AppColors.textSecondary,
+                                    fontSize: isMobile ? 13 : 14.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            onPressed: _openAddDialog,
+                            icon: const Icon(Icons.add, size: 18),
+                            label: Text(
+                              isMobile ? 'Add' : '+ Add Achievement',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.secondary,
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: isMobile ? 14 : 20,
+                                vertical: isMobile ? 10 : 14,
+                              ),
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // ─── Summary Metric Cards ──────────────────────────────
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final statItems = [
+                          _StatCardData(
+                            title: 'Total Logged',
+                            count: '${allAchievements.length}',
+                            subtitle: 'All milestones',
+                            icon: Icons.emoji_events_outlined,
+                            accentColor: AppColors.primary,
+                          ),
+                          _StatCardData(
+                            title: 'Certifications',
+                            count: '$certsCount',
+                            subtitle: 'Courses & certificates',
+                            icon: Icons.card_membership_outlined,
+                            accentColor: AppColors.secondary,
+                          ),
+                          _StatCardData(
+                            title: 'FDPs & Workshops',
+                            count: '$fdpCount',
+                            subtitle: 'Development programs',
+                            icon: Icons.school_outlined,
+                            accentColor: const Color(0xFF6366F1),
+                          ),
+                          _StatCardData(
+                            title: 'Research & Pubs',
+                            count: '$pubCount',
+                            subtitle: 'Papers & patents',
+                            icon: Icons.menu_book_outlined,
+                            accentColor: const Color(0xFF16A34A),
+                          ),
+                        ];
+
+                        if (isMobile) {
+                          return GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 10,
+                              mainAxisSpacing: 10,
+                              childAspectRatio: 1.4,
+                            ),
+                            itemCount: statItems.length,
+                            itemBuilder: (context, index) => _StatCard(data: statItems[index]),
+                          );
+                        } else if (isTablet) {
+                          return GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 14,
+                              mainAxisSpacing: 14,
+                              childAspectRatio: 2.3,
+                            ),
+                            itemCount: statItems.length,
+                            itemBuilder: (context, index) => _StatCard(data: statItems[index]),
+                          );
+                        } else {
+                          return Row(
+                            children: statItems
+                                .map((item) => Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                                        child: _StatCard(data: item),
+                                      ),
+                                    ))
+                                .toList(),
+                          );
+                        }
+                      },
+                    ),
+
+                    const SizedBox(height: 22),
+
+                    // ─── Search & Category Filter Bar ───────────────────────
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.border),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.02),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Search field
+                          TextField(
+                            controller: _searchController,
+                            onChanged: (v) => setState(() => _searchQuery = v),
+                            decoration: InputDecoration(
+                              hintText: 'Search achievements by title, organization or topic...',
+                              hintStyle: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+                              prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary, size: 20),
+                              suffixIcon: _searchQuery.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear, size: 18),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() => _searchQuery = '');
+                                      },
+                                    )
+                                  : null,
+                              filled: true,
+                              fillColor: AppColors.background,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(color: AppColors.border),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(color: AppColors.border),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // Category filter pills
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                _FilterPill(
+                                  label: 'All (${allAchievements.length})',
+                                  isSelected: _selectedFilter == 'all',
+                                  onTap: () => setState(() => _selectedFilter = 'all'),
+                                ),
+                                ...achievementTypeOptions.map((opt) {
+                                  final count = allAchievements.where((a) => a.achievementType == opt.key).length;
+                                  return _FilterPill(
+                                    label: '${opt.shortLabel}${count > 0 ? ' ($count)' : ''}',
+                                    isSelected: _selectedFilter == opt.key,
+                                    onTap: () => setState(() => _selectedFilter = opt.key),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // ─── Achievement List / Empty State ─────────────────────
+                    if (filteredAchievements.isEmpty) ...[
+                      _EmptyStateView(
+                        isFiltered: _searchQuery.isNotEmpty || _selectedFilter != 'all',
+                        onAddTap: _openAddDialog,
+                        onResetFilter: () {
+                          _searchController.clear();
+                          setState(() {
+                            _selectedFilter = 'all';
+                            _searchQuery = '';
+                          });
+                        },
+                      ),
+                    ] else ...[
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: filteredAchievements.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final achievement = filteredAchievements[index];
+                          return _AchievementItemCard(
+                            achievement: achievement,
+                            onViewDocument: () => _viewDocumentModal(achievement),
+                            onDelete: () => _deleteAchievement(achievement),
+                            formatDate: _formatDate,
+                          );
+                        },
+                      ),
+                    ],
+
+                    const SizedBox(height: 32),
                   ],
                 ),
               ),
             );
-          }
+          },
+        ),
+      ),
+    );
+  }
+}
 
-          final achievements = snapshot.data ?? [];
-          if (achievements.isEmpty) {
-            return const EmptyState(
-              icon: Icons.workspace_premium_outlined,
-              title: 'No achievements yet',
-              message: 'Tap + to log an FDP, publication, certification, or award.',
-            );
-          }
+// ─── Stat Card Widget ───────────────────────────────────────────────────
+class _StatCardData {
+  final String title;
+  final String count;
+  final String subtitle;
+  final IconData icon;
+  final Color accentColor;
 
-          return RefreshIndicator(
-            onRefresh: () async => _refresh(),
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: achievements.length,
-              itemBuilder: (context, index) {
-                final achievement = achievements[index];
-                final isFirst = index == 0;
-                final isLast = index == achievements.length - 1;
+  const _StatCardData({
+    required this.title,
+    required this.count,
+    required this.subtitle,
+    required this.icon,
+    required this.accentColor,
+  });
+}
 
-                return Dismissible(
-                  key: ValueKey(achievement.id),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    decoration: BoxDecoration(
-                      color: AppColors.error.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.delete_outline, color: AppColors.error),
+class _StatCard extends StatelessWidget {
+  final _StatCardData data;
+
+  const _StatCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  data.title,
+                  style: AppTypography.captionBold.copyWith(
+                    color: AppColors.textSecondary,
+                    fontSize: 11.5,
                   ),
-                  onDismissed: (_) => _deleteAchievement(achievement),
-                  child: IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Left Timeline node
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Column(
-                            children: [
-                              Container(
-                                width: 2,
-                                height: 16,
-                                color: isFirst ? Colors.transparent : AppColors.border,
-                              ),
-                              Container(
-                                width: 14,
-                                height: 14,
-                                decoration: BoxDecoration(
-                                  color: AppColors.secondary,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2),
-                                ),
-                              ),
-                              Expanded(
-                                child: Container(
-                                  width: 2,
-                                  color: isLast ? Colors.transparent : AppColors.border,
-                                ),
-                              ),
-                            ],
-                          ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: data.accentColor.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(data.icon, color: data.accentColor, size: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            data.count,
+            style: AppTypography.h2.copyWith(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w800,
+              fontSize: 22,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            data.subtitle,
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textTertiary,
+              fontSize: 10.5,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Filter Pill Widget ─────────────────────────────────────────────────
+class _FilterPill extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _FilterPill({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Material(
+        color: isSelected ? AppColors.primary : AppColors.background,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isSelected ? AppColors.primary : AppColors.border,
+              ),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : AppColors.textPrimary,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Compact Achievement Item Card ──────────────────────────────────────
+class _AchievementItemCard extends StatelessWidget {
+  final AchievementModel achievement;
+  final VoidCallback onViewDocument;
+  final VoidCallback onDelete;
+  final String Function(DateTime) formatDate;
+
+  const _AchievementItemCard({
+    required this.achievement,
+    required this.onViewDocument,
+    required this.onDelete,
+    required this.formatDate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final opt = achievement.categoryOption;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Icon badge
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: opt.color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(opt.icon, color: opt.color, size: 24),
+          ),
+          const SizedBox(width: 14),
+
+          // Core content
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Category badge + Date row
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 10,
+                  runSpacing: 4,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: opt.color.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        opt.shortLabel,
+                        style: TextStyle(
+                          color: opt.color,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
                         ),
-                        // Right Card content
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: AppCard(
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary.withOpacity(0.08),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: const Icon(Icons.workspace_premium_outlined, color: AppColors.primary),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(achievement.title, style: AppTypography.body),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          [
-                                            _categoryLabel(achievement.category),
-                                            if (achievement.organization != null && achievement.organization!.isNotEmpty)
-                                              achievement.organization!,
-                                            if (achievement.dateAchieved != null)
-                                              '${achievement.dateAchieved!.day}/${achievement.dateAchieved!.month}/${achievement.dateAchieved!.year}',
-                                          ].join(' · '),
-                                          style: AppTypography.bodySecondary,
-                                        ),
-                                        if (achievement.documentUrl != null) ...[
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            children: [
-                                              const Icon(Icons.attach_file, size: 14, color: AppColors.textSecondary),
-                                              const SizedBox(width: 4),
-                                              Text('Certificate attached', style: AppTypography.caption),
-                                            ],
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
-                                ],
+                      ),
+                    ),
+                    if (achievement.dateAchieved != null)
+                      Text(
+                        formatDate(achievement.dateAchieved!),
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.textTertiary,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+
+                // Title
+                Text(
+                  achievement.title,
+                  style: AppTypography.bodyMedium.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                    fontSize: 14.5,
+                  ),
+                ),
+
+                // Organization
+                if (achievement.organization != null && achievement.organization!.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      const Icon(Icons.apartment_outlined, size: 14, color: AppColors.textSecondary),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          achievement.organization!,
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                            fontSize: 12.5,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
+                // Description (truncated snippet if provided)
+                if (achievement.description != null && achievement.description!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    achievement.description!,
+                    style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+
+                const SizedBox(height: 10),
+
+                // Bottom Action: View Document / Details
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    InkWell(
+                      onTap: onViewDocument,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              achievement.fileName != null ? Icons.attach_file : Icons.info_outline,
+                              size: 15,
+                              color: AppColors.secondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              achievement.fileName != null ? 'View Document →' : 'View Details →',
+                              style: AppTypography.captionBold.copyWith(
+                                color: AppColors.secondary,
+                                fontSize: 12,
                               ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                );
-              },
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.textTertiary),
+                      tooltip: 'Remove',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: onDelete,
+                    ),
+                  ],
+                ),
+              ],
             ),
-          );
-        },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Clean Empty State View ─────────────────────────────────────────────
+class _EmptyStateView extends StatelessWidget {
+  final bool isFiltered;
+  final VoidCallback onAddTap;
+  final VoidCallback onResetFilter;
+
+  const _EmptyStateView({
+    required this.isFiltered,
+    required this.onAddTap,
+    required this.onResetFilter,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.workspace_premium_outlined,
+              size: 48,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            isFiltered ? 'No matching achievements found' : 'No achievements added yet',
+            style: AppTypography.h3.copyWith(
+              color: AppColors.primary,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Text(
+              isFiltered
+                  ? 'Try clearing your search query or selecting a different category filter.'
+                  : 'Add your certificates, webinars, FDPs, workshops and other professional accomplishments.',
+              style: AppTypography.bodySecondary.copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 13.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 24),
+          if (isFiltered)
+            OutlinedButton(
+              onPressed: onResetFilter,
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.primary),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('Clear Filters'),
+            )
+          else
+            ElevatedButton.icon(
+              onPressed: onAddTap,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('+ Add Achievement', style: TextStyle(fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.secondary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -795,20 +1347,30 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
             const SizedBox(height: 6),
             TextFormField(
               controller: _titleController,
-              autofocus: true,
-              decoration: const InputDecoration(hintText: 'Title, e.g. Completed FDP on Machine Learning'),
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter the achievement title' : null,
+              decoration: InputDecoration(
+                hintText: 'e.g. AWS Certified Solutions Architect, FDP on AI/ML',
+                hintStyle: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+                filled: true,
+                fillColor: AppColors.background,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+              ),
             ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: _category,
-              decoration: const InputDecoration(labelText: 'Category'),
-              items: achievementCategories
-                  .map((c) => DropdownMenuItem(value: c.$1, child: Text(c.$2)))
-                  .toList(),
-              onChanged: (v) => setState(() => _category = v ?? 'other'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
+
+            const SizedBox(height: 16),
+
+            // 3. Organization / Issuing Institution
+            Text('Organization / Issuing Institution', style: AppTypography.captionBold.copyWith(color: AppColors.primary)),
+            const SizedBox(height: 6),
+            TextFormField(
               controller: _organizationController,
               decoration: InputDecoration(
                 hintText: 'e.g. Amazon Web Services, IIT Bombay, IEEE, Coursera',
