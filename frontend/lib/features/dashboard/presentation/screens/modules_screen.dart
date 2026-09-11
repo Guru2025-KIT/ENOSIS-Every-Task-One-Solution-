@@ -28,7 +28,7 @@ class ModulesScreen extends StatelessWidget {
       case 'Reports':
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => const CopoAttainmentScreen(courseId: 'CS201', semester: 'Sem 4'),
+            builder: (_) => const CopoMappingScreen(),
           ),
         );
         break;

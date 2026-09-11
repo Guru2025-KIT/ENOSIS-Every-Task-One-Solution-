@@ -1,36 +1,9 @@
 import 'dart:convert';
-
 import '../../../core/auth/auth_session.dart';
 import '../../../core/network/api_client.dart';
+import 'todo_models.dart';
 
-class TaskModel {
-  final String id;
-  final String title;
-  final String? description;
-  final DateTime? dueDate;
-  final String priority; // "low" | "medium" | "high"
-  final bool isCompleted;
-
-  TaskModel({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.dueDate,
-    required this.priority,
-    required this.isCompleted,
-  });
-
-  factory TaskModel.fromJson(Map<String, dynamic> json) {
-    return TaskModel(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      description: json['description'] as String?,
-      dueDate: json['due_date'] != null ? DateTime.parse(json['due_date'] as String) : null,
-      priority: json['priority'] as String,
-      isCompleted: json['is_completed'] as bool,
-    );
-  }
-}
+export 'todo_models.dart';
 
 class TodoException implements Exception {
   final String message;
@@ -40,13 +13,27 @@ class TodoException implements Exception {
   String toString() => message;
 }
 
-/// Every call here is implicitly scoped to the logged-in user — the
-/// backend never even accepts a "whose tasks" parameter, it always uses
-/// whoever the JWT belongs to (see backend/app/api/routes/todo.py).
 class TodoRepository {
-  Future<List<TaskModel>> fetchTasks() async {
+  Future<List<TaskModel>> fetchTasks({
+    String? view,
+    String? status,
+    String? priority,
+    String? category,
+    String? search,
+  }) async {
     try {
-      final response = await ApiClient.get('/todo/tasks', token: AuthSession.token);
+      final queryParams = <String, String>{};
+      if (view != null && view.isNotEmpty && view != 'all') queryParams['view'] = view;
+      if (status != null && status.isNotEmpty) queryParams['status'] = status;
+      if (priority != null && priority.isNotEmpty) queryParams['priority'] = priority;
+      if (category != null && category.isNotEmpty) queryParams['category'] = category;
+      if (search != null && search.isNotEmpty) queryParams['search'] = search;
+
+      final queryString = queryParams.isNotEmpty
+          ? '?${queryParams.entries.map((e) => '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}').join('&')}'
+          : '';
+
+      final response = await ApiClient.get('/todo/tasks$queryString', token: AuthSession.token);
       if (response.statusCode != 200) {
         throw TodoException('Could not load tasks (${response.statusCode}).');
       }
@@ -55,64 +42,181 @@ class TodoRepository {
     } on TodoException {
       rethrow;
     } catch (e) {
-      throw TodoException('Could not reach the ENOSIS server.');
+      throw TodoException('Could not reach the ENOSIS server: $e');
     }
   }
 
-  Future<void> createTask({
+  Future<TodoSummaryModel> fetchSummary() async {
+    try {
+      final response = await ApiClient.get('/todo/summary', token: AuthSession.token);
+      if (response.statusCode != 200) {
+        throw TodoException('Could not load productivity summary (${response.statusCode}).');
+      }
+      return TodoSummaryModel.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    } on TodoException {
+      rethrow;
+    } catch (e) {
+      throw TodoException('Could not reach the ENOSIS server: $e');
+    }
+  }
+
+  Future<TaskModel> createTask({
     required String title,
     String? description,
     DateTime? dueDate,
     String priority = 'medium',
+    String? category,
+    List<String>? tags,
+    int? estimatedDurationMinutes,
+    Map<String, dynamic>? recurrenceRule,
+    Map<String, dynamic>? remindersConfig,
+    List<Map<String, dynamic>>? subtasks,
   }) async {
     try {
-      final response = await ApiClient.postJson(
-        '/todo/tasks',
-        {
-          'title': title,
-          if (description != null && description.isNotEmpty) 'description': description,
-          if (dueDate != null) 'due_date': dueDate.toIso8601String(),
-          'priority': priority,
-        },
-        token: AuthSession.token,
-      );
+      final body = {
+        'title': title,
+        if (description != null && description.isNotEmpty) 'description': description,
+        if (dueDate != null) 'due_date': dueDate.toIso8601String(),
+        'priority': priority.toLowerCase(),
+        if (category != null && category.isNotEmpty) 'category': category,
+        if (tags != null && tags.isNotEmpty) 'tags': tags,
+        if (estimatedDurationMinutes != null) 'estimated_duration_minutes': estimatedDurationMinutes,
+        if (recurrenceRule != null) 'recurrence_rule': recurrenceRule,
+        if (remindersConfig != null) 'reminders_config': remindersConfig,
+        if (subtasks != null && subtasks.isNotEmpty) 'subtasks': subtasks,
+      };
+
+      final response = await ApiClient.postJson('/todo/tasks', body, token: AuthSession.token);
       if (response.statusCode != 201) {
-        throw TodoException('Could not create the task (${response.statusCode}).');
+        throw TodoException('Could not create task (${response.statusCode}).');
       }
+      return TaskModel.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
     } on TodoException {
       rethrow;
     } catch (e) {
-      throw TodoException('Could not reach the ENOSIS server.');
+      throw TodoException('Could not reach the ENOSIS server: $e');
     }
   }
 
-  Future<void> setCompleted(String taskId, bool isCompleted) async {
+  Future<TaskModel> updateTask(String taskId, Map<String, dynamic> updates) async {
     try {
       final response = await ApiClient.patchJson(
         '/todo/tasks/$taskId',
-        {'is_completed': isCompleted},
+        updates,
         token: AuthSession.token,
       );
       if (response.statusCode != 200) {
-        throw TodoException('Could not update the task (${response.statusCode}).');
+        throw TodoException('Could not update task (${response.statusCode}).');
       }
+      return TaskModel.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
     } on TodoException {
       rethrow;
     } catch (e) {
-      throw TodoException('Could not reach the ENOSIS server.');
+      throw TodoException('Could not reach the ENOSIS server: $e');
     }
+  }
+
+  Future<TaskModel> setCompleted(String taskId, bool isCompleted) async {
+    return updateTask(taskId, {'is_completed': isCompleted});
   }
 
   Future<void> deleteTask(String taskId) async {
     try {
       final response = await ApiClient.delete('/todo/tasks/$taskId', token: AuthSession.token);
       if (response.statusCode != 204) {
-        throw TodoException('Could not delete the task (${response.statusCode}).');
+        throw TodoException('Could not delete task (${response.statusCode}).');
       }
     } on TodoException {
       rethrow;
     } catch (e) {
-      throw TodoException('Could not reach the ENOSIS server.');
+      throw TodoException('Could not reach the ENOSIS server: $e');
+    }
+  }
+
+  Future<TaskModel> snoozeTask(
+    String taskId, {
+    DateTime? snoozeUntil,
+    String? preset,
+  }) async {
+    try {
+      final body = <String, dynamic>{};
+      if (snoozeUntil != null) body['snooze_until'] = snoozeUntil.toIso8601String();
+      if (preset != null) body['preset'] = preset;
+
+      final response = await ApiClient.postJson(
+        '/todo/tasks/$taskId/snooze',
+        body,
+        token: AuthSession.token,
+      );
+      if (response.statusCode != 200) {
+        throw TodoException('Could not snooze task (${response.statusCode}).');
+      }
+      return TaskModel.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    } on TodoException {
+      rethrow;
+    } catch (e) {
+      throw TodoException('Could not reach the ENOSIS server: $e');
+    }
+  }
+
+  Future<TaskModel> addSubtask(String taskId, String title) async {
+    try {
+      final response = await ApiClient.postJson(
+        '/todo/tasks/$taskId/subtasks',
+        {'title': title},
+        token: AuthSession.token,
+      );
+      if (response.statusCode != 200) {
+        throw TodoException('Could not add subtask (${response.statusCode}).');
+      }
+      return TaskModel.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    } on TodoException {
+      rethrow;
+    } catch (e) {
+      throw TodoException('Could not reach the ENOSIS server: $e');
+    }
+  }
+
+  Future<TaskModel> toggleSubtask(String taskId, String subtaskId, bool isCompleted) async {
+    try {
+      final response = await ApiClient.patchJson(
+        '/todo/tasks/$taskId/subtasks/$subtaskId',
+        {'is_completed': isCompleted},
+        token: AuthSession.token,
+      );
+      if (response.statusCode != 200) {
+        throw TodoException('Could not update subtask (${response.statusCode}).');
+      }
+      return TaskModel.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    } on TodoException {
+      rethrow;
+    } catch (e) {
+      throw TodoException('Could not reach the ENOSIS server: $e');
+    }
+  }
+
+  Future<TaskModel> deleteSubtask(String taskId, String subtaskId) async {
+    try {
+      final response = await ApiClient.delete(
+        '/todo/tasks/$taskId/subtasks/$subtaskId',
+        token: AuthSession.token,
+      );
+      if (response.statusCode != 200) {
+        throw TodoException('Could not delete subtask (${response.statusCode}).');
+      }
+      return TaskModel.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    } on TodoException {
+      rethrow;
+    } catch (e) {
+      throw TodoException('Could not reach the ENOSIS server: $e');
+    }
+  }
+
+  Future<void> evaluateReminders() async {
+    try {
+      await ApiClient.postJson('/todo/reminders/evaluate', {}, token: AuthSession.token);
+    } catch (_) {
+      // Background reconciliation
     }
   }
 }

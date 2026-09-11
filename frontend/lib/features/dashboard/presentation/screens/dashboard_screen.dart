@@ -6,6 +6,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../ai_assistant/presentation/screens/ai_assistant_screen.dart';
 import '../../../career/presentation/screens/career_advancement_screen.dart';
+import '../../../copo/data/copo_repository.dart';
 import '../../../copo/presentation/screens/copo_attainment_screen.dart';
 import '../../../copo/presentation/screens/copo_mapping_screen.dart';
 import '../../../faculty_insights/presentation/screens/faculty_insights_screen.dart';
@@ -79,40 +80,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return '${months[date.month - 1]} ${date.day}';
   }
 
+  void _handleTabNavigation(int tabIndex) {
+    if (widget.onNavigateTab != null) {
+      widget.onNavigateTab!(tabIndex);
+    } else {
+      switch (tabIndex) {
+        case 1:
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TimetableHubScreen()));
+          break;
+        case 2:
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CopoMappingScreen()));
+          break;
+        case 3:
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CareerAdvancementScreen()));
+          break;
+        case 4:
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyDayScreen()));
+          break;
+        case 5:
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FacultyInsightsScreen()));
+          break;
+      }
+    }
+  }
+
   void _handleWorkspaceAction(BuildContext context, String title) {
     switch (title) {
-      case 'CO-PO Progress':
-        if (widget.onNavigateTab != null) {
-          widget.onNavigateTab!(2); // Switch to CO-PO tab
-        } else {
-          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CopoMappingScreen()));
-        }
-        break;
+      case 'Timetable Management':
       case 'Generate Timetable':
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GenerateTimetableScreen()));
+        _handleTabNavigation(1);
         break;
-      case 'Pending Tasks':
-        if (widget.onNavigateTab != null) {
-          widget.onNavigateTab!(3); // Switch to To-Do tab
-        } else {
-          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyDayScreen()));
-        }
-        break;
-      case 'Reports & Analytics':
-        if (widget.onNavigateTab != null) {
-          widget.onNavigateTab!(4); // Switch to Reports tab
-        } else {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const CopoAttainmentScreen(courseId: 'CS201', semester: 'Sem 4'),
-            ),
-          );
-        }
+      case 'CO-PO Progress':
+        _handleTabNavigation(2);
         break;
       case 'Career Advancement':
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const CareerAdvancementScreen()),
-        );
+        _handleTabNavigation(3);
+        break;
+      case 'Pending Tasks':
+      case 'Priority Tasks':
+        _handleTabNavigation(4);
+        break;
+      case 'Faculty Insights':
+      case 'Faculty Insights (ML)':
+        _handleTabNavigation(5);
+        break;
+      case 'Reports & Analytics':
+      case 'CO-PO Progress':
+      case 'CO-PO Mapping':
+        _handleTabNavigation(2);
         break;
       default:
         break;
@@ -244,6 +259,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     ];
 
+    void navigateMetric(int index) {
+      switch (index) {
+        case 0:
+          _handleTabNavigation(1); // Timetable
+          break;
+        case 1:
+          _handleTabNavigation(4); // To-Do
+          break;
+        case 2:
+          _handleTabNavigation(5); // Faculty Insights
+          break;
+        case 3:
+          _handleTabNavigation(3); // Career Advancement
+          break;
+      }
+    }
+
     final summaryCardsSection = LayoutBuilder(
       builder: (context, constraints) {
         if (isMobile) {
@@ -258,7 +290,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             itemCount: summaryMetrics.length,
             itemBuilder: (context, index) {
-              return _SummaryMetricCard(metric: summaryMetrics[index]);
+              return _SummaryMetricCard(
+                metric: summaryMetrics[index],
+                onTap: () => navigateMetric(index),
+              );
             },
           );
         } else if (isTablet) {
@@ -273,7 +308,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             itemCount: summaryMetrics.length,
             itemBuilder: (context, index) {
-              return _SummaryMetricCard(metric: summaryMetrics[index]);
+              return _SummaryMetricCard(
+                metric: summaryMetrics[index],
+                onTap: () => navigateMetric(index),
+              );
             },
           );
         } else {
@@ -282,7 +320,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               for (int i = 0; i < summaryMetrics.length; i++) ...[
                 if (i > 0) const SizedBox(width: 16),
                 Expanded(
-                  child: _SummaryMetricCard(metric: summaryMetrics[i]),
+                  child: _SummaryMetricCard(
+                    metric: summaryMetrics[i],
+                    onTap: () => navigateMetric(i),
+                  ),
                 ),
               ],
             ],
@@ -542,6 +583,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
 
     // ─── 5. Academic Insights Section ───────────────────────────────────
+    final copoRepo = CopoRepository();
+    String? matchedSubjectCode;
+    String? matchedSubjectName;
+    for (final slot in scheduleSlots) {
+      if (slot.subjectCode != null && slot.subjectCode!.isNotEmpty) {
+        matchedSubjectCode = slot.subjectCode;
+        matchedSubjectName = slot.subjectName;
+        break;
+      } else if (slot.subjectName.isNotEmpty) {
+        matchedSubjectCode = slot.subjectName;
+        matchedSubjectName = slot.subjectName;
+        break;
+      }
+    }
+
+    final bool isCopoConfigured = matchedSubjectCode != null &&
+        (copoRepo.master.courseCode.toLowerCase() == matchedSubjectCode.toLowerCase() ||
+         copoRepo.master.courseName.toLowerCase().contains(matchedSubjectName?.toLowerCase() ?? ''));
+
+    final copoReport = isCopoConfigured ? copoRepo.calculateLocalReport() : null;
+
     final academicInsightsSection = Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -601,11 +663,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               TextButton(
                 onPressed: () {
                   if (widget.onNavigateTab != null) {
-                    widget.onNavigateTab!(4); // Reports
+                    widget.onNavigateTab!(2); // CO-PO tab
                   } else {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => const CopoAttainmentScreen(courseId: 'CS201', semester: 'Sem 4'),
+                        builder: (_) => const CopoMappingScreen(),
                       ),
                     );
                   }
@@ -617,72 +679,133 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 16),
           const Divider(height: 1, color: AppColors.divider),
           const SizedBox(height: 16),
-          ...MockDashboardData.courseAttainments.map((course) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.primarySoft,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                course.courseCode,
-                                style: AppTypography.captionBold.copyWith(
-                                  color: AppColors.primary,
-                                  fontSize: 11,
+          if (copoReport != null && copoReport.coAttainments.isNotEmpty) ...[
+            ...copoReport.coAttainments.map((co) {
+              final pctOfMax = (co.finalAttainment / 3.0) * 100.0;
+              final percent = (pctOfMax / 100.0).clamp(0.0, 1.0);
+              final course = CourseAttainmentInsight(
+                courseCode: copoReport.master.courseCode,
+                courseName: '${copoReport.master.courseName} (${co.coId})',
+                attainmentPercent: percent,
+                status: '${co.finalAttainment.toStringAsFixed(2)} / 3.00 · ${co.remark}',
+                statusColor: co.isAttained ? const Color(0xFF1E8E3E) : const Color(0xFFF4791E),
+              );
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primarySoft,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  course.courseCode,
+                                  style: AppTypography.captionBold.copyWith(
+                                    color: AppColors.primary,
+                                    fontSize: 11,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                course.courseName,
-                                style: AppTypography.bodyMedium.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13.5,
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  course.courseName,
+                                  style: AppTypography.bodyMedium.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13.5,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        course.status,
-                        style: TextStyle(
-                          color: course.statusColor,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
+                        const SizedBox(width: 8),
+                        Text(
+                          course.status,
+                          style: TextStyle(
+                            color: course.statusColor,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: LinearProgressIndicator(
-                      value: course.attainmentPercent,
-                      backgroundColor: AppColors.divider,
-                      valueColor: AlwaysStoppedAnimation<Color>(course.statusColor),
-                      minHeight: 6,
+                      ],
                     ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: course.attainmentPercent,
+                        backgroundColor: AppColors.divider,
+                        valueColor: AlwaysStoppedAnimation<Color>(course.statusColor),
+                        minHeight: 6,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ] else ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.border.withOpacity(0.8)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.track_changes_outlined, size: 36, color: Colors.grey.shade400),
+                  const SizedBox(height: 10),
+                  Text(
+                    matchedSubjectName != null
+                        ? 'No academic data configured for $matchedSubjectName'
+                        : 'No academic data available',
+                    style: AppTypography.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Configure course outcome targets, student roster, and evaluation thresholds to view real-time attainment analytics.',
+                    style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.secondary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                    icon: const Icon(Icons.tune_outlined, size: 16),
+                    label: const Text('Configure CO-PO Mapping', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5)),
+                    onPressed: () {
+                      if (widget.onNavigateTab != null) {
+                        widget.onNavigateTab!(2);
+                      }
+                    },
                   ),
                 ],
               ),
-            );
-          }),
+            ),
+          ],
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(14),
@@ -752,7 +875,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             } else {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (_) => const CopoAttainmentScreen(courseId: 'CS201', semester: 'Sem 4'),
+                                  builder: (_) => const CopoMappingScreen(),
                                 ),
                               );
                             }
@@ -807,7 +930,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           } else {
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (_) => const CopoAttainmentScreen(courseId: 'CS201', semester: 'Sem 4'),
+                                builder: (_) => const CopoMappingScreen(),
                               ),
                             );
                           }
@@ -833,8 +956,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
       },
     );
 
-    // ─── 6. "Your Workspace" Actionable Section ─────────────────────────
-    final workspaceItems = MockDashboardData.workspaceItems;
+    // ─── 4. "Your Workspace" Actionable Section ─────────────────────────
+    final workspaceItems = [
+      const WorkspaceActionItem(
+        title: 'Timetable Management',
+        subtitle: 'Automated schedule engine & daily lecture tracking',
+        actionLabel: 'View Schedule',
+        icon: Icons.calendar_today_outlined,
+        accentColor: Color(0xFF0284C7),
+      ),
+      const WorkspaceActionItem(
+        title: 'CO-PO Progress',
+        subtitle: 'Course outcome mapping matrix & attainment computation',
+        actionLabel: 'Continue Mapping',
+        icon: Icons.track_changes_outlined,
+        accentColor: Color(0xFF16A34A),
+      ),
+      const WorkspaceActionItem(
+        title: 'Career Advancement',
+        subtitle: 'Track professional achievements, FDPs & verified credentials',
+        actionLabel: 'View Growth',
+        icon: Icons.emoji_events_outlined,
+        accentColor: Color(0xFF8B5CF6),
+      ),
+      const WorkspaceActionItem(
+        title: 'Priority Tasks',
+        subtitle: 'Priority-aware daily faculty checklist & smart reminders',
+        actionLabel: 'View Tasks',
+        icon: Icons.checklist_outlined,
+        accentColor: Color(0xFFF4791E),
+      ),
+      const WorkspaceActionItem(
+        title: 'Faculty Insights (ML)',
+        subtitle: '24-feature student risk intelligence & verified outcomes',
+        actionLabel: 'View Insights',
+        icon: Icons.psychology_outlined,
+        accentColor: Color(0xFF0D9488),
+      ),
+    ];
     final yourWorkspaceSection = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -905,6 +1064,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           );
 
     // ─── Main Screen Assembly ───────────────────────────────────────────
+    // Strict order:
+    // 1. Header / Greeting
+    // 2. Summary Metric Cards
+    // 3. Today's Schedule
+    // 4. Your Workspace
+    // 5. Calendar
+    // 6. Academic Insights, Faculty Insights, AI & Recent Activity
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -922,32 +1088,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(height: 18),
                 summaryCardsSection,
                 const SizedBox(height: 22),
-                if (isMobile || isTablet) ...[
-                  scheduleSection,
-                  const SizedBox(height: 18),
-                  calendarSection,
-                ] else ...[
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        flex: 7,
-                        child: scheduleSection,
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        flex: 5,
-                        child: calendarSection,
-                      ),
-                    ],
-                  ),
-                ],
+                scheduleSection,
                 const SizedBox(height: 24),
+                yourWorkspaceSection,
+                const SizedBox(height: 24),
+                calendarSection,
+                const SizedBox(height: 26),
                 academicInsightsSection,
                 const SizedBox(height: 26),
                 facultyInsightsSection,
-                const SizedBox(height: 26),
-                yourWorkspaceSection,
                 const SizedBox(height: 26),
                 aiAndActivitySection,
                 const SizedBox(height: 36),
@@ -971,75 +1120,83 @@ class _DashboardScreenState extends State<DashboardScreen> {
 // ─── Summary Metric Card Widget ─────────────────────────────────────────
 class _SummaryMetricCard extends StatelessWidget {
   final SummaryMetric metric;
+  final VoidCallback? onTap;
 
-  const _SummaryMetricCard({required this.metric});
+  const _SummaryMetricCard({required this.metric, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  metric.title,
-                  style: AppTypography.captionBold.copyWith(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: metric.accentColor.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(metric.icon, color: metric.accentColor, size: 17),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            metric.value,
-            style: AppTypography.h2.copyWith(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w800,
-              fontSize: 22,
-              letterSpacing: -0.5,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      metric.title,
+                      style: AppTypography.captionBold.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: metric.accentColor.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(metric.icon, color: metric.accentColor, size: 17),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                metric.value,
+                style: AppTypography.h2.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 22,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                metric.subtitle,
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.textTertiary,
+                  fontSize: 11,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
-          const SizedBox(height: 3),
-          Text(
-            metric.subtitle,
-            style: AppTypography.caption.copyWith(
-              color: AppColors.textTertiary,
-              fontSize: 11,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1548,7 +1705,26 @@ class _RecentActivityCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          ...MockDashboardData.recentActivities.map((act) {
+          ...const [
+            RecentActivityItem(
+              title: 'Timetable synchronized with current academic calendar',
+              timeAgo: 'Just now',
+              icon: Icons.calendar_today_outlined,
+              iconColor: Color(0xFF0284C7),
+            ),
+            RecentActivityItem(
+              title: 'CO-PO attainment calculated for active syllabus course outcomes',
+              timeAgo: 'Live report',
+              icon: Icons.track_changes_outlined,
+              iconColor: Color(0xFF16A34A),
+            ),
+            RecentActivityItem(
+              title: 'Faculty Insights ML risk perception engine synchronized',
+              timeAgo: 'Synced',
+              icon: Icons.psychology_outlined,
+              iconColor: Color(0xFF8B5CF6),
+            ),
+          ].map((act) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Row(
@@ -1866,7 +2042,7 @@ class _FacultyInsightsSection extends StatelessWidget {
                 },
                 {
                   'title': 'Suggested Strategy',
-                  'desc': 'Remedial hands-on lab recommended for CS201',
+                  'desc': 'Remedial hands-on lab recommended for lower attainment COs',
                   'icon': Icons.lightbulb_outline,
                   'color': const Color(0xFFF4791E),
                 },

@@ -8,6 +8,7 @@ import app.models.timetable
 import app.models.generation_history
 import app.models.sli
 import app.models.attendance
+import app.models.todo
 
 def sync_database_schema():
     print("=== 1. ENSURING ALL TABLES EXIST ===")
@@ -186,6 +187,27 @@ def sync_database_schema():
                         conn.execute(text("DROP TABLE interventions_old;"))
                     except Exception as e:
                         print("SQLite interventions table migration notice:", e)
+
+        # 11. tasks
+        if "tasks" in inspector.get_table_names():
+            task_cols = {col["name"] for col in inspector.get_columns("tasks")}
+            for col_name, col_type in [
+                ("status", "VARCHAR(20) NOT NULL DEFAULT 'TODO'"),
+                ("category", "VARCHAR(100) NULL"),
+                ("tags", "JSON NULL"),
+                ("estimated_duration_minutes", "INT NULL"),
+                ("recurrence_rule", "JSON NULL"),
+                ("reminders_config", "JSON NULL"),
+                ("subtasks", "JSON NULL"),
+                ("completed_at", "DATETIME NULL"),
+                ("updated_at", "DATETIME NULL"),
+            ]:
+                if col_name not in task_cols:
+                    conn.execute(text(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_type};"))
+
+        # 12. task_reminders (created automatically by Base.metadata.create_all if not existing)
+        if "task_reminders" not in inspector.get_table_names():
+            app.models.todo.TaskReminder.__table__.create(bind=conn)
 
         conn.commit()
         print("=== DATABASE SCHEMA SYNC COMPLETE ===")

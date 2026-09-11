@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../ai_assistant/presentation/screens/ai_assistant_screen.dart';
+import '../../../career/presentation/screens/career_advancement_screen.dart';
 import '../../../copo/presentation/screens/copo_attainment_screen.dart';
 import '../../../copo/presentation/screens/copo_mapping_screen.dart';
 import '../../../faculty_insights/presentation/screens/faculty_insights_screen.dart';
@@ -33,16 +34,15 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
 
-  // Tabs for the main layout stack (indexed 0 to 7)
+  // Tabs for the main layout stack (indexed 0 to 6)
   late final List<Widget> _tabs = [
     DashboardScreen(onNavigateTab: _setTabIndex), // 0: Home
     const TimetableHubScreen(),                    // 1: Timetable
     const CopoMappingScreen(),                     // 2: CO-PO Mapping
-    const MyDayScreen(),                           // 3: To-Do List
-    const CopoAttainmentScreen(courseId: 'CS201', semester: 'Sem 4'), // 4: Reports / Attainment
+    const CareerAdvancementScreen(),               // 3: Career Advancement
+    const MyDayScreen(),                           // 4: To-Do List
     const FacultyInsightsScreen(),                 // 5: Faculty Insights (ML)
-    const NotificationsScreen(),                   // 6: Notifications
-    const ProfileScreen(),                         // 7: Profile
+    const ProfileScreen(),                         // 6: Profile
   ];
 
   void _setTabIndex(int index) {
@@ -54,13 +54,14 @@ class _MainShellState extends State<MainShell> {
   void _openQuickActions() {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (sheetContext) {
         return SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -117,6 +118,22 @@ class _MainShellState extends State<MainShell> {
                   subtitle: Text('Create a quick reminder or checklist', style: AppTypography.caption),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
+                    _setTabIndex(4);
+                  },
+                ),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.emoji_events_outlined, color: AppColors.primary),
+                  ),
+                  title: Text('Career Advancement', style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
+                  subtitle: Text('Add certificates, FDPs & achievements', style: AppTypography.caption),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
                     _setTabIndex(3);
                   },
                 ),
@@ -151,7 +168,7 @@ class _MainShellState extends State<MainShell> {
                   subtitle: Text('CO-PO attainment & analytics summaries', style: AppTypography.caption),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
-                    _setTabIndex(4);
+                    _setTabIndex(2);
                   },
                 ),
               ],
@@ -245,13 +262,17 @@ class _MainShellState extends State<MainShell> {
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                               tooltip: 'Notifications',
-                              onPressed: () => _setTabIndex(6),
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                                );
+                              },
                             ),
                             const SizedBox(width: 4),
                             Material(
                               color: Colors.transparent,
                               child: InkWell(
-                                onTap: () => _setTabIndex(7),
+                                onTap: () => _setTabIndex(6),
                                 borderRadius: BorderRadius.circular(14),
                                 child: CircleAvatar(
                                   radius: 13,
@@ -306,14 +327,14 @@ class _MainShellState extends State<MainShell> {
                             onTap: () => _setTabIndex(2),
                           ),
                           _MobileNavPill(
-                            icon: Icons.checklist_outlined,
-                            label: 'To-Do',
+                            icon: Icons.emoji_events_outlined,
+                            label: 'Career',
                             isActive: _currentIndex == 3,
                             onTap: () => _setTabIndex(3),
                           ),
                           _MobileNavPill(
-                            icon: Icons.assessment_outlined,
-                            label: 'Reports',
+                            icon: Icons.checklist_outlined,
+                            label: 'To-Do',
                             isActive: _currentIndex == 4,
                             onTap: () => _setTabIndex(4),
                           ),
@@ -324,16 +345,10 @@ class _MainShellState extends State<MainShell> {
                             onTap: () => _setTabIndex(5),
                           ),
                           _MobileNavPill(
-                            icon: Icons.notifications_none_outlined,
-                            label: 'Notifications',
-                            isActive: _currentIndex == 6,
-                            onTap: () => _setTabIndex(6),
-                          ),
-                          _MobileNavPill(
                             icon: Icons.person_outline,
                             label: 'Profile',
-                            isActive: _currentIndex == 7,
-                            onTap: () => _setTabIndex(7),
+                            isActive: _currentIndex == 6,
+                            onTap: () => _setTabIndex(6),
                           ),
                         ],
                       ),
@@ -345,63 +360,104 @@ class _MainShellState extends State<MainShell> {
           ),
         ),
         body: IndexedStack(index: _currentIndex, children: _tabs),
-        floatingActionButton: FloatingActionButton(
-          heroTag: 'main_shell_quick_action_fab',
-          onPressed: _openQuickActions,
-          backgroundColor: AppColors.secondary,
-          foregroundColor: Colors.white,
-          elevation: 4,
-          child: const Icon(Icons.add, size: 26),
-        ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-        bottomNavigationBar: BottomAppBar(
-          shape: const CircularNotchedRectangle(),
-          notchMargin: 6,
-          color: AppColors.surface,
-          elevation: 8,
-          padding: EdgeInsets.zero,
-          child: Row(
-            children: [
-              Expanded(
-                child: _NavIconButton(
-                  icon: Icons.home_outlined,
-                  activeIcon: Icons.home,
-                  label: 'Home',
-                  isActive: _currentIndex == 0,
-                  onTap: () => _setTabIndex(0),
-                ),
-              ),
-              Expanded(
-                child: _NavIconButton(
-                  icon: Icons.calendar_today_outlined,
-                  activeIcon: Icons.calendar_today,
-                  label: 'Timetable',
-                  isActive: _currentIndex == 1,
-                  onTap: () => _setTabIndex(1),
-                ),
-              ),
-              const SizedBox(width: 48), // Notch space for FAB
-              Expanded(
-                child: _NavIconButton(
-                  icon: Icons.track_changes_outlined,
-                  activeIcon: Icons.track_changes,
-                  label: 'CO-PO',
-                  isActive: _currentIndex == 2,
-                  onTap: () => _setTabIndex(2),
-                ),
-              ),
-              Expanded(
-                child: _NavIconButton(
-                  icon: Icons.person_outline,
-                  activeIcon: Icons.person,
-                  label: 'Profile',
-                  isActive: _currentIndex == 7,
-                  onTap: () => _setTabIndex(7),
-                ),
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            border: const Border(
+              top: BorderSide(color: AppColors.border, width: 0.8),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 8,
+                offset: const Offset(0, -2),
               ),
             ],
           ),
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              height: 56,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _NavIconButton(
+                      icon: Icons.home_outlined,
+                      activeIcon: Icons.home,
+                      label: 'Home',
+                      isActive: _currentIndex == 0,
+                      onTap: () => _setTabIndex(0),
+                    ),
+                  ),
+                  Expanded(
+                    child: _NavIconButton(
+                      icon: Icons.calendar_today_outlined,
+                      activeIcon: Icons.calendar_today,
+                      label: 'Timetable',
+                      isActive: _currentIndex == 1,
+                      onTap: () => _setTabIndex(1),
+                    ),
+                  ),
+                  Expanded(
+                    child: _NavIconButton(
+                      icon: Icons.track_changes_outlined,
+                      activeIcon: Icons.track_changes,
+                      label: 'CO-PO',
+                      isActive: _currentIndex == 2,
+                      onTap: () => _setTabIndex(2),
+                    ),
+                  ),
+                  Expanded(
+                    child: _NavIconButton(
+                      icon: Icons.emoji_events_outlined,
+                      activeIcon: Icons.emoji_events,
+                      label: 'Career',
+                      isActive: _currentIndex == 3,
+                      onTap: () => _setTabIndex(3),
+                    ),
+                  ),
+                  Expanded(
+                    child: _NavIconButton(
+                      icon: Icons.checklist_outlined,
+                      activeIcon: Icons.checklist,
+                      label: 'To-Do',
+                      isActive: _currentIndex == 4,
+                      onTap: () => _setTabIndex(4),
+                    ),
+                  ),
+                  Expanded(
+                    child: _NavIconButton(
+                      icon: Icons.psychology_outlined,
+                      activeIcon: Icons.psychology,
+                      label: 'Insights',
+                      isActive: _currentIndex == 5,
+                      onTap: () => _setTabIndex(5),
+                    ),
+                  ),
+                  Expanded(
+                    child: _NavIconButton(
+                      icon: Icons.person_outline,
+                      activeIcon: Icons.person,
+                      label: 'Profile',
+                      isActive: _currentIndex == 6,
+                      onTap: () => _setTabIndex(6),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
+        floatingActionButton: FloatingActionButton(
+          heroTag: 'main_shell_mobile_fab',
+          backgroundColor: AppColors.secondary,
+          foregroundColor: Colors.white,
+          elevation: 4,
+          onPressed: _openQuickActions,
+          tooltip: 'Quick Actions',
+          child: const Icon(Icons.add, size: 28),
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       );
     }
 
@@ -499,14 +555,14 @@ class _MainShellState extends State<MainShell> {
                             onTap: () => _setTabIndex(2),
                           ),
                           _WebTabButton(
-                            icon: Icons.checklist_outlined,
-                            label: 'To-Do',
+                            icon: Icons.emoji_events_outlined,
+                            label: 'Career Advancement',
                             isActive: _currentIndex == 3,
                             onTap: () => _setTabIndex(3),
                           ),
                           _WebTabButton(
-                            icon: Icons.assessment_outlined,
-                            label: 'Reports',
+                            icon: Icons.checklist_outlined,
+                            label: 'To-Do',
                             isActive: _currentIndex == 4,
                             onTap: () => _setTabIndex(4),
                           ),
@@ -517,16 +573,10 @@ class _MainShellState extends State<MainShell> {
                             onTap: () => _setTabIndex(5),
                           ),
                           _WebTabButton(
-                            icon: Icons.notifications_none_outlined,
-                            label: 'Notifications',
-                            isActive: _currentIndex == 6,
-                            onTap: () => _setTabIndex(6),
-                          ),
-                          _WebTabButton(
                             icon: Icons.person_outline,
                             label: 'Profile',
-                            isActive: _currentIndex == 7,
-                            onTap: () => _setTabIndex(7),
+                            isActive: _currentIndex == 6,
+                            onTap: () => _setTabIndex(6),
                           ),
                         ],
                       ),
@@ -638,7 +688,7 @@ class _MainShellState extends State<MainShell> {
                       Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          onTap: () => _setTabIndex(7),
+                          onTap: () => _setTabIndex(6),
                           borderRadius: BorderRadius.circular(20),
                           child: CircleAvatar(
                             radius: 16,
@@ -794,25 +844,28 @@ class _NavIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isActive ? AppColors.secondary : AppColors.textSecondary;
+    final color = isActive ? AppColors.secondary : AppColors.textTertiary;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          padding: const EdgeInsets.symmetric(vertical: 3),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(isActive ? activeIcon : icon, color: color, size: 22),
+              Icon(isActive ? activeIcon : icon, color: color, size: 20),
               const SizedBox(height: 2),
               Text(
                 label,
-                style: AppTypography.label.copyWith(
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
                   color: color,
-                  fontSize: 10,
-                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 9.5,
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                  letterSpacing: -0.2,
                 ),
               ),
             ],

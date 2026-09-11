@@ -544,7 +544,10 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -554,12 +557,10 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               ),
               child: const Text('STEP 1', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
             ),
-            const SizedBox(width: 10),
             const Text(
               'Select Academic Year',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
             ),
-            const SizedBox(width: 8),
             const Text('(Mandatory)', style: TextStyle(color: AppColors.secondary, fontSize: 12, fontWeight: FontWeight.bold)),
           ],
         ),
@@ -707,7 +708,10 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -717,7 +721,6 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               ),
               child: const Text('STEP 2', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
             ),
-            const SizedBox(width: 10),
             Text(
               'Select Semester for $_selectedYear',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
@@ -781,7 +784,10 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -791,7 +797,6 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               ),
               child: const Text('STEP 3', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
             ),
-            const SizedBox(width: 10),
             Text(
               'Select Course (${courses.length} subjects available in $_selectedSemester)',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
@@ -854,7 +859,10 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
                                   children: [
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -871,7 +879,6 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(

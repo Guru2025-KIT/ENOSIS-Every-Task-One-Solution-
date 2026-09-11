@@ -9,6 +9,7 @@ import 'package:enosis/features/faculty_insights/presentation/providers/sli_end_
 import 'package:enosis/features/faculty_insights/presentation/providers/sli_mid_provider.dart';
 import 'package:enosis/features/faculty_insights/presentation/providers/sli_pre_provider.dart';
 import 'package:enosis/features/timetable/providers/timetable_provider.dart';
+import 'package:enosis/features/todo/presentation/providers/todo_provider.dart';
 import 'package:enosis/core/theme/app_theme.dart';
 
 void main() {
@@ -21,6 +22,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => SliEndProvider()),
         ChangeNotifierProvider(create: (_) => DashboardProvider()),
         ChangeNotifierProvider(create: (_) => AttendanceProvider()),
+        ChangeNotifierProvider(create: (_) => TodoProvider()),
       ],
       child: MaterialApp(
         theme: AppTheme.lightTheme,
@@ -199,6 +201,41 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Rachana Patil'), findsOneWidget);
+    });
+
+    testWidgets('MainShell renders on 360px mobile width with zero overflow', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(createTestWidget(
+        screenSize: const Size(360, 800),
+        child: const MainShell(),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('ENOSIS'), findsOneWidget);
+      expect(find.text('Career'), findsWidgets);
+      expect(find.text('Insights'), findsWidgets);
+    });
+
+    testWidgets('MainShell renders orange + FAB on mobile', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(createTestWidget(
+        screenSize: const Size(390, 844),
+        child: const MainShell(),
+      ));
+      await tester.pumpAndSettle();
+
+      final fabFinder = find.byType(FloatingActionButton);
+      expect(fabFinder, findsOneWidget);
+      await tester.tap(fabFinder);
+      await tester.pumpAndSettle();
+      expect(find.text('Quick Actions'), findsOneWidget);
     });
   });
 }
