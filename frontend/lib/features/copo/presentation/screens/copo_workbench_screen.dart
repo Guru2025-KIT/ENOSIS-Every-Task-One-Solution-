@@ -854,7 +854,10 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
                                   children: [
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -871,7 +874,6 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
@@ -1033,7 +1035,6 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     }
 
     final report = _cachedReport ?? _repository.calculateLocalReport();
-    final isMobile = Responsive.isMobile(context);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -1090,7 +1091,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             ),
             icon: const Icon(Icons.school_outlined, size: 15),
-            label: const Text('Switch Course', style: TextStyle(fontSize: 11.5)),
+            label: const Text('Switch Course / Year', style: TextStyle(fontSize: 11.5)),
             onPressed: () {
               setState(() {
                 _hasStartedMapping = false;
@@ -1334,9 +1335,19 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Text(
-                    '${overall.toStringAsFixed(2)} / 3.00',
-                    style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Overall Attainment:',
+                        style: TextStyle(fontSize: 10.5, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                      ),
+                      Text(
+                        '${overall.toStringAsFixed(2)} / 3.00',
+                        style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary),
+                      ),
+                    ],
                   ),
                 ],
               ),

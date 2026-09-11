@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, timetable, users, todo, documents, ai_assistant, notifications, achievements, voice, sli, sli_analytics, sli_integration, sli_ml, attendance, dashboard, copo
+from app.api.routes import auth, timetable, users, todo, documents, ai_assistant, notifications, achievements, voice, sli, sli_analytics, sli_integration, sli_ml, attendance, dashboard, copo, admin
 from app.core.config import settings
 from app.db.base import Base, engine
 
@@ -24,8 +24,9 @@ from app.models import (  # noqa: F401
 # reversible instead of just "drop and recreate the table."
 Base.metadata.create_all(bind=engine)
 
-from app.sync_and_seed import sync_database_schema
+from app.sync_and_seed import sync_database_schema, seed_admin_user
 sync_database_schema()
+seed_admin_user()
 
 app = FastAPI(title=settings.APP_NAME)
 
@@ -55,6 +56,7 @@ app.include_router(sli_ml.router)
 app.include_router(attendance.router)
 app.include_router(dashboard.router)
 app.include_router(copo.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
@@ -6,72 +7,8 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/section_header.dart';
 import '../../../copo/presentation/screens/copo_workbench_screen.dart';
 import '../../../timetable/presentation/screens/timetable_hub_screen.dart';
-
-// ─── DATA MODELS FOR ADMIN GOVERNANCE ────────────────────────────────────────
-
-class FacultyMember {
-  final String id;
-  String name;
-  String employeeId;
-  String email;
-  String department;
-  String designation;
-  String phone;
-  List<String> assignedSubjectCodes;
-  bool isActive;
-
-  FacultyMember({
-    required this.id,
-    required this.name,
-    required this.employeeId,
-    required this.email,
-    required this.department,
-    required this.designation,
-    required this.phone,
-    required this.assignedSubjectCodes,
-    this.isActive = true,
-  });
-}
-
-class SubjectAllocation {
-  final String courseCode;
-  String courseName;
-  String department;
-  String year;
-  String semester;
-  int credits;
-  String facultyId;
-  String facultyName;
-  String coFacultyName;
-  String attainmentStatus; // 'Not Started' | 'In Progress' | 'Submitted' | 'Approved'
-
-  SubjectAllocation({
-    required this.courseCode,
-    required this.courseName,
-    required this.department,
-    required this.year,
-    required this.semester,
-    this.credits = 3,
-    required this.facultyId,
-    required this.facultyName,
-    this.coFacultyName = 'None',
-    this.attainmentStatus = 'In Progress',
-  });
-}
-
-class _PendingRequest {
-  final String id;
-  final String facultyName;
-  final String type; // "CAS" | "Leave" | "FDP"
-  final String title;
-
-  _PendingRequest({
-    required this.id,
-    required this.facultyName,
-    required this.type,
-    required this.title,
-  });
-}
+import '../../data/admin_repository.dart';
+import '../widgets/faculty_upload_dialog.dart';
 
 // ─── ADMIN DASHBOARD SCREEN ──────────────────────────────────────────────────
 
@@ -84,198 +21,17 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     with SingleTickerProviderStateMixin {
+  final AdminRepository _repository = AdminRepository();
+
   late TabController _tabController;
 
-  // ─── INITIAL MOCK DATA ────────────────────────────────────────────────────
+  bool _isLoading = true;
+  String? _errorMessage;
 
-  final List<FacultyMember> _facultyList = [
-    FacultyMember(
-      id: 'fac_1',
-      name: 'Dr. Priya Sharma',
-      employeeId: 'KIT-AIML-101',
-      email: 'priya.sharma@kitcoek.in',
-      department: 'CSE (AI & ML)',
-      designation: 'Professor & HOD',
-      phone: '+91 98220 11223',
-      assignedSubjectCodes: ['UAMPC0403', 'UAMPC0303'],
-    ),
-    FacultyMember(
-      id: 'fac_2',
-      name: 'Prof. Rajesh Kumar',
-      employeeId: 'KIT-AIML-102',
-      email: 'rajesh.kumar@kitcoek.in',
-      department: 'CSE (AI & ML)',
-      designation: 'Associate Professor',
-      phone: '+91 98220 22334',
-      assignedSubjectCodes: ['UAMPC0401'],
-    ),
-    FacultyMember(
-      id: 'fac_3',
-      name: 'Dr. Anil Mehta',
-      employeeId: 'KIT-AIML-103',
-      email: 'anil.mehta@kitcoek.in',
-      department: 'CSE (AI & ML)',
-      designation: 'Professor',
-      phone: '+91 98220 33445',
-      assignedSubjectCodes: ['UAMPC0402'],
-    ),
-    FacultyMember(
-      id: 'fac_4',
-      name: 'Prof. Sunita Rao',
-      employeeId: 'KIT-AIML-104',
-      email: 'sunita.rao@kitcoek.in',
-      department: 'CSE (AI & ML)',
-      designation: 'Assistant Professor',
-      phone: '+91 98220 44556',
-      assignedSubjectCodes: ['UAMPC0404'],
-    ),
-    FacultyMember(
-      id: 'fac_5',
-      name: 'Dr. Manoj Kulkarni',
-      employeeId: 'KIT-AIML-105',
-      email: 'manoj.kulkarni@kitcoek.in',
-      department: 'CSE (AI & ML)',
-      designation: 'Associate Professor',
-      phone: '+91 98220 55667',
-      assignedSubjectCodes: ['UAMPC0301'],
-    ),
-    FacultyMember(
-      id: 'fac_6',
-      name: 'Prof. Neha Patil',
-      employeeId: 'KIT-CSE-201',
-      email: 'neha.patil@kitcoek.in',
-      department: 'Computer Science',
-      designation: 'Assistant Professor',
-      phone: '+91 98220 66778',
-      assignedSubjectCodes: ['UAMPC0302'],
-    ),
-    FacultyMember(
-      id: 'fac_7',
-      name: 'Dr. Vikram Deshmukh',
-      employeeId: 'KIT-ETC-301',
-      email: 'vikram.d@kitcoek.in',
-      department: 'Electronics & Telecom',
-      designation: 'Associate Professor',
-      phone: '+91 98220 77889',
-      assignedSubjectCodes: ['UAMPC0104'],
-    ),
-    FacultyMember(
-      id: 'fac_8',
-      name: 'Prof. Kavita Joshi',
-      email: 'kavita.j@kitcoek.in',
-      employeeId: 'KIT-BS-401',
-      department: 'Basic Sciences',
-      designation: 'Assistant Professor',
-      phone: '+91 98220 88990',
-      assignedSubjectCodes: ['UAMPC0101'],
-    ),
-  ];
-
-  final List<SubjectAllocation> _subjectAllocations = [
-    SubjectAllocation(
-      courseCode: 'UAMPC0403',
-      courseName: 'Design and Analysis of Algorithms',
-      department: 'CSE (AI & ML)',
-      year: 'S.Y. B.Tech',
-      semester: 'Semester IV',
-      credits: 4,
-      facultyId: 'fac_1',
-      facultyName: 'Dr. Priya Sharma',
-      coFacultyName: 'Prof. Rajesh Kumar',
-      attainmentStatus: 'In Progress',
-    ),
-    SubjectAllocation(
-      courseCode: 'UAMPC0401',
-      courseName: 'Operating Systems & Architecture',
-      department: 'CSE (AI & ML)',
-      year: 'S.Y. B.Tech',
-      semester: 'Semester IV',
-      credits: 3,
-      facultyId: 'fac_2',
-      facultyName: 'Prof. Rajesh Kumar',
-      coFacultyName: 'Prof. Sunita Rao',
-      attainmentStatus: 'Submitted',
-    ),
-    SubjectAllocation(
-      courseCode: 'UAMPC0402',
-      courseName: 'Database Management Systems',
-      department: 'CSE (AI & ML)',
-      year: 'S.Y. B.Tech',
-      semester: 'Semester IV',
-      credits: 3,
-      facultyId: 'fac_3',
-      facultyName: 'Dr. Anil Mehta',
-      coFacultyName: 'None',
-      attainmentStatus: 'In Progress',
-    ),
-    SubjectAllocation(
-      courseCode: 'UAMPC0404',
-      courseName: 'Machine Learning Foundations',
-      department: 'CSE (AI & ML)',
-      year: 'S.Y. B.Tech',
-      semester: 'Semester IV',
-      credits: 4,
-      facultyId: 'fac_4',
-      facultyName: 'Prof. Sunita Rao',
-      coFacultyName: 'Dr. Priya Sharma',
-      attainmentStatus: 'Not Started',
-    ),
-    SubjectAllocation(
-      courseCode: 'UAMPC0301',
-      courseName: 'Discrete Mathematics and Graph Theory',
-      department: 'CSE (AI & ML)',
-      year: 'S.Y. B.Tech',
-      semester: 'Semester III',
-      credits: 3,
-      facultyId: 'fac_5',
-      facultyName: 'Dr. Manoj Kulkarni',
-      coFacultyName: 'None',
-      attainmentStatus: 'Approved',
-    ),
-    SubjectAllocation(
-      courseCode: 'UAMPC0302',
-      courseName: 'Linear Algebra for Machine Learning',
-      department: 'CSE (AI & ML)',
-      year: 'S.Y. B.Tech',
-      semester: 'Semester III',
-      credits: 3,
-      facultyId: 'fac_6',
-      facultyName: 'Prof. Neha Patil',
-      coFacultyName: 'Dr. Anil Mehta',
-      attainmentStatus: 'Approved',
-    ),
-    SubjectAllocation(
-      courseCode: 'UAMPC0303',
-      courseName: 'Advanced Data Structures',
-      department: 'CSE (AI & ML)',
-      year: 'S.Y. B.Tech',
-      semester: 'Semester III',
-      credits: 3,
-      facultyId: 'fac_1',
-      facultyName: 'Dr. Priya Sharma',
-      coFacultyName: 'Prof. Sunita Rao',
-      attainmentStatus: 'Approved',
-    ),
-    SubjectAllocation(
-      courseCode: 'UAMPC0101',
-      courseName: 'Engineering Mathematics-I',
-      department: 'Basic Sciences',
-      year: 'F.Y. B.Tech',
-      semester: 'Semester I',
-      credits: 4,
-      facultyId: 'fac_8',
-      facultyName: 'Prof. Kavita Joshi',
-      coFacultyName: 'None',
-      attainmentStatus: 'Approved',
-    ),
-  ];
-
-  final List<_PendingRequest> _requests = [
-    _PendingRequest(id: 'r_1', facultyName: 'Dr. Priya Sharma', type: 'CAS', title: 'CAS Portfolio Verification: Tier II Promotion to Senior Professor'),
-    _PendingRequest(id: 'r_2', facultyName: 'Prof. Rajesh Kumar', type: 'Leave', title: 'Medical Leave: 14 Aug - 18 Aug (5 days)'),
-    _PendingRequest(id: 'r_3', facultyName: 'Dr. Anil Mehta', type: 'FDP', title: 'National Workshop on AI/ML at IIT Bombay (Sponsored)'),
-    _PendingRequest(id: 'r_4', facultyName: 'Prof. Sunita Rao', type: 'CAS', title: 'Research Publication Indexing & Validation: IEEE Access'),
-  ];
+  AdminDashboardStats? _stats;
+  List<FacultyModel> _facultyList = [];
+  List<SubjectAllocationModel> _subjectAllocations = [];
+  List<GovernanceRequestModel> _requests = [];
 
   // Filters
   String _facultySearchQuery = '';
@@ -287,6 +43,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _loadDashboardData();
   }
 
   @override
@@ -295,15 +52,80 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     super.dispose();
   }
 
-  void _handleRequestAction(String id, bool approve) {
+  Future<void> _loadDashboardData() async {
     setState(() {
-      _requests.removeWhere((r) => r.id == id);
+      _isLoading = true;
+      _errorMessage = null;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(approve ? 'Request approved and signed.' : 'Request rejected.'),
-        backgroundColor: approve ? AppColors.success : AppColors.error,
-        behavior: SnackBarBehavior.floating,
+
+    try {
+      final statsFuture = _repository.getDashboardStats();
+      final facultyFuture = _repository.getFacultyList();
+      final allocationsFuture = _repository.getSubjectAllocations();
+      final requestsFuture = _repository.getGovernanceRequests();
+
+      final results = await Future.wait([
+        statsFuture,
+        facultyFuture,
+        allocationsFuture,
+        requestsFuture,
+      ]);
+
+      if (mounted) {
+        setState(() {
+          _stats = results[0] as AdminDashboardStats;
+          _facultyList = results[1] as List<FacultyModel>;
+          _subjectAllocations = results[2] as List<SubjectAllocationModel>;
+          _requests = results[3] as List<GovernanceRequestModel>;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+        });
+      }
+    }
+  }
+
+  Future<void> _handleRequestAction(String id, bool approve) async {
+    try {
+      await _repository.processGovernanceAction(
+        requestId: id,
+        action: approve ? 'APPROVE' : 'REJECT',
+      );
+      await _loadDashboardData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(approve ? 'Request approved successfully.' : 'Request rejected.'),
+            backgroundColor: approve ? AppColors.success : AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Action failed: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  // ─── FACULTY UPLOAD DIALOG ─────────────────────────────────────────────────
+
+  void _openUploadFacultyDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => FacultyUploadDialog(
+        onImportSuccess: _loadDashboardData,
       ),
     );
   }
@@ -395,24 +217,34 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-                  onPressed: () {
+                  onPressed: () async {
                     if (nameCtrl.text.trim().isEmpty) return;
-                    setState(() {
-                      _facultyList.add(FacultyMember(
-                        id: 'fac_${DateTime.now().millisecondsSinceEpoch}',
+                    final email = emailCtrl.text.trim().isNotEmpty
+                        ? emailCtrl.text.trim()
+                        : '${nameCtrl.text.trim().toLowerCase().replaceAll(' ', '.')}@enosis.edu.in';
+                    try {
+                      await _repository.createFaculty(
                         name: nameCtrl.text.trim(),
+                        email: email,
                         employeeId: empCtrl.text.trim(),
-                        email: emailCtrl.text.trim().isNotEmpty ? emailCtrl.text.trim() : '${nameCtrl.text.trim().toLowerCase().replaceAll(' ', '.')}@kitcoek.in',
                         department: dept,
                         designation: desig,
                         phone: phoneCtrl.text.trim(),
-                        assignedSubjectCodes: [],
-                      ));
-                    });
-                    Navigator.of(ctx).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Faculty ${nameCtrl.text.trim()} added successfully!'), backgroundColor: AppColors.success),
-                    );
+                      );
+                      if (ctx.mounted) Navigator.of(ctx).pop();
+                      await _loadDashboardData();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Faculty ${nameCtrl.text.trim()} added successfully!'), backgroundColor: AppColors.success),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to add faculty: $e'), backgroundColor: AppColors.error),
+                        );
+                      }
+                    }
                   },
                   child: const Text('Add Faculty'),
                 ),
@@ -424,12 +256,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  void _openEditFacultyDialog(FacultyMember faculty) {
+  void _openEditFacultyDialog(FacultyModel faculty) {
     final nameCtrl = TextEditingController(text: faculty.name);
     final emailCtrl = TextEditingController(text: faculty.email);
     final phoneCtrl = TextEditingController(text: faculty.phone);
-    String dept = faculty.department;
-    String desig = faculty.designation;
+    String dept = faculty.department.isNotEmpty ? faculty.department : 'CSE (AI & ML)';
+    String desig = faculty.designation.isNotEmpty ? faculty.designation : 'Assistant Professor';
+    bool canManage = faculty.canManageTimetable;
+
+    final depts = ['CSE (AI & ML)', 'Computer Science', 'Electronics & Telecom', 'Basic Sciences', 'Mechanical Engineering'];
+    if (!depts.contains(dept)) depts.add(dept);
+
+    final desigs = ['Professor & HOD', 'Professor', 'Associate Professor', 'Assistant Professor', 'Adjunct Faculty'];
+    if (!desigs.contains(desig)) desigs.add(desig);
 
     showDialog(
       context: context,
@@ -454,19 +293,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       DropdownButtonFormField<String>(
                         value: dept,
                         decoration: const InputDecoration(labelText: 'Department'),
-                        items: ['CSE (AI & ML)', 'Computer Science', 'Electronics & Telecom', 'Basic Sciences', 'Mechanical Engineering']
-                            .map((d) => DropdownMenuItem(value: d, child: Text(d, style: const TextStyle(fontSize: 13))))
-                            .toList(),
+                        items: depts.map((d) => DropdownMenuItem(value: d, child: Text(d, style: const TextStyle(fontSize: 13)))).toList(),
                         onChanged: (v) => setDialogState(() => dept = v!),
                       ),
                       const SizedBox(height: 14),
                       DropdownButtonFormField<String>(
                         value: desig,
                         decoration: const InputDecoration(labelText: 'Designation'),
-                        items: ['Professor & HOD', 'Professor', 'Associate Professor', 'Assistant Professor', 'Adjunct Faculty']
-                            .map((d) => DropdownMenuItem(value: d, child: Text(d, style: const TextStyle(fontSize: 13))))
-                            .toList(),
+                        items: desigs.map((d) => DropdownMenuItem(value: d, child: Text(d, style: const TextStyle(fontSize: 13)))).toList(),
                         onChanged: (v) => setDialogState(() => desig = v!),
+                      ),
+                      const SizedBox(height: 14),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Timetable Manager Role', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        subtitle: const Text('Allow this faculty member to build and solve timetables', style: TextStyle(fontSize: 11)),
+                        value: canManage,
+                        onChanged: (val) => setDialogState(() => canManage = val),
                       ),
                     ],
                   ),
@@ -476,18 +319,31 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary, foregroundColor: Colors.white),
-                  onPressed: () {
-                    setState(() {
-                      faculty.name = nameCtrl.text.trim();
-                      faculty.email = emailCtrl.text.trim();
-                      faculty.phone = phoneCtrl.text.trim();
-                      faculty.department = dept;
-                      faculty.designation = desig;
-                    });
-                    Navigator.of(ctx).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Updated ${faculty.name}!'), backgroundColor: AppColors.success),
-                    );
+                  onPressed: () async {
+                    try {
+                      await _repository.updateFaculty(
+                        id: faculty.id,
+                        name: nameCtrl.text.trim(),
+                        email: emailCtrl.text.trim(),
+                        phone: phoneCtrl.text.trim(),
+                        department: dept,
+                        designation: desig,
+                        canManageTimetable: canManage,
+                      );
+                      if (ctx.mounted) Navigator.of(ctx).pop();
+                      await _loadDashboardData();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Updated ${nameCtrl.text.trim()}!'), backgroundColor: AppColors.success),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to update: $e'), backgroundColor: AppColors.error),
+                        );
+                      }
+                    }
                   },
                   child: const Text('Save Changes'),
                 ),
@@ -501,8 +357,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   // ─── SUBJECT ALLOCATION REASSIGNMENT ────────────────────────────────────────
 
-  void _openReassignSubjectDialog(SubjectAllocation allocation) {
-    String selectedFacId = allocation.facultyId;
+  void _openReassignSubjectDialog(SubjectAllocationModel allocation) {
+    if (_facultyList.isEmpty) return;
+    String selectedFacId = allocation.facultyId.isNotEmpty ? allocation.facultyId : _facultyList.first.id;
     String coFacName = allocation.coFacultyName;
 
     showDialog(
@@ -540,7 +397,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     const Text('Assign Primary Faculty In-Charge:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: selectedFacId.isNotEmpty ? selectedFacId : _facultyList.first.id,
+                      value: _facultyList.any((f) => f.id == selectedFacId) ? selectedFacId : _facultyList.first.id,
                       decoration: const InputDecoration(prefixIcon: Icon(Icons.school_outlined)),
                       items: _facultyList.map((f) {
                         return DropdownMenuItem(
@@ -588,26 +445,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary, foregroundColor: Colors.white),
-                  onPressed: () {
-                    final newFaculty = _facultyList.firstWhere((f) => f.id == selectedFacId);
-                    setState(() {
-                      // Update old faculty
-                      for (final f in _facultyList) {
-                        f.assignedSubjectCodes.remove(allocation.courseCode);
+                  onPressed: () async {
+                    try {
+                      await _repository.reassignSubjectAllocation(
+                        allocationId: allocation.id,
+                        facultyId: selectedFacId,
+                        coFacultyName: coFacName,
+                      );
+                      if (ctx.mounted) Navigator.of(ctx).pop();
+                      await _loadDashboardData();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Reallocated ${allocation.courseCode} successfully!'),
+                            backgroundColor: AppColors.success,
+                          ),
+                        );
                       }
-                      // Update new faculty
-                      newFaculty.assignedSubjectCodes.add(allocation.courseCode);
-                      allocation.facultyId = newFaculty.id;
-                      allocation.facultyName = newFaculty.name;
-                      allocation.coFacultyName = coFacName;
-                    });
-                    Navigator.of(ctx).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Reallocated ${allocation.courseCode} to ${newFaculty.name}!'),
-                        backgroundColor: AppColors.success,
-                      ),
-                    );
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Reallocation failed: $e'), backgroundColor: AppColors.error),
+                        );
+                      }
+                    }
                   },
                   child: const Text('Confirm Allocation'),
                 ),
@@ -620,6 +481,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   void _openAddNewSubjectDialog() {
+    if (_facultyList.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please add at least one faculty member first.')),
+      );
+      return;
+    }
+
     final codeCtrl = TextEditingController();
     final nameCtrl = TextEditingController();
     int credits = 3;
@@ -692,28 +560,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-                  onPressed: () {
+                  onPressed: () async {
                     if (codeCtrl.text.trim().isEmpty || nameCtrl.text.trim().isEmpty) return;
-                    final fac = _facultyList.firstWhere((f) => f.id == facId);
-                    setState(() {
-                      final newAlloc = SubjectAllocation(
+                    try {
+                      await _repository.createSubjectAllocation(
                         courseCode: codeCtrl.text.trim().toUpperCase(),
                         courseName: nameCtrl.text.trim(),
                         department: dept,
                         year: year,
                         semester: sem,
                         credits: credits,
-                        facultyId: fac.id,
-                        facultyName: fac.name,
-                        attainmentStatus: 'Not Started',
+                        facultyId: facId,
                       );
-                      _subjectAllocations.add(newAlloc);
-                      fac.assignedSubjectCodes.add(newAlloc.courseCode);
-                    });
-                    Navigator.of(ctx).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Course ${codeCtrl.text.trim()} created!'), backgroundColor: AppColors.success),
-                    );
+                      if (ctx.mounted) Navigator.of(ctx).pop();
+                      await _loadDashboardData();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Course ${codeCtrl.text.trim()} created!'), backgroundColor: AppColors.success),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to create course: $e'), backgroundColor: AppColors.error),
+                        );
+                      }
+                    }
                   },
                   child: const Text('Add Course'),
                 ),
@@ -744,7 +616,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
             ),
             Text(
-              "KIT's College of Engineering (Autonomous), Kolhapur · Academic Monitoring",
+              "KIT's College of Engineering (Autonomous), Kolhapur · Central Master Data",
               style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 11.5),
             ),
           ],
@@ -752,8 +624,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
-            tooltip: 'Refresh Records',
-            onPressed: () => setState(() {}),
+            tooltip: 'Refresh Records from Database',
+            onPressed: _loadDashboardData,
           ),
           const SizedBox(width: 8),
         ],
@@ -763,21 +635,54 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           unselectedLabelColor: Colors.white60,
           indicatorColor: AppColors.secondary,
           indicatorWeight: 3.5,
-          tabs: const [
-            Tab(icon: Icon(Icons.people_alt_outlined, size: 18), text: '1. Faculty Directory'),
-            Tab(icon: Icon(Icons.menu_book_outlined, size: 18), text: '2. Manage Subjects & Teaching Load'),
-            Tab(icon: Icon(Icons.verified_user_outlined, size: 18), text: '3. Approvals & System Audit'),
+          tabs: [
+            Tab(icon: const Icon(Icons.people_alt_outlined, size: 18), text: '1. Faculty Directory (${_facultyList.length})'),
+            Tab(icon: const Icon(Icons.menu_book_outlined, size: 18), text: '2. Manage Subjects & Teaching Load (${_subjectAllocations.length})'),
+            Tab(icon: const Icon(Icons.verified_user_outlined, size: 18), text: '3. Approvals & System Audit (${_requests.length})'),
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildFacultyManagementTab(isMobile),
-          _buildSubjectManagementTab(isMobile),
-          _buildApprovalsTab(isMobile),
-        ],
-      ),
+      body: _isLoading
+          ? const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Loading Live Central Master Data from Database...', style: TextStyle(fontWeight: FontWeight.w600)),
+                ],
+              ),
+            )
+          : _errorMessage != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.cloud_off, size: 48, color: AppColors.error),
+                        const SizedBox(height: 16),
+                        Text('Failed to load Master Data', style: AppTypography.h3),
+                        const SizedBox(height: 8),
+                        Text(_errorMessage!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textSecondary)),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry Connection'),
+                          onPressed: _loadDashboardData,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildFacultyManagementTab(isMobile),
+                    _buildSubjectManagementTab(isMobile),
+                    _buildApprovalsTab(isMobile),
+                  ],
+                ),
     );
   }
 
@@ -823,12 +728,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   DropdownButton<String>(
                     value: _selectedDeptFilter,
                     underline: const SizedBox(),
-                    items: ['All', 'CSE (AI & ML)', 'Computer Science', 'Electronics & Telecom', 'Basic Sciences']
+                    items: ['All', 'CSE (AI & ML)', 'Computer Science', 'Electronics & Telecom', 'Basic Sciences', 'Mechanical Engineering']
                         .map((dept) => DropdownMenuItem(value: dept, child: Text(dept, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))))
                         .toList(),
                     onChanged: (val) => setState(() => _selectedDeptFilter = val!),
                   ),
                   const SizedBox(width: 16),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                    icon: const Icon(Icons.file_upload_outlined, size: 18),
+                    label: const Text('Import Faculty (Excel/CSV)', style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: _openUploadFacultyDialog,
+                  ),
+                  const SizedBox(width: 12),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.secondary,
@@ -848,92 +764,130 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           // Faculty List
           Text('Registered Faculty Members (${filtered.length} shown)', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: filtered.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, idx) {
-              final faculty = filtered[idx];
-              return Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          if (filtered.isEmpty)
+            const AppCard(
+              child: Center(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 24,
-                        backgroundColor: AppColors.primary,
-                        child: Text(
-                          faculty.name.split(' ').map((n) => n.isNotEmpty ? n[0] : '').take(2).join(),
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  padding: EdgeInsets.symmetric(vertical: 32),
+                  child: Text('No faculty records found matching your filters.'),
+                ),
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: filtered.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, idx) {
+                final faculty = filtered[idx];
+                return Card(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundColor: AppColors.primary,
+                          child: Text(
+                            faculty.name.split(' ').map((n) => n.isNotEmpty ? n[0] : '').take(2).join(),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text(faculty.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary)),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(6)),
-                                  child: Text(faculty.employeeId, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(faculty.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary)),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(6)),
+                                    child: Text(faculty.employeeId, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                                  ),
+                                  if (faculty.canManageTimetable) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(color: AppColors.secondary.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                                      child: const Text('Timetable Coordinator', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.secondary)),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              Text('${faculty.designation} · ${faculty.department}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12.5)),
+                              const SizedBox(height: 4),
+                              Text('✉ ${faculty.email}   |   ☎ ${faculty.phone.isNotEmpty ? faculty.phone : "N/A"}', style: const TextStyle(color: AppColors.textTertiary, fontSize: 11.5)),
+                              if (faculty.assignedSubjectCodes.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 4,
+                                  children: faculty.assignedSubjectCodes.map((code) {
+                                    return Chip(
+                                      visualDensity: VisualDensity.compact,
+                                      backgroundColor: const Color(0xFFF1F5F9),
+                                      label: Text('$code In-Charge', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                                    );
+                                  }).toList(),
                                 ),
                               ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Row(
+                          children: [
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
+                              icon: const Icon(Icons.edit_outlined, size: 16),
+                              label: const Text('Edit'),
+                              onPressed: () => _openEditFacultyDialog(faculty),
                             ),
-                            const SizedBox(height: 3),
-                            Text('${faculty.designation} · ${faculty.department}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12.5)),
-                            const SizedBox(height: 4),
-                            Text('✉ ${faculty.email}   |   ☎ ${faculty.phone}', style: const TextStyle(color: AppColors.textTertiary, fontSize: 11.5)),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 4,
-                              children: faculty.assignedSubjectCodes.map((code) {
-                                return Chip(
-                                  visualDensity: VisualDensity.compact,
-                                  backgroundColor: const Color(0xFFF1F5F9),
-                                  label: Text('$code In-Charge', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                              tooltip: 'Deactivate Faculty',
+                              onPressed: () async {
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (c) => AlertDialog(
+                                    title: const Text('Deactivate Faculty Member?'),
+                                    content: Text('Are you sure you want to deactivate ${faculty.name}?'),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Cancel')),
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+                                        onPressed: () => Navigator.of(c).pop(true),
+                                        child: const Text('Deactivate'),
+                                      ),
+                                    ],
+                                  ),
                                 );
-                              }).toList(),
+                                if (confirm == true) {
+                                  await _repository.deleteFaculty(faculty.id);
+                                  await _loadDashboardData();
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Deactivated ${faculty.name}')),
+                                    );
+                                  }
+                                }
+                              },
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Row(
-                        children: [
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
-                            icon: const Icon(Icons.edit_outlined, size: 16),
-                            label: const Text('Edit'),
-                            onPressed: () => _openEditFacultyDialog(faculty),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, color: AppColors.error),
-                            tooltip: 'Deactivate Faculty',
-                            onPressed: () {
-                              setState(() {
-                                _facultyList.removeWhere((f) => f.id == faculty.id);
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Removed ${faculty.name}')),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
-          ),
+                );
+              },
+            ),
         ],
       ),
     );
@@ -958,73 +912,82 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  const Icon(Icons.filter_list, color: AppColors.secondary),
-                  const SizedBox(width: 10),
-                  const Text('Filter Term:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  const SizedBox(width: 14),
-                  DropdownButton<String>(
-                    value: _allocYearFilter,
-                    underline: const SizedBox(),
-                    items: ['F.Y. B.Tech', 'S.Y. B.Tech', 'T.Y. B.Tech', 'Final Year B.Tech']
-                        .map((y) => DropdownMenuItem(value: y, child: Text(y, style: const TextStyle(fontWeight: FontWeight.bold))))
-                        .toList(),
-                    onChanged: (v) => setState(() => _allocYearFilter = v!),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _allocYearFilter,
+                      decoration: const InputDecoration(labelText: 'Academic Year', isDense: true),
+                      items: ['F.Y. B.Tech', 'S.Y. B.Tech', 'T.Y. B.Tech', 'Final Year B.Tech']
+                          .map((y) => DropdownMenuItem(value: y, child: Text(y, style: const TextStyle(fontSize: 13))))
+                          .toList(),
+                      onChanged: (v) => setState(() => _allocYearFilter = v!),
+                    ),
                   ),
-                  const SizedBox(width: 20),
-                  DropdownButton<String>(
-                    value: _allocSemFilter,
-                    underline: const SizedBox(),
-                    items: ['Semester I', 'Semester II', 'Semester III', 'Semester IV', 'Semester V', 'Semester VI', 'Semester VII', 'Semester VIII']
-                        .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontWeight: FontWeight.bold))))
-                        .toList(),
-                    onChanged: (v) => setState(() => _allocSemFilter = v!),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _allocSemFilter,
+                      decoration: const InputDecoration(labelText: 'Semester', isDense: true),
+                      items: ['Semester I', 'Semester II', 'Semester III', 'Semester IV', 'Semester V', 'Semester VI', 'Semester VII', 'Semester VIII']
+                          .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 13))))
+                          .toList(),
+                      onChanged: (v) => setState(() => _allocSemFilter = v!),
+                    ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 16),
                   ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add Course'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.secondary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                    ),
+                    icon: const Icon(Icons.add_box_outlined, size: 18),
+                    label: const Text('Add Course', style: TextStyle(fontWeight: FontWeight.bold)),
                     onPressed: _openAddNewSubjectDialog,
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
-          Text('Subject Faculty Allocations for $_allocYearFilter ($_allocSemFilter)', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+          Text(
+            'Active Teaching Allocations (${filteredSubjects.length} courses in $_allocYearFilter - $_allocSemFilter)',
+            style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 12),
 
           if (filteredSubjects.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(32),
-              alignment: Alignment.center,
-              child: const Text('No subjects registered for this semester. Click "Add Course" above.'),
+            const AppCard(
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 32),
+                  child: Text('No courses allocated for this semester yet.'),
+                ),
+              ),
             )
           else
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: filteredSubjects.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (context, idx) {
-                final sub = filteredSubjects[idx];
-                final statusColor = sub.attainmentStatus == 'Approved'
-                    ? AppColors.success
-                    : (sub.attainmentStatus == 'Submitted' ? Colors.blue : (sub.attainmentStatus == 'In Progress' ? AppColors.warning : AppColors.textTertiary));
-
+                final alloc = filteredSubjects[idx];
                 return Card(
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: Padding(
-                    padding: const EdgeInsets.all(18),
+                    padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primarySoft,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           child: Text(
-                            sub.courseCode,
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 13),
+                            alloc.courseCode,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -1032,68 +995,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(sub.courseName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary)),
-                              const SizedBox(height: 4),
-                              Text('${sub.department} · ${sub.credits} Credits · Theory & Practical', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  const Icon(Icons.person, size: 16, color: AppColors.secondary),
-                                  const SizedBox(width: 6),
-                                  Text('Primary Faculty: ${sub.facultyName}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: AppColors.textPrimary)),
-                                  const SizedBox(width: 14),
-                                  Text('Co-Faculty: ${sub.coFacultyName}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                                ],
-                              ),
+                              Text(alloc.courseName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: AppColors.textPrimary)),
+                              const SizedBox(height: 3),
+                              Text('Assigned Teacher: ${alloc.facultyName}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5, color: AppColors.secondary)),
+                              if (alloc.coFacultyName != 'None' && alloc.coFacultyName.isNotEmpty)
+                                Text('Co-Faculty: ${alloc.coFacultyName}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11.5)),
                             ],
                           ),
                         ),
                         const SizedBox(width: 16),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: statusColor.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: statusColor),
-                              ),
-                              child: Text(
-                                sub.attainmentStatus,
-                                style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 11),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.secondary,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  ),
-                                  icon: const Icon(Icons.swap_horiz, size: 16),
-                                  label: const Text('Reallocate Faculty', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                  onPressed: () => _openReassignSubjectDialog(sub),
-                                ),
-                                const SizedBox(width: 8),
-                                OutlinedButton.icon(
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: AppColors.primary,
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                  ),
-                                  icon: const Icon(Icons.open_in_new, size: 15),
-                                  label: const Text('Workbench', style: TextStyle(fontSize: 12)),
-                                  onPressed: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(builder: (_) => const CopoWorkbenchScreen(initialMappingStarted: true)),
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                          ],
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.secondary,
+                            side: const BorderSide(color: AppColors.secondary),
+                          ),
+                          icon: const Icon(Icons.swap_horiz, size: 16),
+                          label: const Text('Reassign Faculty'),
+                          onPressed: () => _openReassignSubjectDialog(alloc),
                         ),
                       ],
                     ),
@@ -1114,7 +1032,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionHeader(title: 'Pending Faculty Governance Requests'),
+          const SectionHeader(title: 'Pending Faculty Governance & CAS Requests'),
           const SizedBox(height: 12),
           if (_requests.isEmpty)
             const AppCard(
@@ -1208,6 +1126,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   Widget _buildStatRow(bool isMobile) {
+    final totalFaculty = _stats?.totalFaculty ?? _facultyList.length;
+    final allocatedCourses = _stats?.allocatedCoursesCount ?? _subjectAllocations.length;
+    final attainmentPercent = _stats?.attainmentCompletedPercent ?? 0;
+    final pendingGov = _stats?.pendingGovernanceCount ?? _requests.length;
+
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -1216,10 +1139,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       mainAxisSpacing: 16,
       childAspectRatio: isMobile ? 1.4 : 1.7,
       children: [
-        _buildStatCard('Total Faculty', '${_facultyList.length}', Icons.people_alt_outlined, AppColors.primary),
-        _buildStatCard('Allocated Courses', '${_subjectAllocations.length}', Icons.menu_book, AppColors.secondary),
-        _buildStatCard('Attainment Completed', '75%', Icons.check_circle_outline, AppColors.success),
-        _buildStatCard('Pending Governance', '${_requests.length}', Icons.pending_actions, AppColors.warning),
+        _buildStatCard('Total Faculty', '$totalFaculty', Icons.people_alt_outlined, AppColors.primary),
+        _buildStatCard('Allocated Courses', '$allocatedCourses', Icons.menu_book, AppColors.secondary),
+        _buildStatCard('Attainment Completed', '$attainmentPercent%', Icons.check_circle_outline, AppColors.success),
+        _buildStatCard('Pending Governance', '$pendingGov', Icons.pending_actions, AppColors.warning),
       ],
     );
   }

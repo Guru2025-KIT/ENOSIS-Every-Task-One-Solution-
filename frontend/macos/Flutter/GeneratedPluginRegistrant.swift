@@ -5,7 +5,7 @@
 import FlutterMacOS
 import Foundation
 
-import file_picker
+import file_picker_darwin
 import flutter_tts
 import shared_preferences_foundation
 import speech_to_text

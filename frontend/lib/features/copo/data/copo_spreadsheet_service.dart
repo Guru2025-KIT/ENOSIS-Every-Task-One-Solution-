@@ -35,17 +35,15 @@ class CopoSpreadsheetService {
   /// Picks a file from user's device and extracts student marks.
   static Future<ParsedSpreadsheetResult?> pickAndParseMarksSheet() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: ['xlsx', 'xls', 'csv'],
-        withData: true,
       );
 
-      if (result == null || result.files.isEmpty) return null;
+      if (file == null) return null;
 
-      final file = result.files.first;
-      final bytes = file.bytes;
-      if (bytes == null) return null;
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) return null;
 
       return parseFileBytes(bytes, file.name);
     } catch (e) {

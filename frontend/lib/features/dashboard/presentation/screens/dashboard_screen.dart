@@ -698,59 +698,125 @@ class _DashboardScreenState extends State<DashboardScreen> {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: AppColors.secondary.withOpacity(0.3)),
             ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.secondary,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.auto_stories_rounded, color: Colors.white, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            child: LayoutBuilder(
+              builder: (context, bannerConstraints) {
+                final isNarrow = bannerConstraints.maxWidth < 500;
+                if (isNarrow) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
-                        'Guided 6-Stage CO-PO Attainment Wizard',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.textPrimary),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.secondary,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.auto_stories_rounded, color: Colors.white, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Guided 6-Stage CO-PO Attainment Wizard',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.textPrimary),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '1. Matrix ➔ 2. Roll Call ➔ 3. ISE ➔ 4. MSE/ESE ➔ 5. Survey ➔ 6. Attainment',
+                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '1. Matrix ➔ 2. Roll Call ➔ 3. ISE ➔ 4. MSE/ESE ➔ 5. Survey ➔ 6. Attainment',
-                        style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      const SizedBox(height: 10),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.secondary,
+                          foregroundColor: Colors.white,
+                          elevation: 1,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                        label: const Text('Start Workflow ➔', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        onPressed: () {
+                          if (widget.onNavigateTab != null) {
+                            widget.onNavigateTab!(2);
+                          } else {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const CopoAttainmentScreen(courseId: 'CS201', semester: 'Sem 4'),
+                              ),
+                            );
+                          }
+                        },
                       ),
                     ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.secondary,
-                    foregroundColor: Colors.white,
-                    elevation: 1,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                  label: const Text('Start Workflow ➔', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                  onPressed: () {
-                    if (widget.onNavigateTab != null) {
-                      widget.onNavigateTab!(2); // Switch to CO-PO tab
-                    } else {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const CopoAttainmentScreen(courseId: 'CS201', semester: 'Sem 4'),
-                        ),
-                      );
-                    }
-                  },
-                ),
-              ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.secondary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.auto_stories_rounded, color: Colors.white, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Guided 6-Stage CO-PO Attainment Wizard',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.textPrimary),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '1. Matrix ➔ 2. Roll Call ➔ 3. ISE ➔ 4. MSE/ESE ➔ 5. Survey ➔ 6. Attainment',
+                            style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.secondary,
+                        foregroundColor: Colors.white,
+                        elevation: 1,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                      label: const Text('Start Workflow ➔', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      onPressed: () {
+                        if (widget.onNavigateTab != null) {
+                          widget.onNavigateTab!(2);
+                        } else {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const CopoAttainmentScreen(courseId: 'CS201', semester: 'Sem 4'),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ],

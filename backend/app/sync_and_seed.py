@@ -17,6 +17,24 @@ def sync_database_schema():
     inspector = inspect(engine)
     
     with engine.connect() as conn:
+        # 0. users
+        if "users" in inspector.get_table_names():
+            user_cols = {col["name"] for col in inspector.get_columns("users")}
+            if "designation" not in user_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN designation VARCHAR(100) NULL;"))
+            if "phone" not in user_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN phone VARCHAR(30) NULL;"))
+            if "role" not in user_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'faculty';"))
+            if "can_manage_timetable" not in user_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN can_manage_timetable BOOLEAN NOT NULL DEFAULT 0;"))
+            if "is_active" not in user_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1;"))
+            if "employee_id" not in user_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN employee_id VARCHAR(50) NULL;"))
+            if "department" not in user_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN department VARCHAR(100) NULL;"))
+
         # 1. subjects
         subject_cols = {col["name"] for col in inspector.get_columns("subjects")}
         if "sli_department_id" not in subject_cols:
@@ -189,6 +207,63 @@ def sync_database_schema():
 
         conn.commit()
         print("=== DATABASE SCHEMA SYNC COMPLETE ===")
+
+
+def seed_admin_user():
+    """
+    Ensures at least one admin account exists in the database.
+    
+    Strategy:
+    1. If ANY user already has role=ADMIN, do nothing — admin exists.
+    2. Else if a user with the default admin email exists, promote them.
+    3. Else create a brand new admin user with sensible defaults.
+    
+    The default admin credentials are admin@enosis.edu.in / admin123
+    (intended for development only — production would use env vars).
+    """
+    from app.models.user import User, UserRole
+    from app.core.security import hash_password
+
+    DEFAULT_ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@enosis.edu.in")
+    DEFAULT_ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+    DEFAULT_ADMIN_NAME = os.environ.get("ADMIN_NAME", "System Admin")
+
+    db = SessionLocal()
+    try:
+        # Check if any admin already exists
+        existing_admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
+        if existing_admin:
+            print(f"  ✓ Admin user already exists: {existing_admin.email}")
+            return
+
+        # Check if a user with the admin email exists but isn't admin yet
+        user = db.query(User).filter(User.email == DEFAULT_ADMIN_EMAIL).first()
+        if user:
+            user.role = UserRole.ADMIN
+            db.commit()
+            print(f"  ✓ Promoted existing user '{user.email}' to ADMIN role.")
+            return
+
+        # Create a new admin user
+        admin_user = User(
+            email=DEFAULT_ADMIN_EMAIL,
+            hashed_password=hash_password(DEFAULT_ADMIN_PASSWORD),
+            full_name=DEFAULT_ADMIN_NAME,
+            role=UserRole.ADMIN,
+            department="Administration",
+            employee_id="ADMIN-001",
+            is_active=True,
+            can_manage_timetable=True,
+        )
+        db.add(admin_user)
+        db.commit()
+        print(f"  ✓ Created admin user: {DEFAULT_ADMIN_EMAIL} (password: {DEFAULT_ADMIN_PASSWORD})")
+    except Exception as e:
+        db.rollback()
+        print(f"  ⚠ Admin seeding failed: {e}")
+    finally:
+        db.close()
+
 
 if __name__ == "__main__":
     sync_database_schema()

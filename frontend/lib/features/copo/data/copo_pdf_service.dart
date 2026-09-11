@@ -25,11 +25,6 @@ class CopoPdfService {
     Future.delayed(const Duration(seconds: 15), () {
       html.Url.revokeObjectUrl(url);
     });
-
-    if (printWindow == null) {
-      // Fallback: trigger file download if popup blocked
-      downloadReportHtml(report: report, config: config, course: course);
-    }
   }
 
   static void downloadReportHtml({

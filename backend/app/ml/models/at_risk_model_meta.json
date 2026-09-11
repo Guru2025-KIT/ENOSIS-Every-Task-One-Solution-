@@ -1,6 +1,6 @@
 {
   "model_name": "LogisticRegression",
-  "trained_at": "2026-09-09T02:52:22.465484+00:00",
+  "trained_at": "2026-09-11T02:21:39.817472+00:00",
   "total_samples": 18,
   "train_samples": 13,
   "validation_samples": 5,
@@ -65,13 +65,13 @@
     "has_critical_drop"
   ],
   "top_feature_importances": {
-    "mid_skill_confidence_mean": 0.4711,
+    "mid_skill_confidence_mean": 0.4712,
     "mid_skill_application_mean": 0.4052,
     "mid_problem_solving": 0.4052,
     "min_mid_skill_score": 0.4052,
-    "delta_confidence_mean": 0.3255,
+    "delta_confidence_mean": 0.3256,
     "mid_barrier_frequency": 0.2799,
-    "delta_barrier_frequency": 0.2799,
+    "delta_barrier_frequency": 0.2798,
     "mid_overall_confidence": 0.2788
   },
   "is_calibration_dataset": false

@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../../core/network/api_client.dart';
 
 const List<String> poColumnNames = [
   'PO1', 'PO2', 'PO3', 'PO4', 'PO5', 'PO6',
@@ -1209,7 +1209,7 @@ class CopoRepository {
   Future<CopoAttainmentReport> calculateAttainment() async {
     ensureInitialized();
     try {
-      final url = Uri.parse('http://localhost:8000/api/copo/calculate');
+      final url = Uri.parse('${ApiClient.baseUrl}/api/copo/calculate');
       final payload = {
         'master': master.toJson(),
         'matrix': {'matrix': matrix},

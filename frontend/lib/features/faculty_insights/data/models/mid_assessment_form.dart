@@ -1,5 +1,3 @@
-import '../../../../core/network/api_client.dart';
-
 /// Structured skill progress item linked to PRE-identified target skills.
 class SkillProgressItem {
   String skillName;

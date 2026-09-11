@@ -7,7 +7,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
-import '../../../../core/widgets/primary_button.dart';
 import '../../data/achievement_repository.dart';
 
 /// Screen for Faculty Career Advancement.
@@ -1165,16 +1164,14 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
 
   Future<void> _chooseFile() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'],
-        allowMultiple: false,
-        withData: true,
       );
 
-      if (result != null && result.files.isNotEmpty) {
-        final file = result.files.first;
-        if (file.size > 10 * 1024 * 1024) {
+      if (file != null) {
+        final bytes = await file.readAsBytes();
+        if (bytes.length > 10 * 1024 * 1024) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('File size exceeds the 10MB maximum limit.')),
@@ -1182,7 +1179,7 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
           return;
         }
 
-        final sizeKb = (file.size / 1024).round();
+        final sizeKb = (bytes.length / 1024).round();
         final sizeStr = sizeKb > 1024
             ? '${(sizeKb / 1024).toStringAsFixed(1)} MB'
             : '$sizeKb KB';
@@ -1190,10 +1187,8 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
         setState(() {
           _selectedFileName = file.name;
           _selectedFileSize = sizeStr;
-          // On Flutter Web, PlatformFile.path is unavailable and throws.
-          // Use bytes (loaded via withData: true) for upload instead.
           _selectedFilePath = kIsWeb ? null : file.path;
-          _selectedFileBytes = file.bytes;
+          _selectedFileBytes = bytes;
         });
       }
     } catch (e) {

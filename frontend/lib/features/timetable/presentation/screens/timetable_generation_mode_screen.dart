@@ -12,7 +12,6 @@ import '../../data/constraint_repository.dart';
 import 'generate_timetable_screen.dart';
 import 'manage_timetable_data_screen.dart';
 import 'constraint_builder_screen.dart';
-import 'division_timetable_screen.dart';
 
 class TimetableGenerationModeScreen extends StatefulWidget {
   const TimetableGenerationModeScreen({super.key});
@@ -87,7 +86,7 @@ class _TimetableGenerationModeScreenState extends State<TimetableGenerationModeS
       final rooms = results[0] as List<RoomModel>;
       final subs = results[1] as List<SubjectModel>;
       final divs = results[2] as List<DivisionModel>;
-      final assigns = results[3] as List<dynamic>;
+      final assigns = results[3];
       final consts = results[4] as List<ConstraintModel>;
       final faculty = results[5] as List<FacultyOption>;
 
@@ -1133,18 +1132,18 @@ class _TimetableGenerationModeScreenState extends State<TimetableGenerationModeS
             child: Column(
               children: [
                 Text(
-                  config.collegeName ?? "KIT's College of Engineering (Autonomous), Kolhapur",
+                  config.collegeName.isNotEmpty ? config.collegeName : "KIT's College of Engineering (Autonomous), Kolhapur",
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Department of ${config.departmentName ?? 'Computer Science & Engineering'}",
+                  "Department of ${config.departmentName.isNotEmpty ? config.departmentName : 'Computer Science & Engineering'}",
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black54),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  "Time Table A.Y. ${config.academicYear ?? '2026-27'} ${config.semester ?? 'Odd'} Semester — ${_getViewTitle()}",
+                  "Time Table A.Y. ${config.academicYear.isNotEmpty ? config.academicYear : '2026-27'} ${config.semester.isNotEmpty ? config.semester : 'Odd'} Semester — ${_getViewTitle()}",
                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary),
                 ),
               ],
@@ -1311,8 +1310,8 @@ class _TimetableGenerationModeScreenState extends State<TimetableGenerationModeS
       height: 52,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        border: Border.all(color: color.withOpacity(0.4), width: 1.0),
+        color: color.withValues(alpha: 0.12),
+        border: Border.all(color: color.withValues(alpha: 0.4), width: 1.0),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Center(
