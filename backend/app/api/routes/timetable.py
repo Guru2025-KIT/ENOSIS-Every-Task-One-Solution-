@@ -598,8 +598,9 @@ def pre_validate(db: Session = Depends(get_db), _: User = Depends(get_current_us
 def generate(
     payload: TimetableGenerateRequestBody | None = None,
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_optional_current_user),
+    current_user: User = Depends(require_timetable_manager),
 ):
+
     """
     Stage 2 Dynamic Timetable Generation Endpoint.
     Accepts assignments, time slots, constraints, and combined/joint class groupings in the request body.

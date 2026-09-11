@@ -17,8 +17,10 @@ os.environ["DATABASE_URL"] = "sqlite:///./test_enosis.db"
 
 import pytest
 
+from app.core.security import create_access_token, hash_password
 from app.db.base import Base, engine, SessionLocal
 from app.models.user import User, UserRole
+
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -227,8 +227,33 @@ def sync_database_schema():
         if "task_reminders" not in inspector.get_table_names():
             app.models.todo.TaskReminder.__table__.create(bind=conn)
 
+        # 13. schedule_config
+        if "schedule_config" in inspector.get_table_names():
+            sc_cols = {col["name"] for col in inspector.get_columns("schedule_config")}
+            if "end_time" not in sc_cols:
+                conn.execute(text("ALTER TABLE schedule_config ADD COLUMN end_time VARCHAR(10) NULL DEFAULT '17:00';"))
+
+        # 14. rooms
+        if "rooms" in inspector.get_table_names():
+            room_cols = {col["name"] for col in inspector.get_columns("rooms")}
+            if "building" not in room_cols:
+                conn.execute(text("ALTER TABLE rooms ADD COLUMN building VARCHAR(100) NULL;"))
+            if "equipment" not in room_cols:
+                conn.execute(text("ALTER TABLE rooms ADD COLUMN equipment TEXT NULL;"))
+            if "is_active" not in room_cols:
+                conn.execute(text("ALTER TABLE rooms ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1;"))
+
+        # 15. timetable_entries
+        if "timetable_entries" in inspector.get_table_names():
+            tt_cols = {col["name"] for col in inspector.get_columns("timetable_entries")}
+            if "batch_name" not in tt_cols:
+                conn.execute(text("ALTER TABLE timetable_entries ADD COLUMN batch_name VARCHAR(50) NULL;"))
+            if "session_type" not in tt_cols:
+                conn.execute(text("ALTER TABLE timetable_entries ADD COLUMN session_type VARCHAR(30) NULL DEFAULT 'Theory';"))
+
         conn.commit()
         print("=== DATABASE SCHEMA SYNC COMPLETE ===")
+
 
 
 def seed_admin_user():
