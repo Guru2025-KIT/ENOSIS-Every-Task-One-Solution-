@@ -33,16 +33,19 @@ class ApiClient {
       }
       list.add('http://localhost:8000');
       list.add('http://127.0.0.1:8000');
+      list.add('http://10.46.195.143:8000');
       list.add('http://172.16.54.114:8000');
     } else if (defaultTargetPlatform == TargetPlatform.android) {
-      // 10.0.2.2 is Android Emulator loopback to host; 172.16.54.114 is LAN IP for physical devices
+      // 10.0.2.2 is Android Emulator loopback to host; 10.46.195.143 / 172.16.54.114 for LAN IP
       list.add('http://10.0.2.2:8000');
+      list.add('http://10.46.195.143:8000');
       list.add('http://172.16.54.114:8000');
       list.add('http://localhost:8000');
       list.add('http://127.0.0.1:8000');
     } else {
       list.add('http://localhost:8000');
       list.add('http://127.0.0.1:8000');
+      list.add('http://10.46.195.143:8000');
       list.add('http://172.16.54.114:8000');
     }
 
