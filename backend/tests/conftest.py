@@ -23,16 +23,23 @@ from app.models.user import User, UserRole
 
 
 
+@pytest.fixture(autouse=True)
+def setup_db_tables():
+    """Initializes all database tables before every test function."""
+    Base.metadata.create_all(bind=engine)
+    yield
+
+
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_after_all_tests():
-    """Initializes tables and removes test DB file after tests finish."""
-    Base.metadata.create_all(bind=engine)
+    """Removes test DB file after the entire test suite finishes."""
     yield
     if os.path.exists("test_enosis.db"):
         try:
             os.remove("test_enosis.db")
         except PermissionError:
             pass
+
 
 
 
