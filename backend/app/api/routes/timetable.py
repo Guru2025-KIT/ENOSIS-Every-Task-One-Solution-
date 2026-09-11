@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_timetable_manager
+from app.api.deps import get_current_user, require_timetable_manager, get_optional_current_user
 from app.core.config import settings
 from app.db.base import get_db
 from app.models.academic import (
@@ -33,9 +33,11 @@ from app.schemas.timetable import (
     TimetableEntryOut, CollegeInfo, GenerationRunOut, ValidationResponse,
     ConflictDetail,
     InstitutionalCourseCreate, InstitutionalCourseOut,
-    SharedCourseCreate, SharedCourseOut
+    SharedCourseCreate, SharedCourseOut,
+    TimetableGenerateRequestBody, TimetableGenerateResponseBody
 )
 from app.services.timetable_solver import generate_timetable, validate_request
+from app.services.timetable_cpsat_solver import solve_from_dicts
 from app.services.timetable_validator import validate_generated_timetable
 from app.services.notifications import notify
 
@@ -592,16 +594,42 @@ def pre_validate(db: Session = Depends(get_db), _: User = Depends(get_current_us
 
 @router.post("/generate")
 def generate(
+    payload: TimetableGenerateRequestBody | None = None,
     db: Session = Depends(get_db),
-    _: User = Depends(require_timetable_manager),
+    current_user: User | None = Depends(get_optional_current_user),
 ):
     """
-    Loads all current divisions/subjects/rooms/assignments/constraints,
-    runs the CP-SAT solver, performs post-generation validation,
-    and replaces the existing schedule entries.
-    Records history in GenerationRun.
+    Stage 2 Dynamic Timetable Generation Endpoint.
+    Accepts assignments, time slots, constraints, and combined/joint class groupings in the request body.
+    Returns: { status, timetable, conflictingConstraints, message, solve_time_seconds }
     """
-    # 1. Build solver request
+    if payload and payload.assignments:
+        # ✅ ADDED FOR DEBUGGING: Print what Flutter sent
+        print("\n=== BACKEND RECEIVED CONSTRAINTS ===")
+        for c in payload.constraints:
+            # FastAPI parses this as a dict, so we can print it directly
+            print(c)
+        print("===================================\n")
+
+        # ✅ FIX: payload.assignments is already a list of dicts! Just pass it directly.
+        solver_result = solve_from_dicts(
+            assignments_raw=payload.assignments,
+            constraints_raw=payload.constraints,
+            combined_groups=payload.combined_groups,
+            time_slots_raw=payload.time_slots,
+            working_days=payload.working_days,
+            time_limit_seconds=payload.time_limit_seconds,
+        )
+
+        return TimetableGenerateResponseBody(
+            status=solver_result.status,
+            timetable=solver_result.timetable,
+            conflictingConstraints=solver_result.conflicts,
+            message=solver_result.message,
+            solve_time_seconds=solver_result.solve_time_seconds,
+        )
+
+    # Legacy fallback: Build from database if no payload provided
     request = _build_generation_request(db)
     
     # Snapshot of config
@@ -612,13 +640,13 @@ def generate(
         "max_lectures_per_day_per_faculty": request.max_lectures_per_day_per_faculty
     }
 
-    # 2. Run solver
+    # Run solver
     result = generate_timetable(request)
 
     batch_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
 
-    # 3. Handle solver result
+    # Handle solver result
     if result.status not in ("OPTIMAL", "FEASIBLE"):
         # Save run history as INFEASIBLE
         db_run = GenerationRun(

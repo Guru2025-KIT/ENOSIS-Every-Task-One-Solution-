@@ -425,3 +425,25 @@ class ParseConstraintResponse(BaseModel):
     confirmation_message: str
     raw_text: str
     parsed_successfully: bool
+
+
+# ---------------------------------------------------------------------------
+# Stage 2 Dynamic CP-SAT Generator API schemas
+# ---------------------------------------------------------------------------
+
+class TimetableGenerateRequestBody(BaseModel):
+    assignments: list[dict[str, Any]] = Field(default_factory=list)
+    time_slots: list[dict[str, Any]] | None = None
+    constraints: list[dict[str, Any]] = Field(default_factory=list)
+    combined_groups: list[list[str]] | None = None
+    working_days: list[str] | None = None
+    time_limit_seconds: int = 30
+
+
+class TimetableGenerateResponseBody(BaseModel):
+    status: str
+    timetable: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
+    conflictingConstraints: list[str] = Field(default_factory=list)
+    message: str | None = None
+    solve_time_seconds: float | None = None
+

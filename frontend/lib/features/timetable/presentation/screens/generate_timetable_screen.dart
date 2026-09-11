@@ -15,44 +15,97 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
   bool _isGenerating = false;
   String? _selectedClass;
 
-  final List<Color> _subjectPalette = [
-    const Color(0xFFE3F2FD), const Color(0xFFE8F5E9), const Color(0xFFF3E5F5),
-    const Color(0xFFFFF3E0), const Color(0xFFE0F7FA), const Color(0xFFFCE4EC), const Color(0xFFF1F8E9),
-  ];
-
-  final List<Color> _textPalette = [
-    const Color(0xFF1565C0), const Color(0xFF2E7D32), const Color(0xFF6A1B9A),
-    const Color(0xFFE65100), const Color(0xFF00838F), const Color(0xFFAD1457), const Color(0xFF558B2F),
-  ];
-
-  Color _getCellColor(String subject) {
-    if (subject == 'Break') return Colors.grey.shade200;
-    if (subject == 'Free') return Colors.white;
-    if (subject == 'Holiday') return Colors.red.shade50;
-    int hash = subject.hashCode; if (hash < 0) hash = -hash;
-    return _subjectPalette[hash % _subjectPalette.length];
-  }
-
-  Color _getTextColor(String subject) {
-    if (subject == 'Break' || subject == 'Holiday') return Colors.grey.shade700;
-    if (subject == 'Free') return Colors.grey.shade400;
-    int hash = subject.hashCode; if (hash < 0) hash = -hash;
-    return _textPalette[hash % _textPalette.length];
-  }
-
   Future<void> _startGeneration() async {
     setState(() => _isGenerating = true);
-    await Future.delayed(const Duration(seconds: 2)); // Simulate algorithm thinking
     
-    context.read<TimetableProvider>().generateTimetable();
+    final provider = context.read<TimetableProvider>();
+    await provider.generateTimetable(); // Calls backend
     
-    final classes = context.read<TimetableProvider>().generatedTimetable.keys.toList();
+    final classes = provider.generatedTimetable.keys.toList();
     if (classes.isNotEmpty) {
       _selectedClass = classes.first;
     }
 
     if (!mounted) return;
     setState(() => _isGenerating = false);
+
+    // ✅ SHOW POP-UP IF CONSTRAINTS WERE IGNORED
+    if (provider.generationError != null) {
+      _showInfeasibleDialog(provider.generationError!);
+    } else if (provider.conflictingConstraints.isNotEmpty) {
+      _showRelaxedDialog(provider.conflictingConstraints);
+    }
+  }
+
+  void _showInfeasibleDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cannot Generate Timetable'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRelaxedDialog(List<String> conflicts) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Timetable Generated with Warnings'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: conflicts.length,
+            itemBuilder: (context, index) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(conflicts[index], style: const TextStyle(fontSize: 13))),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ UNIFIED COLORS: Theory (Blue), Lab (Purple)
+  Color _getCellColor(String subject, String batchInfo) {
+    if (subject == 'Break') return Colors.grey.shade200;
+    if (subject == 'Free' || subject.isEmpty) return Colors.white;
+    if (subject == 'Holiday') return Colors.white; // Hide holiday visually
+    
+    bool isLab = subject.toLowerCase().contains('lab') || batchInfo.contains('Batch');
+    if (isLab) return Colors.purple.shade50;
+    return AppColors.primary.withOpacity(0.08); // Theory
+  }
+
+  Color _getTextColor(String subject, String batchInfo) {
+    if (subject == 'Break') return Colors.grey.shade700;
+    if (subject == 'Free' || subject == 'Holiday' || subject.isEmpty) return Colors.white; // Hide text
+    
+    bool isLab = subject.toLowerCase().contains('lab') || batchInfo.contains('Batch');
+    if (isLab) return Colors.purple.shade800;
+    return AppColors.primary; // Theory
   }
 
   @override
@@ -89,7 +142,7 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
                   const SizedBox(height: 24),
                   Text('Generating Timetable...', style: AppTypography.h3),
                   const SizedBox(height: 8),
-                  Text('Splitting batches & assigning labs...', style: AppTypography.bodySecondary),
+                  Text('Applying CSP Algorithm & Constraints...', style: AppTypography.bodySecondary),
                 ],
               ),
             )
@@ -180,9 +233,9 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
           child: _selectedClass == null
               ? const Center(child: Text('Select a class'))
               : SingleChildScrollView(
-                  scrollDirection: Axis.vertical, // ✅ ADDED VERTICAL SCROLL
+                  scrollDirection: Axis.vertical, 
                   child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal, // ✅ KEPT HORIZONTAL SCROLL
+                    scrollDirection: Axis.horizontal, 
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Table(
@@ -203,46 +256,80 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
                           ...timeSlots.map((slot) {
                             return TableRow(
                               children: [
+                                // ✅ SHOW TIMES ON SLOTS
                                 Container(
                                   color: const Color(0xFFF3F4F6),
                                   child: Padding(
-                                    padding: const EdgeInsets.all(12.0),
-                                    child: Text(
-                                      slot.isBreak ? 'Break' : 'Slot ${slot.lectureNumber}',
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF374151)),
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          slot.isBreak ? 'Break' : 'Slot ${slot.lectureNumber}',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF374151)),
+                                        ),
+                                        if (!slot.isBreak)
+                                          Text(
+                                            '${slot.startTime}\n${slot.endTime}',
+                                            style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                          ),
+                                      ],
                                     ),
                                   ),
                                 ),
-                                ...days.map((day) {
+                                                               ...days.map((day) {
                                   String cellKey = '${day}_${slot.lectureNumber}';
                                   List<String>? cellData = generated[_selectedClass]?[cellKey];
-                                  String subject = cellData == null ? 'Free' : cellData[0];
+                                  
+                                  String subject = cellData == null ? '' : cellData[0];
                                   String faculty = cellData != null && cellData.length > 1 ? cellData[1] : '';
                                   String batchInfo = cellData != null && cellData.length > 2 ? cellData[2] : '';
+                                  
+                                  if (subject == 'Holiday') subject = '';
+
+                                  // ✅ LOGIC TO VISUALLY MERGE LABS
+                                  // Check if the PREVIOUS slot has the exact same subject & faculty (meaning it's a 2hr lab continuation)
+                                  String prevCellKey = '${day}_${slot.lectureNumber - 1}';
+                                  List<String>? prevCellData = generated[_selectedClass]?[prevCellKey];
+                                  bool isLabContinuation = prevCellData != null && 
+                                      prevCellData.length > 1 && 
+                                      prevCellData[0] == subject && 
+                                      prevCellData[1] == faculty && 
+                                      subject.isNotEmpty && 
+                                      subject != 'Free' && 
+                                      subject != 'Break';
 
                                   return Container(
-                                    color: _getCellColor(subject),
+                                    color: _getCellColor(subject, batchInfo),
                                     child: Padding(
-                                      padding: const EdgeInsets.all(10.0),
-                                      child: subject == 'Free' || subject == 'Break' || subject == 'Holiday'
-                                        ? Center(child: Text(subject, style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500, fontSize: 12)))
-                                        : Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(subject, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _getTextColor(subject))),
-                                              const SizedBox(height: 4),
-                                              Text(faculty, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                                              if (batchInfo.isNotEmpty && batchInfo != 'All')
-                                                Padding(
-                                                  padding: const EdgeInsets.only(top: 4.0),
-                                                  child: Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                    decoration: BoxDecoration(color: Colors.purple.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                                                    child: Text(batchInfo, style: const TextStyle(fontSize: 9, color: Colors.purple, fontWeight: FontWeight.bold)),
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: subject.isEmpty || subject == 'Free' || subject == 'Break'
+                                        ? const SizedBox() // Empty for Free, Break, Holiday
+                                        : isLabContinuation 
+                                          ? const SizedBox() // ✅ Leave EMPTY for 2nd hour of lab to visually merge!
+                                          : Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(subject, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _getTextColor(subject, batchInfo))),
+                                                const SizedBox(height: 4),
+                                                Text(faculty, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                                if (cellData != null && cellData.length > 3 && cellData[3].isNotEmpty)
+                                                  Padding(
+                                                    padding: const EdgeInsets.only(top: 2.0),
+                                                    child: Text('Room: ${cellData[3]}', style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
                                                   ),
-                                                )
-                                            ],
-                                          ),
+                                                if (batchInfo.isNotEmpty && batchInfo != 'All')
+                                                  Padding(
+                                                    padding: const EdgeInsets.only(top: 4.0),
+                                                    child: Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                      decoration: BoxDecoration(color: Colors.purple.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                                                      child: Text(batchInfo, style: const TextStyle(fontSize: 9, color: Colors.purple, fontWeight: FontWeight.bold)),
+                                                    ),
+                                                  )
+                                              ],
+                                            ),
                                     ),
                                   );
                                 }).toList(),
