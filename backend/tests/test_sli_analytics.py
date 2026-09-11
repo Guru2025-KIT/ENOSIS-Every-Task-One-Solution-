@@ -379,3 +379,84 @@ def test_analytics_authorization_enforcement(analytics_test_data):
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert r4.status_code == 200
+
+
+def test_context_interventions_tracker(analytics_test_data):
+    """Context-wide intervention tracker returns logged interventions with student details and respects filters."""
+    faculty_token = analytics_test_data["faculty_token"]
+    other_token = analytics_test_data["other_faculty_token"]
+    class_id = analytics_test_data["class_id"]
+    subject_id = analytics_test_data["subject_id"]
+    semester_id = analytics_test_data["semester_id"]
+    e1_id = analytics_test_data["e1_id"]
+    e2_id = analytics_test_data["e2_id"]
+
+    # Log two interventions for this context: one COMPLETED, one PLANNED (PENDING)
+    r_log1 = client.post(
+        "/sli/interventions/log",
+        json={
+            "enrollment_id": e1_id,
+            "intervention_type": "One-on-One Tutoring",
+            "status": "COMPLETED",
+            "notes": "Reviewed core algorithms.",
+        },
+        headers={"Authorization": f"Bearer {faculty_token}"},
+    )
+    assert r_log1.status_code == 201
+
+    r_log2 = client.post(
+        "/sli/interventions/log",
+        json={
+            "enrollment_id": e2_id,
+            "intervention_type": "Remedial Problem Set",
+            "status": "PLANNED",
+            "notes": "Assigned remedial worksheet for topics 1 and 2.",
+        },
+        headers={"Authorization": f"Bearer {faculty_token}"},
+    )
+    assert r_log2.status_code == 201
+
+    # 1. Fetch all interventions for context
+    resp_all = client.get(
+        f"/sli/faculty/analytics/context/{class_id}/{subject_id}/{semester_id}/interventions",
+        headers={"Authorization": f"Bearer {faculty_token}"},
+    )
+    assert resp_all.status_code == 200
+    all_data = resp_all.json()
+    assert len(all_data) >= 2
+    types = [item["intervention_type"] for item in all_data]
+    assert "One-on-One Tutoring" in types
+    assert "Remedial Problem Set" in types
+
+    # Check student identification is populated
+    item1 = next(item for item in all_data if item["enrollment_id"] == e1_id)
+    assert item1["student_name"] is not None
+    assert item1["student_id"] is not None
+    assert item1["status"] == "COMPLETED"
+
+    # 2. Status filter: PENDING (includes PLANNED and IN_PROGRESS)
+    resp_pending = client.get(
+        f"/sli/faculty/analytics/context/{class_id}/{subject_id}/{semester_id}/interventions?status=PENDING",
+        headers={"Authorization": f"Bearer {faculty_token}"},
+    )
+    assert resp_pending.status_code == 200
+    pending_data = resp_pending.json()
+    for item in pending_data:
+        assert item["status"] in ["PLANNED", "IN_PROGRESS"]
+
+    # 3. Status filter: COMPLETED
+    resp_completed = client.get(
+        f"/sli/faculty/analytics/context/{class_id}/{subject_id}/{semester_id}/interventions?status=COMPLETED",
+        headers={"Authorization": f"Bearer {faculty_token}"},
+    )
+    assert resp_completed.status_code == 200
+    completed_data = resp_completed.json()
+    for item in completed_data:
+        assert item["status"] == "COMPLETED"
+
+    # 4. Unauthorized faculty receives 403
+    resp_unauth = client.get(
+        f"/sli/faculty/analytics/context/{class_id}/{subject_id}/{semester_id}/interventions",
+        headers={"Authorization": f"Bearer {other_token}"},
+    )
+    assert resp_unauth.status_code == 403

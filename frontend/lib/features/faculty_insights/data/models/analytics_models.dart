@@ -781,3 +781,153 @@ class ContextAttentionRoster {
     );
   }
 }
+
+class ContextIntervention {
+  final int interventionId;
+  final int enrollmentId;
+  final String studentId;
+  final String studentName;
+  final String? rollNumber;
+  final String? facultyId;
+  final String interventionType;
+  final String status;
+  final bool implemented;
+  final String? implementationDate;
+  final String? notes;
+  final String? outcomeEffectiveness;
+  final String? createdAt;
+  final String? updatedAt;
+
+  const ContextIntervention({
+    required this.interventionId,
+    required this.enrollmentId,
+    required this.studentId,
+    required this.studentName,
+    this.rollNumber,
+    this.facultyId,
+    required this.interventionType,
+    required this.status,
+    required this.implemented,
+    this.implementationDate,
+    this.notes,
+    this.outcomeEffectiveness,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  factory ContextIntervention.fromJson(Map<String, dynamic> json) {
+    return ContextIntervention(
+      interventionId: json['intervention_id'] as int? ?? 0,
+      enrollmentId: json['enrollment_id'] as int? ?? 0,
+      studentId: json['student_id']?.toString() ?? '',
+      studentName: json['student_name'] as String? ?? '',
+      rollNumber: json['roll_number'] as String?,
+      facultyId: json['faculty_id'] as String?,
+      interventionType: json['intervention_type'] as String? ?? '',
+      status: json['status'] as String? ?? 'COMPLETED',
+      implemented: json['implemented'] as bool? ?? true,
+      implementationDate: json['implementation_date'] as String?,
+      notes: json['notes'] as String?,
+      outcomeEffectiveness: json['outcome_effectiveness'] as String?,
+      createdAt: json['created_at'] as String?,
+      updatedAt: json['updated_at'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'intervention_id': interventionId,
+    'enrollment_id': enrollmentId,
+    'student_id': studentId,
+    'student_name': studentName,
+    'roll_number': rollNumber,
+    'faculty_id': facultyId,
+    'intervention_type': interventionType,
+    'status': status,
+    'implemented': implemented,
+    'implementation_date': implementationDate,
+    'notes': notes,
+    'outcome_effectiveness': outcomeEffectiveness,
+    'created_at': createdAt,
+    'updated_at': updatedAt,
+  };
+}
+
+/// Model mapping the backend SliEndCompetencySummaryExportOut response.
+/// Represents aggregated END-semester competency evidence for a teaching context.
+class EndCompetencySummary {
+  final int classId;
+  final String subjectId;
+  final String subjectName;
+  final int semesterId;
+  final int totalEnrolled;
+  final int totalEndAssessed;
+  final double assessmentCoveragePct;
+  final double? avgUnderstandingLevel;
+  final double? avgConceptApplicationAbility;
+  final double? avgCoreConceptsMastery;
+  final double? avgProblemSolvingAbility;
+  final double? avgPracticalLabCompetence;
+  final double? avgIndependentLearningAbility;
+  final double? avgRealWorldApplication;
+  final double? avgLearningSatisfaction;
+  final double? avgOverallExperience;
+  final String? exportedAt;
+
+  const EndCompetencySummary({
+    required this.classId,
+    required this.subjectId,
+    required this.subjectName,
+    required this.semesterId,
+    required this.totalEnrolled,
+    required this.totalEndAssessed,
+    required this.assessmentCoveragePct,
+    this.avgUnderstandingLevel,
+    this.avgConceptApplicationAbility,
+    this.avgCoreConceptsMastery,
+    this.avgProblemSolvingAbility,
+    this.avgPracticalLabCompetence,
+    this.avgIndependentLearningAbility,
+    this.avgRealWorldApplication,
+    this.avgLearningSatisfaction,
+    this.avgOverallExperience,
+    this.exportedAt,
+  });
+
+  factory EndCompetencySummary.fromJson(Map<String, dynamic> json) {
+    return EndCompetencySummary(
+      classId: json['class_id'] as int? ?? 0,
+      subjectId: json['subject_id'] as String? ?? '',
+      subjectName: json['subject_name'] as String? ?? '',
+      semesterId: json['semester_id'] as int? ?? 0,
+      totalEnrolled: json['total_enrolled'] as int? ?? 0,
+      totalEndAssessed: json['total_end_assessed'] as int? ?? 0,
+      assessmentCoveragePct: (json['assessment_coverage_pct'] as num?)?.toDouble() ?? 0.0,
+      avgUnderstandingLevel: (json['avg_understanding_level'] as num?)?.toDouble(),
+      avgConceptApplicationAbility: (json['avg_concept_application_ability'] as num?)?.toDouble(),
+      avgCoreConceptsMastery: (json['avg_core_concepts_mastery'] as num?)?.toDouble(),
+      avgProblemSolvingAbility: (json['avg_problem_solving_ability'] as num?)?.toDouble(),
+      avgPracticalLabCompetence: (json['avg_practical_lab_competence'] as num?)?.toDouble(),
+      avgIndependentLearningAbility: (json['avg_independent_learning_ability'] as num?)?.toDouble(),
+      avgRealWorldApplication: (json['avg_real_world_application'] as num?)?.toDouble(),
+      avgLearningSatisfaction: (json['avg_learning_satisfaction'] as num?)?.toDouble(),
+      avgOverallExperience: (json['avg_overall_experience'] as num?)?.toDouble(),
+      exportedAt: json['exported_at'] as String?,
+    );
+  }
+
+  /// Returns all 9 competency dimensions as label-value pairs for display.
+  List<MapEntry<String, double?>> get competencyDimensions => [
+        MapEntry('Understanding Level', avgUnderstandingLevel),
+        MapEntry('Concept Application', avgConceptApplicationAbility),
+        MapEntry('Core Concepts Mastery', avgCoreConceptsMastery),
+        MapEntry('Problem Solving', avgProblemSolvingAbility),
+        MapEntry('Practical / Lab Competence', avgPracticalLabCompetence),
+        MapEntry('Independent Learning', avgIndependentLearningAbility),
+        MapEntry('Real-World Application', avgRealWorldApplication),
+        MapEntry('Learning Satisfaction', avgLearningSatisfaction),
+        MapEntry('Overall Experience', avgOverallExperience),
+      ];
+
+  /// True if at least one dimension has a non-null average.
+  bool get hasData => competencyDimensions.any((e) => e.value != null);
+}

@@ -1,3 +1,4 @@
+from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Any
 from app.schemas.sli import InterventionOut
@@ -230,3 +231,21 @@ class ContextAttentionRosterOut(BaseModel):
     critical_count: int
     attention_count: int
     students: list[AttentionRosterItemOut]
+
+
+class ContextInterventionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    intervention_id: int
+    enrollment_id: int
+    student_id: str
+    student_name: str
+    roll_number: str | None = None
+    faculty_id: str | None = None
+    intervention_type: str
+    status: str  # COMPLETED, PLANNED, IN_PROGRESS
+    implemented: bool
+    implementation_date: date | None = None
+    notes: str | None = None
+    outcome_effectiveness: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None

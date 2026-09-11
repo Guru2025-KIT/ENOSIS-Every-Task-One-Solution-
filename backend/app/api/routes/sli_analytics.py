@@ -7,6 +7,7 @@ from app.models.user import User, UserRole
 from app.schemas.sli_analytics import (
     ContextAnalyticsOut,
     ContextAttentionRosterOut,
+    ContextInterventionOut,
     StudentLongitudinalAnalyticsOut,
 )
 from app.services import sli_analytics_service
@@ -85,5 +86,34 @@ def get_context_attention_roster(
         class_id=class_id,
         subject_id=subject_id,
         semester_id=semester_id,
+        is_admin=is_admin,
+    )
+
+
+@router.get(
+    "/context/{class_id}/{subject_id}/{semester_id}/interventions",
+    response_model=list[ContextInterventionOut],
+)
+def get_context_interventions(
+    class_id: int,
+    subject_id: str,
+    semester_id: int,
+    status: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Retrieves all faculty interventions for an authorized teaching context,
+    including student identity, action details, status, and outcome effectiveness.
+    Supports optional status filtering ('ALL', 'PENDING', 'COMPLETED').
+    """
+    is_admin = current_user.role == UserRole.ADMIN
+    return sli_analytics_service.get_context_interventions(
+        db=db,
+        faculty_id=current_user.id,
+        class_id=class_id,
+        subject_id=subject_id,
+        semester_id=semester_id,
+        status_filter=status,
         is_admin=is_admin,
     )

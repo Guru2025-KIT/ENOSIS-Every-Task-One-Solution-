@@ -11,7 +11,9 @@ import '../providers/sli_mid_provider.dart';
 import '../providers/sli_pre_provider.dart';
 import 'assessment_management_screen.dart';
 import 'class_analytics_dashboard_screen.dart';
+import 'context_interventions_screen.dart';
 import 'student_roster_screen.dart';
+import 'verified_outcome_screen.dart';
 
 /// Screen displaying the faculty's authorized teaching contexts for PRE, MID, or END assessment.
 class TeachingContextsScreen extends StatefulWidget {
@@ -27,14 +29,60 @@ class TeachingContextsScreen extends StatefulWidget {
 }
 
 class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<SliPreProvider>().fetchTeachingContexts();
-      context.read<SliMidProvider>().fetchTeachingContexts();
-      context.read<SliEndProvider>().fetchTeachingContexts();
+      _refreshAllContexts();
     });
+  }
+
+  void _refreshAllContexts() {
+    context.read<SliPreProvider>().fetchTeachingContexts();
+    context.read<SliMidProvider>().fetchTeachingContexts();
+    context.read<SliEndProvider>().fetchTeachingContexts();
+  }
+
+  void _openAssignmentSelectionDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: SingleChildScrollView(
+              child: _SelectTeachingAssignmentCard(
+                isDialog: true,
+                stage: widget.stage,
+                onAssignmentCompleted: (newContext) {
+                  Navigator.of(dialogContext).pop();
+                  _onAssignmentCreated(newContext);
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _onAssignmentCreated(FacultyTeachingContext newContext) {
+    _refreshAllContexts();
+    context.read<SliPreProvider>().selectContext(newContext);
+    context.read<SliMidProvider>().selectContext(newContext);
+    context.read<SliEndProvider>().selectContext(newContext);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Assigned to ${newContext.subjectName} (${newContext.yearDisplay} • Div ${newContext.divisionCode})'),
+        backgroundColor: AppColors.success,
+      ),
+    );
   }
 
   @override
@@ -42,18 +90,29 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
     final isMobile = Responsive.isMobile(context);
     final isMid = widget.stage == 'MID';
     final isEnd = widget.stage == 'END';
+    final isGapDetection = widget.stage == 'GAP_DETECTION';
+    final isAction = widget.stage == 'ACTION';
+    final isVerifiedOutcome = widget.stage == 'VERIFIED_OUTCOME';
 
-    final stageTitle = isEnd
-        ? 'Teaching Contexts • END Assessment'
-        : isMid
-            ? 'Teaching Contexts • MID Assessment'
-            : 'Teaching Contexts • PRE Assessment';
+    final stageTitle = isVerifiedOutcome
+        ? 'Teaching Contexts • Verified Outcome'
+        : isEnd
+            ? 'Teaching Contexts • END Assessment'
+            : isGapDetection
+                ? 'Teaching Contexts • Gap Detection'
+                : isAction
+                    ? 'Teaching Contexts • Faculty Action'
+                    : isMid
+                        ? 'Teaching Contexts • MID Assessment'
+                        : 'Teaching Contexts • PRE Assessment';
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: Text(
           stageTitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 18,
@@ -72,11 +131,7 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             tooltip: 'Refresh Contexts',
-            onPressed: () {
-              context.read<SliPreProvider>().fetchTeachingContexts();
-              context.read<SliMidProvider>().fetchTeachingContexts();
-              context.read<SliEndProvider>().fetchTeachingContexts();
-            },
+            onPressed: _refreshAllContexts,
           ),
         ],
       ),
@@ -135,7 +190,7 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        onPressed: () => provider.fetchTeachingContexts(),
+                        onPressed: _refreshAllContexts,
                         icon: const Icon(Icons.refresh, size: 18),
                         label: const Text('Try Again'),
                       ),
@@ -145,7 +200,7 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
               );
             }
 
-            // Case NO: If no timetable/teaching context assignment exists, allow explicit selection
+            // If no timetable / teaching assignment exists, offer course assignment selection directly
             if (provider.contexts.isEmpty) {
               return SingleChildScrollView(
                 padding: EdgeInsets.symmetric(
@@ -164,7 +219,7 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
               );
             }
 
-            // Case YES: Timetable / Teaching Context assignments exist
+            // Teaching Context assignments exist
             return SingleChildScrollView(
               padding: EdgeInsets.symmetric(
                 horizontal: isMobile ? 16 : 24,
@@ -188,24 +243,36 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: isEnd
+                              color: isVerifiedOutcome || isEnd
                                   ? const Color(0xFF16A34A).withOpacity(0.12)
-                                  : isMid
-                                      ? const Color(0xFF7C3AED).withOpacity(0.12)
-                                      : AppColors.primarySoft,
+                                  : isGapDetection
+                                      ? const Color(0xFFE11D48).withOpacity(0.12)
+                                      : isAction
+                                          ? const Color(0xFFD97706).withOpacity(0.12)
+                                          : isMid
+                                              ? const Color(0xFF7C3AED).withOpacity(0.12)
+                                              : AppColors.primarySoft,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Icon(
-                              isEnd
+                              isVerifiedOutcome || isEnd
                                   ? Icons.verified_outlined
-                                  : isMid
-                                      ? Icons.trending_up
-                                      : Icons.fact_check_outlined,
-                              color: isEnd
+                                  : isGapDetection
+                                      ? Icons.radar_outlined
+                                      : isAction
+                                          ? Icons.psychology_outlined
+                                          : isMid
+                                              ? Icons.trending_up
+                                              : Icons.fact_check_outlined,
+                              color: isVerifiedOutcome || isEnd
                                   ? const Color(0xFF16A34A)
-                                  : isMid
-                                      ? const Color(0xFF7C3AED)
-                                      : AppColors.primary,
+                                  : isGapDetection
+                                      ? const Color(0xFFE11D48)
+                                      : isAction
+                                          ? const Color(0xFFD97706)
+                                          : isMid
+                                              ? const Color(0xFF7C3AED)
+                                              : AppColors.primary,
                               size: 22,
                             ),
                           ),
@@ -215,27 +282,43 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  isEnd
-                                      ? 'END-Semester Student Assessment'
-                                      : isMid
-                                          ? 'MID-Semester Student Assessment'
-                                          : 'PRE-Semester Student Assessment',
+                                  isVerifiedOutcome
+                                      ? 'Stage 04 • Verified Outcome'
+                                      : isEnd
+                                          ? 'END-Semester Student Assessment'
+                                          : isGapDetection
+                                              ? 'Stage 02 • Gap Detection & ML Roster'
+                                              : isAction
+                                                  ? 'Stage 03 • Faculty Action & Interventions'
+                                                  : isMid
+                                                      ? 'MID-Semester Student Assessment'
+                                                      : 'PRE-Semester Student Assessment',
                                   style: AppTypography.bodyMedium.copyWith(
                                     fontWeight: FontWeight.bold,
-                                    color: isEnd
+                                    color: isVerifiedOutcome || isEnd
                                         ? const Color(0xFF16A34A)
-                                        : isMid
-                                            ? const Color(0xFF7C3AED)
-                                            : AppColors.primary,
+                                        : isGapDetection
+                                            ? const Color(0xFFE11D48)
+                                            : isAction
+                                                ? const Color(0xFFD97706)
+                                                : isMid
+                                                    ? const Color(0xFF7C3AED)
+                                                    : AppColors.primary,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  isEnd
-                                      ? 'Select a teaching context below to view student learning outcomes and record end-of-semester assessments.'
-                                      : isMid
-                                          ? 'Select a teaching context below to view student progress and record mid-semester assessments.'
-                                          : 'Select a teaching context below to view the enrolled student roster and record baseline assessments.',
+                                  isVerifiedOutcome
+                                      ? 'Select a teaching context below to view END competency outcomes and CO-PO attainment status.'
+                                      : isEnd
+                                          ? 'Select a teaching context below to view student learning outcomes and record end-of-semester assessments.'
+                                          : isGapDetection
+                                              ? 'Select a teaching context below to inspect ML risk predictions, risk drivers, and the Attention Roster.'
+                                              : isAction
+                                                  ? 'Select a teaching context below to view student profiles, assess progress, and log pedagogical interventions.'
+                                                  : isMid
+                                                      ? 'Select a teaching context below to track mid-semester student progress and learning barriers.'
+                                                      : 'Select a teaching context below to begin capturing pre-semester student perceptions.',
                                   style: AppTypography.caption.copyWith(
                                     color: AppColors.textSecondary,
                                   ),
@@ -254,16 +337,24 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
                         Expanded(
                           child: Text(
                             'Your Assigned Teaching Contexts (${provider.contexts.length})',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: AppTypography.h4.copyWith(
                               color: AppColors.textPrimary,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
-                        TextButton.icon(
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          icon: const Icon(Icons.add, size: 16),
+                          label: const Text('Add Assignment', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           onPressed: () => _openAssignmentSelectionDialog(context),
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Add Assignment'),
                         ),
                       ],
                     ),
@@ -291,54 +382,6 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
       ),
     );
   }
-
-  void _onAssignmentCreated(FacultyTeachingContext newContext) {
-    context.read<SliPreProvider>().fetchTeachingContexts();
-    context.read<SliMidProvider>().fetchTeachingContexts();
-    context.read<SliEndProvider>().fetchTeachingContexts();
-
-    context.read<SliPreProvider>().selectContext(newContext);
-    context.read<SliMidProvider>().selectContext(newContext);
-    context.read<SliEndProvider>().selectContext(newContext);
-
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => AssessmentManagementScreen(
-          teachingContext: newContext,
-        ),
-      ),
-    );
-  }
-
-  void _openAssignmentSelectionDialog(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-          top: 20,
-          left: 20,
-          right: 20,
-        ),
-        child: SingleChildScrollView(
-          child: _SelectTeachingAssignmentCard(
-            stage: widget.stage,
-            isDialog: true,
-            onAssignmentCompleted: (newContext) {
-              Navigator.pop(ctx);
-              _onAssignmentCreated(newContext);
-            },
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _TeachingContextCard extends StatelessWidget {
@@ -354,15 +397,28 @@ class _TeachingContextCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isMid = stage == 'MID';
     final isEnd = stage == 'END';
-    final assessedCount = isEnd
+    final isGapDetection = stage == 'GAP_DETECTION';
+    final isAction = stage == 'ACTION';
+    final isVerifiedOutcome = stage == 'VERIFIED_OUTCOME';
+    final assessedCount = isVerifiedOutcome || isEnd
         ? contextItem.endAssessedStudents
-        : isMid
+        : (isMid || isAction)
             ? contextItem.midAssessedStudents
             : contextItem.assessedStudents;
     final double progress = contextItem.totalStudents > 0
         ? (assessedCount / contextItem.totalStudents).clamp(0.0, 1.0)
         : 0.0;
     final int percent = (progress * 100).round();
+
+    final cardThemeColor = isVerifiedOutcome || isEnd
+        ? const Color(0xFF16A34A)
+        : isGapDetection
+            ? const Color(0xFFE11D48)
+            : isAction
+                ? const Color(0xFFD97706)
+                : isMid
+                    ? const Color(0xFF7C3AED)
+                    : AppColors.primary;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -389,20 +445,16 @@ class _TeachingContextCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: isEnd
-                        ? const Color(0xFF16A34A).withOpacity(0.08)
-                        : isMid
-                            ? const Color(0xFF7C3AED).withOpacity(0.08)
-                            : AppColors.primary.withOpacity(0.08),
+                    color: cardThemeColor.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
-                    Icons.menu_book_outlined,
-                    color: isEnd
-                        ? const Color(0xFF16A34A)
-                        : isMid
-                            ? const Color(0xFF7C3AED)
-                            : AppColors.primary,
+                    isGapDetection
+                        ? Icons.radar_outlined
+                        : isAction
+                            ? Icons.psychology_outlined
+                            : Icons.menu_book_outlined,
+                    color: cardThemeColor,
                     size: 24,
                   ),
                 ),
@@ -519,16 +571,12 @@ class _TeachingContextCard extends StatelessWidget {
             ),
             const SizedBox(height: 18),
 
-            // Action Button
+            // Action Button: Take / Record Student Survey
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isEnd
-                      ? const Color(0xFF16A34A)
-                      : isMid
-                          ? const Color(0xFF7C3AED)
-                          : AppColors.primary,
+                  backgroundColor: cardThemeColor,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
@@ -536,24 +584,68 @@ class _TeachingContextCard extends StatelessWidget {
                   ),
                 ),
                 onPressed: () {
-                  // Select context in PRE, MID, and END providers
                   context.read<SliPreProvider>().selectContext(contextItem);
                   context.read<SliMidProvider>().selectContext(contextItem);
                   context.read<SliEndProvider>().selectContext(contextItem);
 
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => StudentRosterScreen(stage: stage),
-                    ),
-                  );
+                  if (isVerifiedOutcome) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => VerifiedOutcomeScreen(
+                          contextItem: contextItem,
+                        ),
+                      ),
+                    );
+                  } else if (isGapDetection) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ClassAnalyticsDashboardScreen(
+                          classId: contextItem.classId ?? 0,
+                          subjectId: contextItem.subjectId,
+                          subjectName: contextItem.subjectName,
+                          semesterId: contextItem.semesterId ?? 0,
+                          initialTabIndex: 4,
+                        ),
+                      ),
+                    );
+                  } else if (isAction) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ContextInterventionsScreen(
+                          contextItem: contextItem,
+                        ),
+                      ),
+                    );
+                  } else {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => StudentRosterScreen(stage: stage),
+                      ),
+                    );
+                  }
                 },
-                icon: const Icon(Icons.group_outlined, size: 18),
+                icon: Icon(
+                  isVerifiedOutcome
+                      ? Icons.verified_outlined
+                      : isGapDetection
+                          ? Icons.radar_outlined
+                          : isAction
+                              ? Icons.assignment_turned_in_outlined
+                              : Icons.group_outlined,
+                  size: 18,
+                ),
                 label: Text(
-                  isEnd
-                      ? 'Open END Student Roster'
-                      : isMid
-                          ? 'Open MID Student Roster'
-                          : 'Open PRE Student Roster',
+                  isVerifiedOutcome
+                      ? 'View Verified Outcomes'
+                      : isEnd
+                          ? 'Open END Survey & Roster'
+                          : isGapDetection
+                              ? 'Open ML Gap Detection & Roster'
+                              : isAction
+                                  ? 'Open Context Intervention Tracker'
+                                  : isMid
+                                      ? 'Open MID Survey & Roster'
+                                      : 'Open PRE Survey & Roster',
                   style: AppTypography.button,
                 ),
               ),
@@ -572,18 +664,29 @@ class _TeachingContextCard extends StatelessWidget {
                       ),
                     ),
                     onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => AssessmentManagementScreen(
-                            teachingContext: contextItem,
+                      if (isAction) {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const StudentRosterScreen(stage: 'MID'),
                           ),
-                        ),
-                      );
+                        );
+                      } else {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => AssessmentManagementScreen(
+                              teachingContext: contextItem,
+                            ),
+                          ),
+                        );
+                      }
                     },
-                    icon: const Icon(Icons.share_outlined, size: 16),
-                    label: const Text(
-                      'Manage & Share',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    icon: Icon(
+                      isAction ? Icons.group_outlined : Icons.edit_calendar_outlined,
+                      size: 16,
+                    ),
+                    label: Text(
+                      isAction ? 'Student Roster' : 'Manage & Share',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                   ),
                 ),
@@ -650,10 +753,11 @@ class _InfoBadge extends StatelessWidget {
   }
 }
 
+/// Dynamic Teaching Assignment Selection Card allowing faculty to explicitly assign institutional courses
 class _SelectTeachingAssignmentCard extends StatefulWidget {
   final String stage;
   final bool isDialog;
-  final ValueChanged<FacultyTeachingContext> onAssignmentCompleted;
+  final Function(FacultyTeachingContext) onAssignmentCompleted;
 
   const _SelectTeachingAssignmentCard({
     required this.stage,
@@ -695,31 +799,29 @@ class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignment
 
     try {
       final data = await _sliService.getAvailableTeachingOptions();
-      final subs = (data['subjects'] as List<dynamic>?)
-              ?.map((e) => Map<String, dynamic>.from(e as Map))
-              .toList() ??
-          [];
-      final divs = (data['divisions'] as List<dynamic>?)
-              ?.map((e) => Map<String, dynamic>.from(e as Map))
-              .toList() ??
-          [];
-      final sems = (data['semesters'] as List<dynamic>?)
-              ?.map((e) => Map<String, dynamic>.from(e as Map))
-              .toList() ??
-          [];
-
+      if (!mounted) return;
       setState(() {
-        _subjects = subs;
-        _divisions = divs;
-        _semesters = sems;
+        _subjects = List<Map<String, dynamic>>.from(data['subjects'] ?? []);
+        _divisions = List<Map<String, dynamic>>.from(data['divisions'] ?? []);
+        _semesters = List<Map<String, dynamic>>.from(data['semesters'] ?? []);
 
-        if (_subjects.isNotEmpty) _selectedSubjectId = _subjects.first['subject_id'] as String?;
-        if (_divisions.isNotEmpty) _selectedDivisionId = _divisions.first['division_id'] as String?;
-        if (_semesters.isNotEmpty) _selectedSemesterId = _semesters.first['semester_id'] as int?;
-
+        if (_subjects.isNotEmpty) {
+          _selectedSubjectId = _subjects.first['subject_id'] as String?;
+        }
+        if (_divisions.isNotEmpty) {
+          _selectedDivisionId = _divisions.first['division_id'] as String?;
+        }
+        if (_semesters.isNotEmpty) {
+          final activeSem = _semesters.firstWhere(
+            (s) => s['status'] == 'ACTIVE',
+            orElse: () => _semesters.first,
+          );
+          _selectedSemesterId = activeSem['semester_id'] as int?;
+        }
         _isLoadingOptions = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _optionsError = e.toString();
         _isLoadingOptions = false;
@@ -729,12 +831,9 @@ class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignment
 
   Future<void> _submitAssignment() async {
     if (_selectedSubjectId == null || _selectedDivisionId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select both a Subject and a Division.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      setState(() {
+        _submitError = 'Please select both a Subject and Class/Division.';
+      });
       return;
     }
 
@@ -744,14 +843,16 @@ class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignment
     });
 
     try {
-      final contextOut = await _sliService.assignFacultyTeachingContext(
+      final contextObj = await _sliService.assignFacultyTeachingContext(
         subjectId: _selectedSubjectId!,
         divisionId: _selectedDivisionId!,
         semesterId: _selectedSemesterId,
       );
 
-      widget.onAssignmentCompleted(contextOut);
+      if (!mounted) return;
+      widget.onAssignmentCompleted(contextObj);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _submitError = e.toString();
         _isSubmitting = false;
@@ -762,23 +863,15 @@ class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignment
   @override
   Widget build(BuildContext context) {
     if (_isLoadingOptions) {
-      return Container(
-        padding: const EdgeInsets.all(32),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: const Center(
+      return const Padding(
+        padding: EdgeInsets.all(40),
+        child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               LoadingIndicator(size: 36),
-              SizedBox(height: 14),
-              Text(
-                'Discovering available subjects & divisions...',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
+              SizedBox(height: 12),
+              Text('Loading subjects & classes...', style: TextStyle(color: AppColors.textSecondary)),
             ],
           ),
         ),
@@ -786,64 +879,47 @@ class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignment
     }
 
     if (_optionsError != null) {
-      return Container(
+      return Padding(
         padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.error.withOpacity(0.3)),
-        ),
-        child: Column(
-          children: [
-            const Icon(Icons.error_outline, color: AppColors.error, size: 40),
-            const SizedBox(height: 12),
-            const Text(
-              'Failed to load available teaching options',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              _optionsError!,
-              style: AppTypography.bodySecondary,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _loadOptions,
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-              child: const Text('Retry Options'),
-            ),
-          ],
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, color: AppColors.error, size: 40),
+              const SizedBox(height: 12),
+              Text('Failed to load courses: $_optionsError', style: AppTypography.bodySmall, textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: _loadOptions,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Try Again'),
+              ),
+            ],
+          ),
         ),
       );
     }
 
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(widget.isDialog ? 24 : 28),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.school_outlined, color: AppColors.primary, size: 26),
+                child: const Icon(Icons.school_outlined, color: AppColors.primary, size: 24),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -851,9 +927,7 @@ class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignment
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.isDialog
-                          ? 'Add Teaching Assignment'
-                          : 'Select Teaching Assignment',
+                      widget.isDialog ? 'Add Teaching Assignment' : 'Select Teaching Assignment',
                       style: AppTypography.h3.copyWith(
                         fontWeight: FontWeight.bold,
                         color: AppColors.primary,
@@ -863,7 +937,7 @@ class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignment
                     Text(
                       widget.isDialog
                           ? 'Choose a subject & division to assign to your faculty profile.'
-                          : 'No timetable assignment found. Explicitly select your course assignment to proceed with assessment & intelligence.',
+                          : 'No timetable assignment found. Explicitly select your course assignment to proceed with assessment & surveys.',
                       style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
                     ),
                   ],
@@ -901,6 +975,7 @@ class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignment
                     child: Text(
                       code != null && code.isNotEmpty ? '$name ($code)' : name,
                       style: const TextStyle(fontSize: 14),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   );
                 }).toList(),
@@ -940,6 +1015,7 @@ class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignment
                     child: Text(
                       '$name ($yrLabel • Div $code)',
                       style: const TextStyle(fontSize: 14),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   );
                 }).toList(),
@@ -953,7 +1029,7 @@ class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignment
                       );
                       final yr = matchedDiv['year_level'] as int?;
                       if (yr != null) {
-                        final preferredSemNum = (yr * 2) - 1; // FE->1, SE->3, TE->5, BE->7
+                        final preferredSemNum = (yr * 2) - 1;
                         final matchedSem = _semesters.firstWhere(
                           (s) => s['semester_number'] == preferredSemNum,
                           orElse: () => {},
@@ -970,7 +1046,7 @@ class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignment
           ),
           const SizedBox(height: 18),
 
-          // 3. Semester Dropdown (Optional/Resolved)
+          // 3. Semester Dropdown
           if (_semesters.isNotEmpty) ...[
             Text(
               'Select Academic Semester *',
@@ -1001,6 +1077,7 @@ class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignment
                       child: Text(
                         'Semester ${num ?? 1}${yrName.isNotEmpty ? " ($yrName)" : ""} • $yr • $status',
                         style: const TextStyle(fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     );
                   }).toList(),
@@ -1056,9 +1133,7 @@ class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignment
                     )
                   : const Icon(Icons.check_circle_outline, size: 20),
               label: Text(
-                _isSubmitting
-                    ? 'Confirming Assignment...'
-                    : 'Confirm Assignment & Continue',
+                _isSubmitting ? 'Confirming Assignment...' : 'Confirm Assignment & Continue',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
               ),
             ),
@@ -1068,4 +1143,3 @@ class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignment
     );
   }
 }
-

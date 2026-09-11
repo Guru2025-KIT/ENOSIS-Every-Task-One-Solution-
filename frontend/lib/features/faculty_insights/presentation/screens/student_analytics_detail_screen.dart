@@ -102,7 +102,7 @@ class _StudentAnalyticsDetailScreenState extends State<StudentAnalyticsDetailScr
                             MlRiskCard(prediction: student.mlPrediction!),
                             const SizedBox(height: 14),
                           ],
-                          _buildInterventionActionBar(student),
+                          _buildInterventionActionBar(student, isMobile),
                           const SizedBox(height: 20),
                           _buildInterventionHistorySection(student),
                           const SizedBox(height: 20),
@@ -279,8 +279,10 @@ class _StudentAnalyticsDetailScreenState extends State<StudentAnalyticsDetailScr
             ],
           ),
           const Divider(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+          Wrap(
+            alignment: WrapAlignment.spaceAround,
+            spacing: 12,
+            runSpacing: 8,
             children: [
               _buildStageChip('PRE Baseline', s.hasPre),
               _buildStageChip('MID Progress', s.hasMid),
@@ -481,7 +483,7 @@ class _StudentAnalyticsDetailScreenState extends State<StudentAnalyticsDetailScr
   // Faculty Action / Intervention UI Components
   // ---------------------------------------------------------------------------
 
-  Widget _buildInterventionActionBar(StudentLongitudinalAnalytics student) {
+  Widget _buildInterventionActionBar(StudentLongitudinalAnalytics student, bool isMobile) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -489,38 +491,74 @@ class _StudentAnalyticsDetailScreenState extends State<StudentAnalyticsDetailScr
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.assignment_turned_in_outlined, color: AppColors.primary, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                'Faculty Action & Interventions',
-                style: AppTypography.bodySmall.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.assignment_turned_in_outlined, color: AppColors.primary, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Faculty Action & Interventions',
+                        style: AppTypography.bodySmall.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
-          ElevatedButton.icon(
-            key: const Key('log_intervention_button'),
-            onPressed: () => _showLogInterventionDialog(context),
-            icon: const Icon(Icons.add, size: 16),
-            label: const Text('Log Intervention'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+                const SizedBox(height: 10),
+                ElevatedButton.icon(
+                  key: const Key('log_intervention_button'),
+                  onPressed: () => _showLogInterventionDialog(context),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Log Intervention'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.assignment_turned_in_outlined, color: AppColors.primary, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Faculty Action & Interventions',
+                      style: AppTypography.bodySmall.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                ElevatedButton.icon(
+                  key: const Key('log_intervention_button'),
+                  onPressed: () => _showLogInterventionDialog(context),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Log Intervention'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
 

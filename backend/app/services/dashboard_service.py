@@ -149,7 +149,7 @@ def get_faculty_dashboard_summary(
         Task.is_completed == False,
     ).all()
     pending_tasks_count = len(pending_tasks)
-    high_priority_tasks_count = sum(1 for t in pending_tasks if (t.priority or "").lower() == "high")
+    high_priority_tasks_count = sum(1 for t in pending_tasks if (t.priority or "").lower() in ("high", "urgent"))
 
     # 6. Career Achievements
     achievements_count = db.query(Achievement).filter(

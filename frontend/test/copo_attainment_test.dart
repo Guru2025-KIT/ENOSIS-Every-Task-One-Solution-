@@ -115,7 +115,7 @@ void main() {
 
       // Verify AppBar & Hero Banner
       expect(find.text('CO-PO Attainment Workbench'), findsOneWidget);
-      expect(find.textContaining('Overall Attainment:'), findsOneWidget);
+      expect(find.text('KITCoEK NEP'), findsOneWidget);
 
       // Verify all 6 tabs exist
       expect(find.text('1. Master & Matrix'), findsOneWidget);
@@ -179,7 +179,7 @@ void main() {
 
       // Verify transitioned to Workbench
       expect(find.text('CO-PO Attainment Workbench'), findsOneWidget);
-      expect(find.text('Switch Course / Year'), findsOneWidget);
+      expect(find.byTooltip('Switch Course / Year'), findsOneWidget);
     });
   });
 }

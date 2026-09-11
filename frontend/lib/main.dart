@@ -7,9 +7,12 @@ import 'features/faculty_insights/presentation/providers/sli_end_provider.dart';
 import 'features/faculty_insights/presentation/providers/sli_mid_provider.dart';
 import 'features/faculty_insights/presentation/providers/sli_pre_provider.dart';
 import 'features/timetable/providers/timetable_provider.dart';
+import 'features/todo/presentation/providers/todo_provider.dart';
+import 'core/services/notification_service.dart';
 
-void main() {
-  // Keep any initialization you had here previously
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService().initialize();
   
   runApp(
     MultiProvider(
@@ -20,6 +23,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => SliEndProvider()),
         ChangeNotifierProvider(create: (_) => DashboardProvider()),
         ChangeNotifierProvider(create: (_) => AttendanceProvider()),
+        ChangeNotifierProvider(create: (_) => TodoProvider()),
       ],
       child: const EnosisApp(), // <-- This is the correct name!
     ),

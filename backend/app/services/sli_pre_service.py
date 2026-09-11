@@ -224,6 +224,27 @@ def authorize_faculty_teaching_assignment(
             ta_query = ta_query.filter(TeachingAssignment.division_id == division_id)
         assignment_exists = ta_query.first() is not None
 
+    if not assignment_exists and division_id:
+        div = db.query(Division).filter(
+            (Division.id == division_id) | (Division.division_code == division_id)
+        ).first()
+        if div:
+            alt_ta = db.query(TeachingAssignment).filter(
+                TeachingAssignment.faculty_id == faculty_id,
+                TeachingAssignment.subject_id == subject_id,
+                TeachingAssignment.division_id.in_([div.id, div.division_code]),
+            ).first()
+            if alt_ta:
+                assignment_exists = True
+
+    if not assignment_exists:
+        asmt_q = db.query(Assessment).filter(
+            Assessment.faculty_id == faculty_id,
+            Assessment.subject_id == subject_id,
+        )
+        if asmt_q.first():
+            assignment_exists = True
+
     if not assignment_exists:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

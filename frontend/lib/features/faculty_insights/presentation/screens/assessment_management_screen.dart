@@ -532,13 +532,18 @@ class _AssessmentManagementScreenState extends State<AssessmentManagementScreen>
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
               'Assessment Management',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
             ),
             Text(
               '${ctx.subjectName} (${ctx.yearDisplay} • Div ${ctx.divisionCode})',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 12, color: Colors.white70),
             ),
           ],
