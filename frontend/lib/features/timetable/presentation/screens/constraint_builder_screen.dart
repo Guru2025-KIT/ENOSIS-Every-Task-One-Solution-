@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../data/constraint_repository.dart';
 import '../../models/timetable_constraint.dart';
 import '../../providers/timetable_provider.dart';
 
@@ -11,18 +12,29 @@ class ConstraintBuilderScreen extends StatefulWidget {
   State<ConstraintBuilderScreen> createState() => _ConstraintBuilderScreenState();
 }
 
-class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
-  String _naturalLanguageText = '';
+class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  final TextEditingController _nlpController = TextEditingController();
+  final ConstraintRepository _constraintRepo = ConstraintRepository();
 
-  // ✅ Only ONE dropdown now!
-  String _selectedIntent = 'Block from Slot (Unavailable)'; 
-  final List<String> _intents = [
-    'Fix to Slot (Force)',
-    'Block from Slot (Unavailable)',
-    'Fill Empty Slots',
-    'Holiday / College Closed',
-    'Parallel / Combined Session',
-    'Natural Language Rule'
+  String _selectedHardRule = 'Faculty Unavailable (Block Slot)';
+  final List<String> _hardRuleOptions = [
+    'Faculty Unavailable (Block Slot)',
+    'Room Unavailable (Block Room)',
+    'Division Unavailable (Block Class)',
+    'Fixed Session (Force Slot)',
+    'Lab Continuity (Force Consecutive)',
+    'Combined / Joint Session',
+    'Replacement Rule (Substitute Free)',
+  ];
+
+  String _selectedSoftRule = 'Preferred Day / Time';
+  final List<String> _softRuleOptions = [
+    'Preferred Day / Time',
+    'Avoid First Period (Morning)',
+    'Avoid Last Period (Evening)',
+    'Faculty Workload Balance',
+    'Minimize Daily Room Swaps',
   ];
 
   final List<String> _selectedFaculties = [];
@@ -33,6 +45,21 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
   
   final List<int> _allSlots = [1, 2, 3, 4, 5, 6, 7, 8];
   final List<int> _selectedSlots = [];
+
+  bool _isParsingNlp = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _nlpController.dispose();
+    super.dispose();
+  }
 
   Future<void> _showMultiSelectDialog({
     required String title,
@@ -65,8 +92,11 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
                             activeColor: AppColors.primary,
                             onChanged: (bool? checked) {
                               setDialogState(() {
-                                if (checked == true) tempSelected.add(item);
-                                else tempSelected.remove(item);
+                                if (checked == true) {
+                                  tempSelected.add(item);
+                                } else {
+                                  tempSelected.remove(item);
+                                }
                               });
                             },
                           );
@@ -77,7 +107,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
                     TextField(
                       controller: customController,
                       decoration: InputDecoration(
-                        hintText: 'Add custom (e.g., Guest Faculty)...',
+                        hintText: 'Add custom value...',
                         suffixIcon: IconButton(
                           icon: const Icon(Icons.add_circle, color: AppColors.primary),
                           onPressed: () {
@@ -160,44 +190,19 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
     );
   }
 
-  void _addConstraint() {
-    if (_selectedIntent == 'Natural Language Rule') {
-      if (_naturalLanguageText.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please type the rule in English.')),
-        );
-        return;
-      }
-      
-      context.read<TimetableProvider>().addNaturalLanguageConstraint(_naturalLanguageText);
-      
-      setState(() {
-        _naturalLanguageText = ''; 
-        _selectedIntent = 'Block from Slot (Unavailable)'; 
-      });
-      
+  void _addStructuredConstraint(bool isHard) {
+    if (_selectedDays.isEmpty && _selectedSlots.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Natural Language Rule Parsed & Added!'), backgroundColor: Colors.green),
+        const SnackBar(content: Text('Please select target Days or Slot numbers for the rule.')),
       );
       return;
     }
 
-    if (_selectedDays.isEmpty && _selectedIntent != 'Holiday / College Closed' && _selectedIntent != 'Fill Empty Slots' && _selectedIntent != 'Parallel / Combined Session') {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select at least one day.')));
-      return;
-    }
+    String category = isHard ? 'hard|$_selectedHardRule' : 'soft|$_selectedSoftRule';
 
-    String intentCode = 'blacklist';
-    if (_selectedIntent == 'Fix to Slot (Force)') intentCode = 'fixed';
-    if (_selectedIntent == 'Block from Slot (Unavailable)') intentCode = 'blacklist';
-    if (_selectedIntent == 'Fill Empty Slots') intentCode = 'fill';
-    if (_selectedIntent == 'Holiday / College Closed') intentCode = 'holiday';
-    if (_selectedIntent == 'Parallel / Combined Session') intentCode = 'parallel';
-
-    // ✅ We use the intentCode as the category itself. No more separate category string!
     final newConstraint = TimetableConstraint(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      category: intentCode, 
+      category: category,
       facultyNames: List.from(_selectedFaculties),
       subjectNames: List.from(_selectedSubjects),
       classNames: List.from(_selectedClasses),
@@ -206,6 +211,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
     );
 
     context.read<TimetableProvider>().addConstraint(newConstraint);
+
     setState(() {
       _selectedFaculties.clear();
       _selectedSubjects.clear();
@@ -213,6 +219,289 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
       _selectedDays.clear();
       _selectedSlots.clear();
     });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${isHard ? "Hard" : "Soft"} constraint added successfully!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  Future<void> _processNaturalLanguageRule() async {
+    final text = _nlpController.text.trim();
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a natural language rule.')),
+      );
+      return;
+    }
+
+    setState(() => _isParsingNlp = true);
+
+    // Call NLP parsing in provider or backend
+    context.read<TimetableProvider>().addNaturalLanguageConstraint(text);
+    final parsedConstraint = context.read<TimetableProvider>().constraints.last;
+
+    setState(() => _isParsingNlp = false);
+
+    if (!mounted) return;
+
+    // Show Confirmation Dialog before applying
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.psychology, color: AppColors.primary),
+              SizedBox(width: 8),
+              Text('Confirm Parsed Constraint'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Original Text:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+              Text('"$text"', style: const TextStyle(fontStyle: FontStyle.italic)),
+
+              const Divider(height: 24),
+              Text('Detected Rule Action:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+              Text(parsedConstraint.category, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
+              const SizedBox(height: 8),
+              if (parsedConstraint.facultyNames.isNotEmpty)
+                Text('Faculty: ${parsedConstraint.facultyNames.join(", ")}'),
+              if (parsedConstraint.subjectNames.isNotEmpty)
+                Text('Subject: ${parsedConstraint.subjectNames.join(", ")}'),
+              if (parsedConstraint.classNames.isNotEmpty)
+                Text('Class/Division: ${parsedConstraint.classNames.join(", ")}'),
+              if (parsedConstraint.days.isNotEmpty)
+                Text('Days: ${parsedConstraint.days.join(", ")}'),
+              if (parsedConstraint.slotNumbers.isNotEmpty)
+                Text('Slots: ${parsedConstraint.slotNumbers.join(", ")}'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                context.read<TimetableProvider>().removeConstraint(parsedConstraint.id);
+                Navigator.pop(context);
+              },
+              child: const Text('Reject / Cancel', style: TextStyle(color: Colors.red)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              onPressed: () {
+                _nlpController.clear();
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('NLP Constraint Applied!'), backgroundColor: Colors.green),
+                );
+              },
+              child: const Text('Confirm & Apply', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildHardConstraintsTab(List<String> facultyList, List<String> subjectList, List<String> classList) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Card(
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Hard Constraint Rule Type', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: _selectedHardRule,
+                    decoration: const InputDecoration(border: OutlineInputBorder()),
+                    items: _hardRuleOptions.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                    onChanged: (val) => setState(() => _selectedHardRule = val!),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildMultiSelectField(label: 'Target Faculty', allOptions: facultyList, selectedItems: _selectedFaculties),
+                  const SizedBox(height: 12),
+                  _buildMultiSelectField(label: 'Target Subject', allOptions: subjectList, selectedItems: _selectedSubjects),
+                  const SizedBox(height: 12),
+                  _buildMultiSelectField(label: 'Target Class / Division', allOptions: classList, selectedItems: _selectedClasses),
+                  const SizedBox(height: 16),
+                  const Text('Days Affected', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 6,
+                    children: _allDays.map((day) {
+                      final sel = _selectedDays.contains(day);
+                      return FilterChip(
+                        label: Text(day.substring(0, 3)),
+                        selected: sel,
+                        selectedColor: AppColors.primary,
+                        labelStyle: TextStyle(color: sel ? Colors.white : Colors.black87),
+                        onSelected: (v) => setState(() => v ? _selectedDays.add(day) : _selectedDays.remove(day)),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('Slots Affected', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 6,
+                    children: _allSlots.map((slot) {
+                      final sel = _selectedSlots.contains(slot);
+                      return FilterChip(
+                        label: Text('Slot $slot'),
+                        selected: sel,
+                        selectedColor: AppColors.primary,
+                        labelStyle: TextStyle(color: sel ? Colors.white : Colors.black87),
+                        onSelected: (v) => setState(() => v ? _selectedSlots.add(slot) : _selectedSlots.remove(slot)),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.add_moderator),
+                      label: const Text('Add Hard Constraint', style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                      onPressed: () => _addStructuredConstraint(true),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSoftConstraintsTab(List<String> facultyList, List<String> subjectList, List<String> classList) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Card(
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Soft Preference Rule Type', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: _selectedSoftRule,
+                    decoration: const InputDecoration(border: OutlineInputBorder()),
+                    items: _softRuleOptions.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                    onChanged: (val) => setState(() => _selectedSoftRule = val!),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildMultiSelectField(label: 'Faculty Preference', allOptions: facultyList, selectedItems: _selectedFaculties),
+                  const SizedBox(height: 12),
+                  _buildMultiSelectField(label: 'Subject Preference', allOptions: subjectList, selectedItems: _selectedSubjects),
+                  const SizedBox(height: 16),
+                  const Text('Preferred Days', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  Wrap(
+                    spacing: 6,
+                    children: _allDays.map((day) {
+                      final sel = _selectedDays.contains(day);
+                      return FilterChip(
+                        label: Text(day.substring(0, 3)),
+                        selected: sel,
+                        selectedColor: Colors.orange,
+                        labelStyle: TextStyle(color: sel ? Colors.white : Colors.black87),
+                        onSelected: (v) => setState(() => v ? _selectedDays.add(day) : _selectedDays.remove(day)),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.star_outline),
+                      label: const Text('Add Soft Preference', style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade800, foregroundColor: Colors.white),
+                      onPressed: () => _addStructuredConstraint(false),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNaturalLanguageTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Card(
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.record_voice_over_outlined, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Text('Natural Language Constraint Engine', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Type your scheduling requirements in plain English. The ENOSIS NLP parser will extract entity names, days, and slot constraints.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _nlpController,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      hintText: 'e.g. "Dr. Patil is unavailable on Wednesday afternoon."\n'
+                          'or "Keep DBMS on Monday at 10 AM."\n'
+                          'or "Replace the free period on Friday with LeetCode activity."',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: ElevatedButton.icon(
+                      icon: _isParsingNlp
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Icon(Icons.auto_awesome),
+                      label: const Text('Parse & Preview Constraint', style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                      onPressed: _isParsingNlp ? null : _processNaturalLanguageRule,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -220,158 +509,99 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> {
     final provider = context.watch<TimetableProvider>();
     final facultyList = provider.facultyNames;
     final subjectList = provider.subjectNames;
-    final classList = provider.classesAndBatches; 
+    final classList = provider.classesAndBatches;
     final constraints = provider.constraints;
-
-    bool showStandardForm = _selectedIntent != 'Natural Language Rule' && _selectedIntent != 'Holiday / College Closed' && _selectedIntent != 'Fill Empty Slots';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Manage Constraints'),
+        title: const Text('Constraint Builder'),
         backgroundColor: AppColors.primary,
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          tabs: const [
+            Tab(text: 'Hard Constraints'),
+            Tab(text: 'Soft Preferences'),
+            Tab(text: 'NLP Input'),
+          ],
+        ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Card(
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      body: Column(
+        children: [
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildHardConstraintsTab(facultyList, subjectList, classList),
+                _buildSoftConstraintsTab(facultyList, subjectList, classList),
+                _buildNaturalLanguageTab(),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          // ACTIVE CONSTRAINTS FOOTER
+          Container(
+            height: 180,
+            color: Colors.grey.shade50,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Add New Constraint', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 16),
-                    
-                    DropdownButtonFormField<String>(
-                      value: _selectedIntent,
-                      decoration: const InputDecoration(labelText: 'Rule Action', border: OutlineInputBorder()),
-                      items: _intents.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(),
-                      onChanged: (val) => setState(() => _selectedIntent = val!),
-                    ),
-                    const SizedBox(height: 16),
-
-                    if (_selectedIntent == 'Natural Language Rule')
-                      TextFormField(
-                        maxLines: 4,
-                        decoration: const InputDecoration(
-                          labelText: 'Type Rule in English',
-                          hintText: 'e.g., Vajreshwari should have 1st lecture on Monday for Btech AIML A',
-                          border: OutlineInputBorder(),
-                          alignLabelWithHint: true,
-                        ),
-                        onChanged: (val) => _naturalLanguageText = val,
-                      )
-                    else if (showStandardForm) ...[
-                      _buildMultiSelectField(label: 'Faculty / Guest', allOptions: facultyList, selectedItems: _selectedFaculties),
-                      const SizedBox(height: 12),
-                      _buildMultiSelectField(label: 'Subject', allOptions: subjectList, selectedItems: _selectedSubjects),
-                      const SizedBox(height: 12),
-                      _buildMultiSelectField(label: 'Class / Batch', allOptions: classList, selectedItems: _selectedClasses),
-                    ],
-
-                    if (showStandardForm || _selectedIntent == 'Holiday / College Closed' || _selectedIntent == 'Parallel / Combined Session') ...[
-                      const SizedBox(height: 16),
-                      const Text('Select Days', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      Wrap(
-                        spacing: 8.0,
-                        runSpacing: 4.0,
-                        children: _allDays.map((day) {
-                          return FilterChip(
-                            label: Text(day.substring(0, 3)),
-                            selected: _selectedDays.contains(day),
-                            selectedColor: AppColors.primary,
-                            labelStyle: TextStyle(color: _selectedDays.contains(day) ? Colors.white : Colors.black),
-                            onSelected: (selected) {
-                              setState(() {
-                                if (selected) _selectedDays.add(day);
-                                else _selectedDays.remove(day);
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ],
-
-                    if (showStandardForm || _selectedIntent == 'Parallel / Combined Session') ...[
-                      const SizedBox(height: 16),
-                      const Text('Applies to Slots (Select multiple for Labs)', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      Wrap(
-                        spacing: 8.0,
-                        runSpacing: 4.0,
-                        children: _allSlots.map((slot) {
-                          return FilterChip(
-                            label: Text('Slot $slot'),
-                            selected: _selectedSlots.contains(slot),
-                            selectedColor: AppColors.primary,
-                            labelStyle: TextStyle(color: _selectedSlots.contains(slot) ? Colors.white : Colors.black),
-                            onSelected: (selected) {
-                              setState(() {
-                                if (selected) _selectedSlots.add(slot);
-                                else _selectedSlots.remove(slot);
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                    
-                    const SizedBox(height: 20),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.add),
-                      label: const Text('Add Constraint'),
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-                      onPressed: _addConstraint,
+                    Text('Active Constraints (${constraints.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    TextButton(
+                      onPressed: () {
+                        for (var c in List.from(constraints)) {
+                          provider.removeConstraint(c.id);
+                        }
+                      },
+                      child: const Text('Clear All', style: TextStyle(color: Colors.red, fontSize: 12)),
                     ),
                   ],
                 ),
-              ),
+                Expanded(
+                  child: constraints.isEmpty
+                      ? const Center(child: Text('No constraints added yet.', style: TextStyle(color: Colors.grey, fontSize: 12)))
+                      : ListView.builder(
+                          itemCount: constraints.length,
+                          itemBuilder: (context, index) {
+                            final c = constraints[index];
+                            final isSoft = c.category.startsWith('soft|');
+                            return Card(
+                              elevation: 0.5,
+                              margin: const EdgeInsets.only(bottom: 4),
+                              child: ListTile(
+                                dense: true,
+                                leading: Icon(
+                                  isSoft ? Icons.star_outline : Icons.push_pin_outlined,
+                                  color: isSoft ? Colors.orange : AppColors.primary,
+                                  size: 20,
+                                ),
+                                title: Text(
+                                  c.category.startsWith('NLP|')
+                                      ? 'NLP: ${c.category.split('|').last}'
+                                      : c.category,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                                subtitle: Text(
+                                  'Days: ${c.days.isEmpty ? "All" : c.days.join(", ")} | Slots: ${c.slotNumbers.isEmpty ? "All" : c.slotNumbers.join(", ")}',
+                                  style: const TextStyle(fontSize: 10),
+                                ),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.close, size: 16, color: Colors.red),
+                                  onPressed: () => provider.removeConstraint(c.id),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
-            const SizedBox(height: 24),
-            const Text('Active Constraints', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 8),
-            
-            if (constraints.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 20.0),
-                child: Center(child: Text('No constraints added yet.', style: TextStyle(color: Colors.grey))),
-              )
-            else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: constraints.length,
-                itemBuilder: (context, index) {
-                  final c = constraints[index];
-                  List<String> details = [];
-                  if (c.facultyNames.isNotEmpty) details.add('Faculty: ${c.facultyNames.join(", ")}');
-                  if (c.subjectNames.isNotEmpty) details.add('Subject: ${c.subjectNames.join(", ")}');
-                  if (c.classNames.isNotEmpty) details.add('Class: ${c.classNames.join(", ")}');
-                  
-                  return ListTile(
-                    leading: const Icon(Icons.push_pin_outlined, color: AppColors.secondary),
-                    title: Text(
-                      c.category.startsWith('NLP|')
-                          ? 'NLP Rule: "${c.category.split('|').last}"'
-                          : c.category, 
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      details.isEmpty ? 'Applied to selected days/slots.' : '${details.join("\n")}\nDays: ${c.days.join(", ")} | Slots: ${c.slotNumbers.join(", ")}', 
-                      style: const TextStyle(height: 1.4)
-                    ),
-                    isThreeLine: true,
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
-                      onPressed: () => context.read<TimetableProvider>().removeConstraint(c.id),
-                    ),
-                  );
-                },
-              ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

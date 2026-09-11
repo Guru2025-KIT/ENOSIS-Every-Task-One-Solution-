@@ -70,6 +70,10 @@ class Room(Base):
     name = Column(String(100), nullable=False)
     type = Column(Enum(RoomType), nullable=False, default=RoomType.LECTURE)
     capacity = Column(Integer, nullable=False, default=60)
+    building = Column(String(100), nullable=True)
+    equipment = Column(JSON, nullable=True, default=list)  # List of equipment/features
+    is_active = Column(Boolean, nullable=False, default=True)
+    department = Column(String(100), nullable=True)
 
 
 class TeachingAssignment(Base):

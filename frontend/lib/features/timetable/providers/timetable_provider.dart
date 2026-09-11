@@ -1,28 +1,44 @@
-﻿import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import '../../../core/network/api_client.dart';
+import '../data/timetable_repository.dart';
+import '../data/constraint_repository.dart';
 import '../models/teaching_assignment.dart';
 import '../models/time_slot.dart';
 import '../models/timetable_constraint.dart';
-import 'package:flutter/foundation.dart';
 import '../models/room.dart';
 
-
 class TimetableProvider extends ChangeNotifier {
-  final List<TimeSlot> _timeSlots = [];
+  final TimetableRepository _repository = TimetableRepository();
+  final ConstraintRepository _constraintRepo = ConstraintRepository();
+
+  List<TimeSlot> _timeSlots = [];
   final List<TeachingAssignment> _assignments = [];
   final List<TimetableConstraint> _constraints = [];
   final Map<String, Map<String, List<String>>> _generatedTimetable = {};
+  Map<String, Map<String, List<String>>> _publishedTimetable = {};
+
+  ScheduleConfigModel? _scheduleConfig;
+  List<RoomModel> _roomModels = [];
+
   bool isTimetableSaved = false;
   bool _isGenerating = false;
+  bool _isLoading = false;
   String? _generationError;
   List<String> _conflictingConstraints = [];
 
+  // Getters
   List<TimeSlot> get timeSlots => _timeSlots;
   List<TeachingAssignment> get assignments => _assignments;
   List<TimetableConstraint> get constraints => _constraints;
   Map<String, Map<String, List<String>>> get generatedTimetable => _generatedTimetable;
+  Map<String, Map<String, List<String>>> get publishedTimetable => _publishedTimetable;
+  ScheduleConfigModel? get scheduleConfig => _scheduleConfig;
+  List<RoomModel> get roomModels => _roomModels;
+  List<Room> get rooms => _roomModels.map((rm) => Room(name: rm.name, type: rm.type, capacity: rm.capacity)).toList();
+
   bool get isGenerating => _isGenerating;
+  bool get isLoading => _isLoading;
   String? get generationError => _generationError;
   List<String> get conflictingConstraints => _conflictingConstraints;
 
@@ -30,18 +46,138 @@ class TimetableProvider extends ChangeNotifier {
   List<String> get subjectNames => _assignments.map((a) => a.subjectName).toSet().toList()..sort();
   List<String> get classesAndBatches => _assignments.map((a) => a.className).where((c) => c.isNotEmpty).toSet().toList()..sort();
 
-  void setTimeSlots(List<TimeSlot> slots) { _timeSlots.clear(); _timeSlots.addAll(slots); notifyListeners(); }
-  void setAssignments(List<TeachingAssignment> assignments) { _assignments.clear(); _assignments.addAll(assignments); notifyListeners(); }
-  void addConstraint(TimetableConstraint constraint) { _constraints.add(constraint); notifyListeners(); }
-  void removeConstraint(String id) { _constraints.removeWhere((c) => c.id == id); notifyListeners(); }
+  // Initialization & Data Loading
+  Future<void> initializeData() async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      _scheduleConfig = await _repository.fetchScheduleConfig();
+      _roomModels = await _repository.fetchRooms();
+      _generateTimeSlotsFromConfig();
+      await fetchPublishedTimetable();
+    } catch (e) {
+      debugPrint('Error initializing timetable provider: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
+  void setTimeSlots(List<TimeSlot> slots) {
+    _timeSlots = List.from(slots);
+    notifyListeners();
+  }
+
+  void setAssignments(List<TeachingAssignment> assignments) {
+    _assignments.clear();
+    _assignments.addAll(assignments);
+    notifyListeners();
+  }
+
+  void addConstraint(TimetableConstraint constraint) {
+    _constraints.add(constraint);
+    notifyListeners();
+  }
+
+  void removeConstraint(String id) {
+    _constraints.removeWhere((c) => c.id == id);
+    notifyListeners();
+  }
+
+  // Schedule Config
+  Future<bool> saveScheduleConfig(ScheduleConfigModel config) async {
+    _scheduleConfig = config;
+    _generateTimeSlotsFromConfig();
+    notifyListeners();
+    return await _repository.updateScheduleConfig(config);
+  }
+
+  void _generateTimeSlotsFromConfig() {
+    if (_scheduleConfig == null) return;
+    final cfg = _scheduleConfig!;
+    final slots = <TimeSlot>[];
+    
+    // Calculate wall clock slots based on start_time, lecture_duration, lab_duration, breaks
+    final parts = cfg.startTime.split(':');
+    int startMins = (int.tryParse(parts[0]) ?? 9) * 60 + (parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0);
+    int currentMins = startMins;
+
+    int lectureNum = 1;
+    for (int p = 1; p <= cfg.periodsPerDay; p++) {
+      bool isBreak = cfg.breakSlots.contains(p);
+      int duration = isBreak ? 20 : cfg.lectureDurationMinutes;
+
+      int endMins = currentMins + duration;
+      String startStr = _formatMins(currentMins);
+      String endStr = _formatMins(endMins);
+
+      slots.add(TimeSlot(
+        lectureNumber: isBreak ? 0 : lectureNum,
+        startTime: startStr,
+        endTime: endStr,
+        isBreak: isBreak,
+      ));
+
+      if (!isBreak) lectureNum++;
+      currentMins = endMins;
+    }
+
+    _timeSlots = slots;
+  }
+
+  String _formatMins(int totalMins) {
+    int h = (totalMins ~/ 60) % 24;
+    int m = totalMins % 60;
+    String period = h >= 12 ? 'PM' : 'AM';
+    int h12 = h % 12 == 0 ? 12 : h % 12;
+    return '${h12.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')} $period';
+  }
+
+  // Rooms
+  Future<void> loadRooms() async {
+    _roomModels = await _repository.fetchRooms();
+    notifyListeners();
+  }
+
+  Future<bool> addRoom(Room room, {String? building, String? department, String? equipment}) async {
+    final model = RoomModel(
+      name: room.name,
+      type: room.type,
+      capacity: room.capacity,
+      building: building,
+      department: department,
+      equipment: equipment,
+    );
+    final saved = await _repository.saveRoom(model);
+    if (saved != null) {
+      _roomModels.add(saved);
+      notifyListeners();
+      return true;
+    }
+    _roomModels.add(model); // local fallback
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> removeRoom(String name) async {
+    final idx = _roomModels.indexWhere((r) => r.name == name);
+    if (idx != -1) {
+      final id = _roomModels[idx].id;
+      _roomModels.removeAt(idx);
+      notifyListeners();
+      if (id != null) {
+        return await _repository.deleteRoom(id);
+      }
+    }
+    return true;
+  }
+
+  // Natural Language Rule Parsing
   bool _stringMatches(String a, String b) {
     if (a.isEmpty || b.isEmpty) return false;
     final t1 = a.toLowerCase().trim();
     final t2 = b.toLowerCase().trim();
     if (t1 == t2) return true;
-
-    // Check abbreviation in parentheses e.g. "Data Structures (DS)" -> "ds"
     final abbrRe = RegExp(r'\(([^)]+)\)');
     for (final m in [abbrRe.firstMatch(t1), abbrRe.firstMatch(t2)]) {
       if (m == null) continue;
@@ -50,7 +186,6 @@ class TimetableProvider extends ChangeNotifier {
         return true;
       }
     }
-
     const stopWords = {
       'the', 'and', 'for', 'all', 'should', 'keep', 'lectures', 'lecture',
       'slot', 'slots', 'between', 'rule', 'have', 'on', 'in', 'at', 'to', 'of',
@@ -59,8 +194,6 @@ class TimetableProvider extends ChangeNotifier {
     };
     final w1 = t1.split(RegExp(r'[\s\-_,.]')).map((w) => w.trim()).where((w) => w.length >= 3 && !stopWords.contains(w)).toSet();
     final w2 = t2.split(RegExp(r'[\s\-_,.]')).map((w) => w.trim()).where((w) => w.length >= 3 && !stopWords.contains(w)).toSet();
-    
-    // Match only full token words (e.g. "MDM" matches "mdm", "Java" matches "java")
     for (final wa in w1) {
       if (w2.contains(wa)) return true;
     }
@@ -80,7 +213,6 @@ class TimetableProvider extends ChangeNotifier {
     final intent = _detectNlpIntent(text);
     final lower = text.toLowerCase();
 
-    // If intent is 'fill' (e.g. "Replace free lecture with leetcode"), don't attach random subjects/faculties
     final foundFaculties = intent == 'fill'
         ? <String>[]
         : facultyNames.where((f) => f.isNotEmpty && _stringMatches(f, text)).toList();
@@ -127,25 +259,8 @@ class TimetableProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-    // Add these variables
-  final List<Room> _rooms = [];
-  List<Room> get rooms => _rooms;
-
-  // Add these methods
-  void addRoom(Room room) {
-    _rooms.add(room);
-    notifyListeners();
-  }
-
-  void removeRoom(String name) {
-    _rooms.removeWhere((r) => r.name == name);
-    notifyListeners();
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // generateTimetable — calls POST /timetable/generate (CP-SAT solver)
-  // ─────────────────────────────────────────────────────────────────────────
-   Future<void> generateTimetable() async {
+  // Generation
+  Future<void> generateTimetable() async {
     _generatedTimetable.clear();
     _generationError = null;
     _conflictingConstraints = [];
@@ -154,7 +269,6 @@ class TimetableProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // ── 1. Build request payload ──────────────────────────────────────────
       final assignmentsPayload = _assignments.map((a) => {
         'facultyName': a.facultyName,
         'subjectName': a.subjectName,
@@ -177,10 +291,10 @@ class TimetableProvider extends ChangeNotifier {
         'is_break': s.isBreak,
       }).toList();
 
-            final constraintsPayload = _constraints.map((c) => {
+      final constraintsPayload = _constraints.map((c) => {
         'id': c.id,
         'category': c.category,
-        'intent': _resolveIntent(c), // Pass the whole object 'c', not 'c.category'
+        'intent': _resolveIntent(c),
         'facultyNames': c.facultyNames,
         'subjectNames': c.subjectNames,
         'classNames': c.classNames,
@@ -188,7 +302,6 @@ class TimetableProvider extends ChangeNotifier {
         'slotNumbers': c.slotNumbers,
       }).toList();
 
-      // ── 2. Detect combined / joint class groups ───────────────────────────
       final groupMap = <String, Set<String>>{};
       for (final a in _assignments) {
         final parts = a.className.split('-');
@@ -207,17 +320,15 @@ class TimetableProvider extends ChangeNotifier {
         'time_slots': timeSlotsPayload,
         'constraints': constraintsPayload,
         'combined_groups': combinedGroups,
+        'schedule_config': _scheduleConfig?.toJson(),
         'time_limit_seconds': 30,
       };
 
-      // ── 3. Call the endpoint ──────────────────────────────────────────────
       final response = await ApiClient.postJson('/timetable/generate', payload);
       final body = jsonDecode(response.body) as Map<String, dynamic>;
-
       final status = body['status'] as String? ?? 'UNKNOWN';
 
       if (status == 'OPTIMAL' || status == 'FEASIBLE') {
-        // ── 4a. Parse timetable into _generatedTimetable ──────────────────
         final raw = body['timetable'] as Map<String, dynamic>? ?? {};
         for (final entry in raw.entries) {
           final className = entry.key;
@@ -232,7 +343,6 @@ class TimetableProvider extends ChangeNotifier {
         _generationError = null;
         _conflictingConstraints = [];
       } else {
-        // ── 4b. INFEASIBLE / UNKNOWN ──────────────────────────────────────
         final conflicts = body['conflictingConstraints'];
         if (conflicts is List) {
           _conflictingConstraints = conflicts.map((e) => e.toString()).toList();
@@ -267,5 +377,56 @@ class TimetableProvider extends ChangeNotifier {
     return 'blacklist';
   }
 
-  void saveTimetable() { isTimetableSaved = true; notifyListeners(); }
+  // Transactional Publish & Persistence
+  Future<bool> saveTimetableToBackend() async {
+    try {
+      final payload = {'timetable': _generatedTimetable};
+      final response = await ApiClient.postJson('/timetable/publish', payload);
+      if (response.statusCode == 200) {
+        isTimetableSaved = true;
+        await fetchPublishedTimetable();
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Failed to publish timetable: $e');
+    }
+    isTimetableSaved = true;
+    notifyListeners();
+    return false;
+  }
+
+  void saveTimetable() { saveTimetableToBackend(); }
+
+  Future<void> fetchPublishedTimetable({String? viewType, String? target}) async {
+    try {
+      final raw = await _repository.fetchPublishedTimetable(viewType: viewType, target: target);
+      if (raw.isNotEmpty) {
+        _publishedTimetable.clear();
+        for (final entry in raw.entries) {
+          final className = entry.key;
+          final slots = entry.value as Map<String, dynamic>;
+          final grid = <String, List<String>>{};
+          for (final slot in slots.entries) {
+            final cellList = slot.value as List<dynamic>;
+            grid[slot.key] = cellList.map((e) => e.toString()).toList();
+          }
+          _publishedTimetable[className] = grid;
+        }
+        isTimetableSaved = true;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error fetching published timetable: $e');
+    }
+  }
+
+  // PDF & Excel Export
+  Future<List<int>> exportPdf({required String viewTitle, required String viewType, String target = ''}) {
+    return _repository.exportPdf(viewTitle: viewTitle, viewType: viewType, target: target);
+  }
+
+  Future<List<int>> exportExcel({required String viewTitle, required String viewType, String target = ''}) {
+    return _repository.exportExcel(viewTitle: viewTitle, viewType: viewType, target: target);
+  }
 }

@@ -17,20 +17,21 @@ os.environ["DATABASE_URL"] = "sqlite:///./test_enosis.db"
 
 import pytest
 
-from app.core.security import create_access_token, hash_password
-from app.db.base import SessionLocal
+from app.db.base import Base, engine, SessionLocal
 from app.models.user import User, UserRole
 
 
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_after_all_tests():
-    """Removes the test database file once, after the entire test run finishes."""
+    """Initializes tables and removes test DB file after tests finish."""
+    Base.metadata.create_all(bind=engine)
     yield
     if os.path.exists("test_enosis.db"):
         try:
             os.remove("test_enosis.db")
         except PermissionError:
             pass
+
 
 
 

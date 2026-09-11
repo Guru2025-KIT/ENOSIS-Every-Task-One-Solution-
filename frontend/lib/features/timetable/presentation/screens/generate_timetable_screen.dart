@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_typography.dart';
 import '../../providers/timetable_provider.dart';
 
 class GenerateTimetableScreen extends StatefulWidget {
@@ -12,352 +11,251 @@ class GenerateTimetableScreen extends StatefulWidget {
 }
 
 class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> {
-  bool _isGenerating = false;
-  String? _selectedClass;
-
-  Future<void> _startGeneration() async {
-    setState(() => _isGenerating = true);
-    
-    final provider = context.read<TimetableProvider>();
-    await provider.generateTimetable(); // Calls backend
-    
-    final classes = provider.generatedTimetable.keys.toList();
-    if (classes.isNotEmpty) {
-      _selectedClass = classes.first;
-    }
-
-    if (!mounted) return;
-    setState(() => _isGenerating = false);
-
-    // ✅ SHOW POP-UP IF CONSTRAINTS WERE IGNORED
-    if (provider.generationError != null) {
-      _showInfeasibleDialog(provider.generationError!);
-    } else if (provider.conflictingConstraints.isNotEmpty) {
-      _showRelaxedDialog(provider.conflictingConstraints);
-    }
-  }
-
-  void _showInfeasibleDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Cannot Generate Timetable'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showRelaxedDialog(List<String> conflicts) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Timetable Generated with Warnings'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: conflicts.length,
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(conflicts[index], style: const TextStyle(fontSize: 13))),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Got it'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ✅ UNIFIED COLORS: Theory (Blue), Lab (Purple)
-  Color _getCellColor(String subject, String batchInfo) {
-    if (subject == 'Break') return Colors.grey.shade200;
-    if (subject == 'Free' || subject.isEmpty) return Colors.white;
-    if (subject == 'Holiday') return Colors.white; // Hide holiday visually
-    
-    bool isLab = subject.toLowerCase().contains('lab') || batchInfo.contains('Batch');
-    if (isLab) return Colors.purple.shade50;
-    return AppColors.primary.withOpacity(0.08); // Theory
-  }
-
-  Color _getTextColor(String subject, String batchInfo) {
-    if (subject == 'Break') return Colors.grey.shade700;
-    if (subject == 'Free' || subject == 'Holiday' || subject.isEmpty) return Colors.white; // Hide text
-    
-    bool isLab = subject.toLowerCase().contains('lab') || batchInfo.contains('Batch');
-    if (isLab) return Colors.purple.shade800;
-    return AppColors.primary; // Theory
-  }
+  String? _selectedDivision;
+  bool _isSaving = false;
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<TimetableProvider>();
     final generated = provider.generatedTimetable;
+    final isGenerating = provider.isGenerating;
+    final error = provider.generationError;
     final timeSlots = provider.timeSlots;
     final days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+    final selectedClass = _selectedDivision ?? (generated.isNotEmpty ? generated.keys.first : null);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Generate Timetable'),
+        title: const Text('Timetable Generator Engine'),
         backgroundColor: AppColors.primary,
         actions: [
-          if (generated.isNotEmpty && !provider.isTimetableSaved)
-            TextButton.icon(
-              onPressed: () {
-                provider.saveTimetable();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Timetable Saved Successfully!'), backgroundColor: AppColors.success),
-                );
-              },
-              icon: const Icon(Icons.save, color: Colors.white),
-              label: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-        ],
-      ),
-      body: _isGenerating
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const CircularProgressIndicator(strokeWidth: 6),
-                  const SizedBox(height: 24),
-                  Text('Generating Timetable...', style: AppTypography.h3),
-                  const SizedBox(height: 8),
-                  Text('Applying CSP Algorithm & Constraints...', style: AppTypography.bodySecondary),
-                ],
-              ),
-            )
-          : generated.isEmpty
-              ? _buildIdleState(provider)
-              : _buildGeneratedState(provider, generated, timeSlots, days),
-    );
-  }
-
-  Widget _buildIdleState(provider) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('Ready to Generate', style: AppTypography.h2, textAlign: TextAlign.center),
-          const SizedBox(height: 8),
-          Text('The algorithm will assign 1hr for Theory, 2 consecutive hrs for Labs, and dynamically split batches.', textAlign: TextAlign.center, style: AppTypography.bodySecondary),
-          const SizedBox(height: 32),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.2,
-            children: [
-              _buildSummaryCard('Faculty', provider.facultyNames.length, Icons.people_outline),
-              _buildSummaryCard('Subjects', provider.subjectNames.length, Icons.menu_book_outlined),
-              _buildSummaryCard('Classes/Batches', provider.classesAndBatches.length, Icons.school_outlined),
-              _buildSummaryCard('Constraints', provider.constraints.length, Icons.rule_folder_outlined),
-            ],
-          ),
-          const SizedBox(height: 40),
-          ElevatedButton.icon(
-            onPressed: _startGeneration,
-            icon: const Icon(Icons.auto_fix_high, color: Colors.white),
-            label: const Text('Generate Clash-Free Timetable'),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGeneratedState(provider, generated, timeSlots, days) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: _selectedClass,
-                  decoration: const InputDecoration(labelText: 'Select Class / Batch', border: OutlineInputBorder()),
-                  items: generated.keys.map<DropdownMenuItem<String>>((c) => DropdownMenuItem<String>(value: c, child: Text(c))).toList(),
-                  onChanged: (val) => setState(() => _selectedClass = val),
-                ),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton.icon(
-                onPressed: _startGeneration,
-                icon: const Icon(Icons.refresh, color: AppColors.primary),
-                label: const Text('Regenerate', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  side: const BorderSide(color: AppColors.primary),
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (provider.isTimetableSaved)
-          Container(
-            color: AppColors.success.withOpacity(0.1),
-            padding: const EdgeInsets.all(8.0),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.check_circle, color: AppColors.success, size: 16),
-                SizedBox(width: 8),
-                Text('This timetable is saved and active.', style: TextStyle(color: AppColors.success, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-        Expanded(
-          child: _selectedClass == null
-              ? const Center(child: Text('Select a class'))
-              : SingleChildScrollView(
-                  scrollDirection: Axis.vertical, 
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal, 
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Table(
-                        border: TableBorder.all(color: Colors.grey.shade300, width: 1, borderRadius: BorderRadius.circular(12)),
-                        defaultColumnWidth: const FixedColumnWidth(140.0),
-                        columnWidths: const { 0: FixedColumnWidth(110.0) },
-                        children: [
-                          TableRow(
-                            decoration: const BoxDecoration(color: Color(0xFF1F2937), borderRadius: BorderRadius.only(topLeft: Radius.circular(11), topRight: Radius.circular(11))),
-                            children: [
-                              const Padding(padding: EdgeInsets.all(12.0), child: Text('Day / Time', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
-                              ...days.map((day) => Padding(
-                                padding: const EdgeInsets.all(12.0),
-                                child: Text(day.substring(0, 3), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                              )).toList(),
-                            ]
+          if (generated.isNotEmpty)
+            IconButton(
+              icon: _isSaving
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.cloud_upload_outlined),
+              tooltip: 'Save / Publish Timetable',
+              onPressed: _isSaving
+                  ? null
+                  : () async {
+                      setState(() => _isSaving = true);
+                      final ok = await provider.saveTimetableToBackend();
+                      setState(() => _isSaving = false);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(ok ? 'Timetable Published & Persisted Successfully!' : 'Saved locally.'),
+                            backgroundColor: ok ? Colors.green : Colors.orange,
                           ),
-                          ...timeSlots.map((slot) {
-                            return TableRow(
-                              children: [
-                                // ✅ SHOW TIMES ON SLOTS
-                                Container(
-                                  color: const Color(0xFFF3F4F6),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(8.0),
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          slot.isBreak ? 'Break' : 'Slot ${slot.lectureNumber}',
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF374151)),
-                                        ),
-                                        if (!slot.isBreak)
-                                          Text(
-                                            '${slot.startTime}\n${slot.endTime}',
-                                            style: const TextStyle(fontSize: 10, color: Colors.grey),
-                                          ),
-                                      ],
-                                    ),
+                        );
+                      }
+                    },
+            ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── SOLVER ACTION CARD ──────────────────────────────────────────
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.memory, color: AppColors.primary),
+                        const SizedBox(width: 8),
+                        Text(
+                          'OR-Tools CP-SAT Solver',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Generates conflict-free, constraint-aware schedules across rooms, labs, divisions, and faculty.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton.icon(
+                        icon: isGenerating
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Icon(Icons.play_arrow),
+                        label: Text(
+                          isGenerating ? 'Solving Constraints...' : 'Generate Academic Timetable',
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                        onPressed: isGenerating ? null : () => provider.generateTimetable(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── ERROR OR INFEASIBLE MESSAGE ────────────────────────────────
+            if (error != null) ...[
+              Card(
+                color: Colors.red.shade50,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.error_outline, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text('Solver Execution Failed', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(error, style: TextStyle(fontSize: 12, color: Colors.red.shade900)),
+                      if (provider.conflictingConstraints.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        const Text('Conflicting Constraints:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        ...provider.conflictingConstraints.map((c) => Text('• $c', style: const TextStyle(fontSize: 11))),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // ── GENERATED TIMETABLE PREVIEW ────────────────────────────────
+            if (generated.isNotEmpty) ...[
+              Card(
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          DropdownButton<String>(
+                            value: selectedClass,
+                            items: generated.keys.map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontWeight: FontWeight.bold)))).toList(),
+                            onChanged: (val) => setState(() => _selectedDivision = val),
+                          ),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.save, size: 16),
+                            label: const Text('Save Timetable'),
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                            onPressed: () async {
+                              final ok = await provider.saveTimetableToBackend();
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(ok ? 'Timetable Saved to Backend!' : 'Saved locally.'),
+                                    backgroundColor: ok ? Colors.green : Colors.orange,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                      const Divider(),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          columnSpacing: 16.0,
+                          headingRowHeight: 40,
+                          dataRowMinHeight: 65,
+                          dataRowMaxHeight: 85,
+                          columns: [
+                            const DataColumn(label: Text('Slot / Time', style: TextStyle(fontWeight: FontWeight.bold))),
+                            ...days.map((day) => DataColumn(label: Text(day.substring(0, 3), style: const TextStyle(fontWeight: FontWeight.bold)))).toList(),
+                          ],
+                          rows: timeSlots.map<DataRow>((slot) {
+                            final isBreak = slot.isBreak;
+                            return DataRow(
+                              cells: [
+                                DataCell(
+                                  Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        isBreak ? 'Break' : 'Slot ${slot.lectureNumber}',
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: isBreak ? Colors.orange.shade800 : AppColors.primary),
+                                      ),
+                                      if (slot.startTime.isNotEmpty)
+                                        Text('${slot.startTime}\n${slot.endTime}', style: const TextStyle(fontSize: 9, color: Colors.grey)),
+                                    ],
                                   ),
                                 ),
-                                                               ...days.map((day) {
+                                ...days.map((day) {
                                   String cellKey = '${day}_${slot.lectureNumber}';
-                                  List<String>? cellData = generated[_selectedClass]?[cellKey];
-                                  
-                                  String subject = cellData == null ? '' : cellData[0];
-                                  String faculty = cellData != null && cellData.length > 1 ? cellData[1] : '';
-                                  String batchInfo = cellData != null && cellData.length > 2 ? cellData[2] : '';
-                                  
-                                  if (subject == 'Holiday') subject = '';
+                                  List<String>? cellData = generated[selectedClass]?[cellKey];
 
-                                  // ✅ LOGIC TO VISUALLY MERGE LABS
-                                  // Check if the PREVIOUS slot has the exact same subject & faculty (meaning it's a 2hr lab continuation)
-                                  String prevCellKey = '${day}_${slot.lectureNumber - 1}';
-                                  List<String>? prevCellData = generated[_selectedClass]?[prevCellKey];
-                                  bool isLabContinuation = prevCellData != null && 
-                                      prevCellData.length > 1 && 
-                                      prevCellData[0] == subject && 
-                                      prevCellData[1] == faculty && 
-                                      subject.isNotEmpty && 
-                                      subject != 'Free' && 
-                                      subject != 'Break';
+                                  if (isBreak || cellData == null || cellData[0] == 'Break') {
+                                    return DataCell(
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(4)),
+                                        child: const Text('BREAK', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange)),
+                                      ),
+                                    );
+                                  }
 
-                                  return Container(
-                                    color: _getCellColor(subject, batchInfo),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(8.0),
-                                      child: subject.isEmpty || subject == 'Free' || subject == 'Break'
-                                        ? const SizedBox() // Empty for Free, Break, Holiday
-                                        : isLabContinuation 
-                                          ? const SizedBox() // ✅ Leave EMPTY for 2nd hour of lab to visually merge!
-                                          : Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(subject, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _getTextColor(subject, batchInfo))),
-                                                const SizedBox(height: 4),
-                                                Text(faculty, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                                                if (cellData != null && cellData.length > 3 && cellData[3].isNotEmpty)
-                                                  Padding(
-                                                    padding: const EdgeInsets.only(top: 2.0),
-                                                    child: Text('Room: ${cellData[3]}', style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
-                                                  ),
-                                                if (batchInfo.isNotEmpty && batchInfo != 'All')
-                                                  Padding(
-                                                    padding: const EdgeInsets.only(top: 4.0),
-                                                    child: Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                      decoration: BoxDecoration(color: Colors.purple.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                                                      child: Text(batchInfo, style: const TextStyle(fontSize: 9, color: Colors.purple, fontWeight: FontWeight.bold)),
-                                                    ),
-                                                  )
-                                              ],
-                                            ),
+                                  String subj = cellData.isNotEmpty ? cellData[0] : 'Free';
+                                  String fac = cellData.length > 1 ? cellData[1] : '';
+                                  String roomExtra = cellData.length > 2 ? cellData[2] : '';
+
+                                  if (subj == 'Free' || subj == '-') {
+                                    return const DataCell(Text('-', style: TextStyle(color: Colors.grey)));
+                                  }
+
+                                  bool isLab = subj.toLowerCase().contains('lab') || roomExtra.toLowerCase().contains('batch');
+
+                                  return DataCell(
+                                    Container(
+                                      padding: const EdgeInsets.all(6.0),
+                                      decoration: BoxDecoration(
+                                        color: isLab ? Colors.purple.shade50 : Colors.blue.shade50,
+                                        borderRadius: BorderRadius.circular(4.0),
+                                        border: Border.all(color: isLab ? Colors.purple.shade200 : Colors.blue.shade200),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(subj, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: isLab ? Colors.purple.shade900 : AppColors.primary)),
+                                          if (fac.isNotEmpty)
+                                            Text(fac, style: const TextStyle(fontSize: 10, color: Colors.black87)),
+                                          if (roomExtra.isNotEmpty)
+                                            Text('[$roomExtra]', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                                        ],
+                                      ),
                                     ),
                                   );
                                 }).toList(),
-                              ]
+                              ],
                             );
                           }).toList(),
-                        ],
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSummaryCard(String title, int count, IconData icon) {
-    return Card(
-      elevation: 1,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Icon(icon, color: AppColors.primary, size: 28),
-            const SizedBox(height: 8),
-            Text('$count', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text(title, style: AppTypography.caption, textAlign: TextAlign.center),
+              ),
+            ],
           ],
         ),
       ),

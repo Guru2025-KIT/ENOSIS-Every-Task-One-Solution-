@@ -102,15 +102,23 @@ class TimetableCpSatSolver:
         constraints: List[Constraint],
         combined_groups: Optional[List[List[str]]] = None,
         working_days: Optional[List[str]] = None,
-        time_limit_seconds: int = 30
+        time_limit_seconds: int = 30,
+        lecture_duration_minutes: int = 60,
+        lab_duration_minutes: int = 120,
     ):
+        import math
         self.assignments = assignments
         self.time_slots = sorted(time_slots, key=lambda s: s.slot_number)
         self.constraints = constraints
         self.combined_groups = combined_groups or []
         self.working_days = working_days or ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
         self.time_limit_seconds = time_limit_seconds
+        self.lecture_duration_minutes = max(15, lecture_duration_minutes)
+        self.lab_duration_minutes = max(15, lab_duration_minutes)
+        # Dynamically compute lab slots needed per lab session from configured minutes
+        self.lab_slots_per_session = max(1, math.ceil(self.lab_duration_minutes / self.lecture_duration_minutes))
         self.fill_rules: List[Dict[str, Any]] = []
+        self.replacement_rules: List[Dict[str, Any]] = []
 
         # Filter active teaching slots
         self.slot_by_num = {s.slot_number: s for s in self.time_slots if not s.is_break and s.slot_number > 0}
@@ -333,8 +341,9 @@ class TimetableCpSatSolver:
                     ))
             elif a.type.lower() == "lab":
                 hours = a.weekly_hours
-                blocks = hours // 2
-                remainder = hours % 2
+                lab_slots = self.lab_slots_per_session
+                blocks = hours // lab_slots
+                remainder = hours % lab_slots
                 block_idx = 0
 
                 for _ in range(blocks):
@@ -346,7 +355,7 @@ class TimetableCpSatSolver:
                         type="Lab",
                         batch=a.batch if a.batch else "Batch 1",
                         classes=[a.class_name],
-                        duration=2,
+                        duration=lab_slots,
                         session_index=block_idx
                     ))
                     block_idx += 1
@@ -658,13 +667,15 @@ class TimetableCpSatSolver:
                     sess_was_placed = True
                     scheduled_count += 1
                     batch_info = "All" if sess.type == "Theory" else (sess.batch if sess.batch else "Batch 1")
+                    room_name = getattr(sess, 'room_name', '') or ("LAB-1" if sess.type == "Lab" else "CR-101")
                     for c_name in sess.classes:
                         for s in opt.slots:
                             key = f"{opt.day}_{s}"
-                            timetable[c_name][key] = [sess.subject, sess.faculty, batch_info]
+                            timetable[c_name][key] = [sess.subject, sess.faculty, room_name, batch_info]
                             detailed[c_name][key] = {
                                 "subject": sess.subject,
                                 "faculty": sess.faculty,
+                                "room": room_name,
                                 "batch": batch_info,
                                 "type": sess.type,
                                 "is_joint": len(sess.classes) > 1,
@@ -776,7 +787,9 @@ def solve_from_dicts(
     combined_groups: Optional[List[List[str]]] = None,
     time_slots_raw: Optional[List[Dict[str, Any]]] = None,
     working_days: Optional[List[str]] = None,
-    time_limit_seconds: int = 30
+    time_limit_seconds: int = 30,
+    lecture_duration_minutes: int = 60,
+    lab_duration_minutes: int = 120,
 ) -> SolverResult:
     """
     Convenience factory to run solver directly from plain dicts / JSON.
@@ -838,6 +851,8 @@ def solve_from_dicts(
         constraints=constraints,
         combined_groups=combined_groups,
         working_days=working_days,
-        time_limit_seconds=time_limit_seconds
+        time_limit_seconds=time_limit_seconds,
+        lecture_duration_minutes=lecture_duration_minutes,
+        lab_duration_minutes=lab_duration_minutes,
     )
     return solver.solve()

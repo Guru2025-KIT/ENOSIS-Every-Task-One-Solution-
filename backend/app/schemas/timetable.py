@@ -52,6 +52,10 @@ class RoomCreate(BaseModel):
     name: str
     type: RoomType = RoomType.LECTURE
     capacity: int = 60
+    building: str | None = None
+    equipment: list[str] = Field(default_factory=list)
+    is_active: bool = True
+    department: str | None = None
 
 
 class RoomOut(BaseModel):
@@ -60,6 +64,10 @@ class RoomOut(BaseModel):
     name: str
     type: RoomType
     capacity: int
+    building: str | None = None
+    equipment: list[str] | None = None
+    is_active: bool = True
+    department: str | None = None
 
 
 class TeachingAssignmentCreate(BaseModel):
@@ -87,7 +95,7 @@ class FacultyUnavailabilityCreate(BaseModel):
 # ---------------------------------------------------------------------------
 
 class ScheduleConfigCreate(BaseModel):
-    working_days: int = Field(ge=1, le=6, default=6)
+    working_days: int = Field(ge=1, le=7, default=6)
     day_names: list[str] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     periods_per_day: int = Field(ge=1, le=20, default=8)
     period_duration_minutes: int = Field(ge=15, le=180, default=60)
@@ -95,6 +103,7 @@ class ScheduleConfigCreate(BaseModel):
     lab_duration_minutes: int = Field(ge=15, le=240, default=120)
     tutorial_duration_minutes: int = Field(ge=15, le=180, default=60)
     start_time: str = "09:00"
+    end_time: str = "17:00"
     break_slots: list[int] = []
     break_labels: dict[str, str] = {}
     max_lectures_per_day_per_faculty: int | None = None
@@ -117,6 +126,7 @@ class ScheduleConfigOut(BaseModel):
     lab_duration_minutes: int
     tutorial_duration_minutes: int
     start_time: str
+    end_time: str = "17:00"
     break_slots: list[int]
     break_labels: dict[str, str]
     max_lectures_per_day_per_faculty: int | None

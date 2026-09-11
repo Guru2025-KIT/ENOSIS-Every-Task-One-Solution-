@@ -43,8 +43,9 @@ class ScheduleConfig(Base):
     lab_duration_minutes = Column(Integer, nullable=False, default=120)
     tutorial_duration_minutes = Column(Integer, nullable=False, default=60)
 
-    # Wall-clock start time of period 0, e.g. "09:00"
+    # Wall-clock start & end time of operating day, e.g. "09:00" and "17:00"
     start_time = Column(String(5), nullable=False, default="09:00")
+    end_time = Column(String(5), nullable=False, default="17:00")
 
     # List of period indices (0-based) that are breaks — the solver will
     # never place a class in these slots.
