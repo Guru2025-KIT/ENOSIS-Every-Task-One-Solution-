@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Response
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Response, Body
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_timetable_manager, get_optional_current_user
@@ -14,11 +14,11 @@ from app.services.timetable_export_service import generate_timetable_excel, gene
 from app.core.config import settings
 from app.db.base import get_db
 from app.models.academic import (
-    Division, Subject, Room, TeachingAssignment, FacultyUnavailability,
+    Division, Subject, Room, RoomType, TeachingAssignment, FacultyUnavailability,
     InstitutionalCourse, SharedCourse
 )
 from app.models.timetable import TimetableEntry
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.schedule_config import ScheduleConfig
 from app.models.constraints import TimetableConstraint
 from app.models.generation_history import GenerationRun
@@ -41,7 +41,10 @@ from app.schemas.timetable import (
 from app.services.timetable_solver import generate_timetable, validate_request
 from app.services.timetable_cpsat_solver import solve_from_dicts
 from app.services.timetable_validator import validate_generated_timetable
+from app.services.timetable_preflight import run_preflight_checks
+from app.services.timetable_staged_solver import StagedTimetableSolver
 from app.services.notifications import notify
+
 
 router = APIRouter(prefix="/timetable", tags=["timetable"])
 
@@ -88,6 +91,13 @@ def get_schedule_config(db: Session = Depends(get_db), _: User = Depends(get_cur
             lab_duration_minutes=120,
             tutorial_duration_minutes=60,
             start_time="09:00",
+            end_time="17:00",
+            break1_enabled=True,
+            break1_after_lectures=2,
+            break1_duration_minutes=15,
+            break2_enabled=True,
+            break2_after_lectures=5,
+            break2_duration_minutes=30,
             break_slots=[],
             break_labels={},
             max_lectures_per_day_per_faculty=None,
@@ -128,18 +138,209 @@ def update_schedule_config(
 # Generic Timetable Constraints (CRUD)
 # ---------------------------------------------------------------------------
 
+def _validate_and_normalize_constraint(payload: ConstraintCreate, db: Session) -> tuple[str, str, int, dict, str]:
+    """
+    Validates a constraint on save according to Step 1(d):
+    - Validates rule_type against generic types
+    - Checks that existing subject, faculty, division actually exist in the DB
+    - Checks that slot is within range and NOT on a break slot
+    - Returns (rule_type, priority, weight, payload_normalized, description)
+    """
+    raw_payload = payload.payload or {}
+
+    # 1. Determine rule_type
+    raw_type = (
+        payload.rule_type
+        or payload.constraint_type
+        or raw_payload.get("rule_type")
+        or raw_payload.get("category", "")
+    )
+    raw_lower = str(raw_type).lower()
+
+    if "unavailable" in raw_lower or "blacklist" in raw_lower:
+        rule_type = "faculty_unavailable"
+    elif "fixed" in raw_lower:
+        rule_type = "fixed_slot"
+    elif "placement" in raw_lower or "lunch" in raw_lower or "window" in raw_lower:
+        rule_type = "placement_window"
+    elif "max" in raw_lower:
+        rule_type = "max_per_day"
+    elif "spread" in raw_lower or "consecutive" in raw_lower:
+        rule_type = "spread"
+    elif "lab_daily" in raw_lower or "continuity" in raw_lower:
+        rule_type = "lab_daily"
+    elif "no_gap" in raw_lower or "nogap" in raw_lower:
+        rule_type = "no_gap"
+    elif "preferred" in raw_lower or "morning" in raw_lower or "evening" in raw_lower:
+        rule_type = "preferred_slot"
+    else:
+        rule_type = payload.rule_type or payload.constraint_type or "fixed_slot"
+
+    valid_types = {
+        "fixed_slot", "faculty_unavailable", "placement_window",
+        "max_per_day", "spread", "lab_daily", "no_gap", "preferred_slot"
+    }
+    if rule_type not in valid_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported rule_type '{rule_type}'. Supported generic rules: {sorted(list(valid_types))}"
+        )
+
+    # 2. Extract scope & params
+    scope = payload.scope.model_dump() if payload.scope else {}
+    params = dict(payload.params or {})
+
+    divisions_in = list(scope.get("divisions") or raw_payload.get("divisions") or raw_payload.get("classNames") or [])
+    subjects_in = list(scope.get("subjects") or raw_payload.get("subjects") or raw_payload.get("subjectNames") or [])
+    faculty_in = list(scope.get("faculty") or raw_payload.get("faculty") or raw_payload.get("facultyNames") or [])
+    session_types_in = list(scope.get("session_types") or raw_payload.get("session_types") or [])
+
+    if "division_id" in raw_payload:
+        divisions_in.append(raw_payload["division_id"])
+    if "subject_id" in raw_payload:
+        subjects_in.append(raw_payload["subject_id"])
+    if "faculty_id" in raw_payload:
+        faculty_in.append(raw_payload["faculty_id"])
+
+    # 3. Validate entities in DB
+    resolved_div_ids = []
+    for d in divisions_in:
+        d_str = str(d).strip()
+        if not d_str:
+            continue
+        div_rec = db.query(Division).filter(
+            (Division.id == d_str) | (Division.name.ilike(d_str)) | (Division.division_code.ilike(d_str))
+        ).first()
+        if not div_rec:
+            raise HTTPException(status_code=400, detail=f"Division '{d_str}' does not exist in database.")
+        resolved_div_ids.append(div_rec.id)
+
+    resolved_sub_ids = []
+    for s in subjects_in:
+        s_str = str(s).strip()
+        if not s_str:
+            continue
+        sub_rec = db.query(Subject).filter(
+            (Subject.id == s_str) | (Subject.code.ilike(s_str)) | (Subject.name.ilike(s_str))
+        ).first()
+        if not sub_rec:
+            raise HTTPException(status_code=400, detail=f"Subject '{s_str}' does not exist in database.")
+        resolved_sub_ids.append(sub_rec.id)
+
+    resolved_fac_ids = []
+    for f in faculty_in:
+        f_str = str(f).strip()
+        if not f_str:
+            continue
+        fac_rec = db.query(User).filter(
+            (User.id == f_str) | (User.email.ilike(f_str)) | (User.full_name.ilike(f_str))
+        ).first()
+        if not fac_rec:
+            raise HTTPException(status_code=400, detail=f"Faculty '{f_str}' does not exist in database.")
+        resolved_fac_ids.append(fac_rec.id)
+
+    # 4. Validate days & slots & breaks against ScheduleConfig
+    config = db.query(ScheduleConfig).filter(ScheduleConfig.id == "default").first()
+    if not config:
+        config = ScheduleConfig(id="default", working_days=6, periods_per_day=8, break_slots=[])
+
+    break_slots = set(config.get_break_slots())
+    periods_per_day = config.periods_per_day or 8
+    working_days = config.working_days or 6
+
+    day_map = {
+        "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6,
+        "mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6
+    }
+    raw_day = params.get("day", raw_payload.get("day", (raw_payload.get("days") or [None])[0]))
+    if raw_day is not None:
+        if isinstance(raw_day, str) and raw_day.lower() in day_map:
+            params["day"] = day_map[raw_day.lower()]
+        elif isinstance(raw_day, (int, str)) and str(raw_day).isdigit():
+            d_int = int(raw_day)
+            if not (0 <= d_int < working_days):
+                raise HTTPException(status_code=400, detail=f"Day {d_int} is out of range (0 to {working_days - 1}).")
+            params["day"] = d_int
+
+    raw_slots = params.get("slot") or raw_payload.get("slot") or params.get("slots") or raw_payload.get("slotNumbers") or []
+    if not isinstance(raw_slots, list):
+        raw_slots = [raw_slots]
+
+    validated_slots = []
+    for s in raw_slots:
+        if s is None:
+            continue
+        try:
+            s_val = int(s)
+            if s_val >= periods_per_day and s_val <= periods_per_day:
+                s_val = s_val - 1
+            if not (0 <= s_val < periods_per_day):
+                raise HTTPException(status_code=400, detail=f"Slot {s} is out of range (0 to {periods_per_day - 1}).")
+            if s_val in break_slots:
+                break_lbl = (config.break_labels or {}).get(str(s_val), "break")
+                raise HTTPException(status_code=400, detail=f"Slot {s_val} is a {break_lbl} slot and cannot have classes scheduled.")
+            validated_slots.append(s_val)
+        except ValueError:
+            pass
+
+    if validated_slots:
+        params["slot"] = validated_slots[0]
+        params["slots"] = validated_slots
+
+    if rule_type == "placement_window":
+        w = str(params.get("window", raw_payload.get("window", "after_lunch"))).lower()
+        if w not in ("before_lunch", "after_lunch", "slot_range"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid placement window '{w}'. Must be 'before_lunch', 'after_lunch', or 'slot_range'."
+            )
+        params["window"] = w
+
+    priority = str(payload.priority or "hard").lower()
+    if priority not in ("hard", "soft"):
+        priority = "hard"
+    weight = int(payload.weight or 10)
+
+    normalized_payload = {
+        "rule_type": rule_type,
+        "scope": {
+            "divisions": resolved_div_ids,
+            "subjects": resolved_sub_ids,
+            "faculty": resolved_fac_ids,
+            "session_types": session_types_in
+        },
+        "params": params,
+        "priority": priority,
+        "weight": weight
+    }
+
+    desc = payload.description or f"{rule_type.replace('_', ' ').title()} ({priority})"
+    return rule_type, priority, weight, normalized_payload, desc
+
+
 @router.post("/constraints", response_model=ConstraintOut, status_code=status.HTTP_201_CREATED)
 def create_constraint(
     payload: ConstraintCreate,
     db: Session = Depends(get_db),
     _: User = Depends(require_timetable_manager)
 ):
-    """Creates a new timetable constraint (either hard or soft)."""
-    constraint = TimetableConstraint(**payload.model_dump())
+    """Creates a new timetable constraint with strict generic validation."""
+    rule_type, priority, weight, normalized_payload, desc = _validate_and_normalize_constraint(payload, db)
+
+    constraint = TimetableConstraint(
+        id=str(uuid.uuid4()),
+        constraint_type=rule_type,
+        priority=priority,
+        weight=weight,
+        payload=normalized_payload,
+        description=desc,
+        is_active=payload.is_active
+    )
     db.add(constraint)
     db.commit()
     db.refresh(constraint)
     return constraint
+
 
 
 @router.get("/constraints", response_model=list[ConstraintOut])
@@ -275,7 +476,17 @@ def delete_subject(
 
 @router.post("/rooms", response_model=RoomOut, status_code=status.HTTP_201_CREATED)
 def create_room(payload: RoomCreate, db: Session = Depends(get_db), _: User = Depends(require_timetable_manager)):
-    room = Room(**payload.model_dump())
+    # Check if a room with the same name already exists — upsert if so
+    room_name = payload.name.strip()
+    existing_room = db.query(Room).filter(Room.name.ilike(room_name)).first()
+    if existing_room:
+        for field, value in payload.model_dump().items():
+            setattr(existing_room, field, value)
+        db.commit()
+        db.refresh(existing_room)
+        return existing_room
+
+    room = Room(id=str(uuid.uuid4()), **payload.model_dump())
     db.add(room)
     db.commit()
     db.refresh(room)
@@ -283,7 +494,7 @@ def create_room(payload: RoomCreate, db: Session = Depends(get_db), _: User = De
 
 
 @router.get("/rooms", response_model=list[RoomOut])
-def list_rooms(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_rooms(db: Session = Depends(get_db), _: User = Depends(require_timetable_manager)):
     return db.query(Room).all()
 
 
@@ -318,6 +529,142 @@ def delete_room(
     db.delete(room)
     db.commit()
     return {"status": "deleted"}
+
+
+@router.get("/rooms/template-excel")
+def download_room_excel_template(_: User = Depends(require_timetable_manager)):
+    """Returns a real Excel workbook template for room imports."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Rooms Import"
+    
+    headers = ["Room Name", "Type", "Capacity", "Building", "Equipment"]
+    ws.append(headers)
+    
+    sample_rows = [
+        ["CR-101", "Classroom", 60, "Main Block", "Projector, Audio System"],
+        ["CR-102", "Classroom", 60, "Main Block", "Projector"],
+        ["LAB-201", "Lab", 30, "Tech Block", "Computers, LAN"],
+        ["LAB-202", "Lab", 30, "Tech Block", "Computers, IoT Kits"],
+    ]
+    for row in sample_rows:
+        ws.append(row)
+        
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=room_import_template.xlsx"}
+    )
+
+
+@router.post("/rooms/import-excel")
+def import_rooms_excel(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_timetable_manager)
+):
+    """Imports rooms from an uploaded Excel (.xlsx) file, returning detailed validation and result statistics."""
+    filename_lower = (file.filename or "").lower()
+    if not (filename_lower.endswith('.xlsx') or filename_lower.endswith('.xls')):
+        # Check if contents can be opened with openpyxl anyway
+        pass
+        
+    contents = file.file.read()
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid Excel file format: {e}")
+
+    ws = wb.active
+    processed = 0
+    created = 0
+    updated = 0
+    rejected = 0
+    errors = []
+
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        raise HTTPException(status_code=400, detail="Uploaded Excel file is empty.")
+
+    start_idx = 0
+    header_col1 = str(rows[0][0] or '').strip().lower()
+    if 'room' in header_col1 or 'name' in header_col1 or 'capacity' in str(rows[0]).lower():
+        start_idx = 1
+
+    for row_idx, row in enumerate(rows[start_idx:], start=start_idx + 1):
+        if not row or all(val is None or str(val).strip() == '' for val in row):
+            continue
+
+        processed += 1
+        name = str(row[0]).strip() if row[0] is not None else ""
+        raw_type = str(row[1]).strip() if len(row) > 1 and row[1] is not None else "Classroom"
+        raw_cap = row[2] if len(row) > 2 else 60
+        building = str(row[3]).strip() if len(row) > 3 and row[3] is not None else None
+        equipment = str(row[4]).strip() if len(row) > 4 and row[4] is not None else None
+
+        if not name:
+            errors.append(f"Row {row_idx}: Room name is required.")
+            rejected += 1
+            continue
+
+        try:
+            capacity = int(raw_cap)
+            if capacity <= 0:
+                raise ValueError("Capacity must be positive")
+        except Exception:
+            errors.append(f"Row {row_idx}: Invalid capacity '{raw_cap}'. Must be a positive integer.")
+            rejected += 1
+            continue
+
+        type_lower = raw_type.lower()
+        if "lab" in type_lower:
+            room_type = RoomType.LAB
+        elif "class" in type_lower or "lecture" in type_lower or "theory" in type_lower:
+            room_type = RoomType.LECTURE
+        else:
+            errors.append(f"Row {row_idx}: Invalid room type '{raw_type}'. Expected 'Classroom' or 'Lab'.")
+            rejected += 1
+            continue
+
+        equip_list = [e.strip() for e in equipment.split(',')] if equipment else []
+
+        existing_room = db.query(Room).filter(Room.name.ilike(name)).first()
+        if existing_room:
+            existing_room.type = room_type
+            existing_room.capacity = capacity
+            if building:
+                existing_room.building = building
+            if equip_list:
+                existing_room.equipment = equip_list
+            updated += 1
+        else:
+            new_room = Room(
+                id=str(uuid.uuid4()),
+                name=name,
+                type=room_type,
+                capacity=capacity,
+                building=building,
+                equipment=equip_list,
+                is_active=True
+            )
+            db.add(new_room)
+            created += 1
+
+    db.commit()
+
+    return {
+        "status": "success" if rejected == 0 else "partial_success",
+        "processed": processed,
+        "created": created,
+        "updated": updated,
+        "rejected": rejected,
+        "errors": errors,
+        "message": f"Processed {processed} rows: {created} created, {updated} updated, {rejected} rejected."
+    }
 
 
 @router.post("/assignments", response_model=TeachingAssignmentOut, status_code=status.HTTP_201_CREATED)
@@ -571,27 +918,16 @@ def _build_generation_request(db: Session) -> TimetableGenerationRequest:
 
 @router.get("/validate", response_model=ValidationResponse)
 def pre_validate(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    """Performs pre-solve conflict check against the current DB data."""
-    request = _build_generation_request(db)
-    conflicts = validate_request(request)
-    
-    valid = len(conflicts) == 0
-    summary = "Configuration is valid for solver run." if valid else f"Found {len(conflicts)} scheduling conflicts."
-    suggestions = []
-    for c in conflicts:
-        if c.type == "no_compatible_lecture_room":
-            suggestions.append(f"Add a lecture room matching subject capacity needs.")
-        elif c.type == "no_compatible_lab_room":
-            suggestions.append(f"Add a lab-type room for {c.subject}.")
-        elif c.type == "faculty_overloaded":
-            suggestions.append(f"Decrease session requirement or add another faculty for Faculty {c.faculty}.")
-
+    """Performs Stage 0 pre-solve conflict check against the current DB data."""
+    valid, issues, conflicts, suggestions, summary = run_preflight_checks(db)
     return ValidationResponse(
         valid=valid,
         conflicts=conflicts,
-        suggestions=list(set(suggestions)),
-        summary=summary
+        suggestions=suggestions,
+        summary=summary,
+        issues=issues
     )
+
 
 
 @router.post("/generate")
@@ -614,14 +950,23 @@ def generate(
             print(c)
         print("===================================\n")
 
-        # ✅ FIX: payload.assignments is already a list of dicts! Just pass it directly.
+        effective_working_days = payload.working_days
+        if not effective_working_days:
+            config = db.query(ScheduleConfig).filter(ScheduleConfig.id == "default").first()
+            if config and config.day_names:
+                effective_working_days = config.day_names
+            else:
+                effective_working_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
         solver_result = solve_from_dicts(
             assignments_raw=payload.assignments,
             constraints_raw=payload.constraints,
             combined_groups=payload.combined_groups,
             time_slots_raw=payload.time_slots,
-            working_days=payload.working_days,
+            working_days=effective_working_days,
             time_limit_seconds=payload.time_limit_seconds,
+            lecture_duration_minutes=payload.lecture_duration_minutes,
+            lab_duration_minutes=payload.lab_duration_minutes,
         )
 
         return TimetableGenerateResponseBody(
@@ -632,26 +977,35 @@ def generate(
             solve_time_seconds=solver_result.solve_time_seconds,
         )
 
-    # Legacy fallback: Build from database if no payload provided
-    request = _build_generation_request(db)
-    
-    # Snapshot of config
-    config_dict = {
-        "working_days": request.working_days,
-        "periods_per_day": request.periods_per_day,
-        "break_slots": request.break_slots,
-        "max_lectures_per_day_per_faculty": request.max_lectures_per_day_per_faculty
-    }
+    # DB-first fallback: use the staged solver pipeline
+    return _run_staged_generate(db)
 
-    # Run solver
-    result = generate_timetable(request)
+
+def _run_staged_generate(db: Session, locked_hints: list[dict] | None = None) -> dict:
+    """
+    Internal helper — runs the 4-stage solver pipeline from DB data,
+    persists results into TimetableEntry + GenerationRun, and returns
+    a JSON-serialisable dict suitable as a FastAPI response.
+    """
+    solver = StagedTimetableSolver(db=db, locked_hint_entries=locked_hints)
+    result = solver.solve()
 
     batch_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
 
-    # Handle solver result
+    # Build config snapshot for the generation history record
+    config_dict = {
+        "working_days": solver.working_days,
+        "periods_per_day": solver.periods_per_day,
+        "break_slots": solver.break_slots,
+    }
+
+    stage_log = "\n".join(
+        f"{sp.stage_name}: {sp.status} ({sp.total_placed} placed, {sp.solve_time_seconds}s)"
+        for sp in result.stage_progress
+    )
+
     if result.status not in ("OPTIMAL", "FEASIBLE"):
-        # Save run history as INFEASIBLE
         db_run = GenerationRun(
             id=batch_id,
             status=result.status,
@@ -659,9 +1013,9 @@ def generate(
             total_entries=0,
             validation_passed=False,
             config_snapshot=config_dict,
-            conflicts=[c.model_dump() for c in result.conflicts],
-            suggestions=result.suggestions,
-            solver_log=result.solver_log
+            conflicts=result.conflicts,
+            suggestions=[],
+            solver_log=stage_log[:4000]
         )
         db.add(db_run)
         db.commit()
@@ -670,73 +1024,49 @@ def generate(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
                 "status": result.status,
-                "message": result.message or "Solver failed to find a valid solution.",
-                "conflicts": [c.model_dump() for c in result.conflicts],
-                "suggestions": result.suggestions
+                "message": result.message or "Staged solver failed.",
+                "conflicts": result.conflicts,
+                "stage_progress": [
+                    {"stage": sp.stage_name, "status": sp.status, "placed": sp.total_placed,
+                     "time": sp.solve_time_seconds, "conflicts": sp.conflicts}
+                    for sp in result.stage_progress
+                ]
             }
         )
 
-    # 4. Run post-solve validation layer
-    validation_passed, validation_violations = validate_generated_timetable(request, result.entries)
-
-    if not validation_passed:
-        # Validation layer failed (strict audit block)
-        db_run = GenerationRun(
-            id=batch_id,
-            status="ERROR",
-            solve_time_seconds=result.solve_time_seconds,
-            total_entries=0,
-            validation_passed=False,
-            config_snapshot=config_dict,
-            conflicts=[c.model_dump() for c in validation_violations],
-            suggestions=["Check model solver constraints integrity."],
-            solver_log=result.solver_log
-        )
-        db.add(db_run)
-        db.commit()
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "status": "VALIDATION_FAILED",
-                "message": "Independent validation of generated timetable failed.",
-                "conflicts": [c.model_dump() for c in validation_violations]
-            }
-        )
-
-    # 5. Clear old timetable entries and insert new ones
+    # Clear old entries and persist the new timetable
     db.query(TimetableEntry).delete()
 
     for entry in result.entries:
         db.add(TimetableEntry(
             batch_id=batch_id,
-            division_id=entry.division_id,
-            subject_id=entry.subject_id,
-            faculty_id=entry.faculty_id,
-            room_id=entry.room_id,
-            day=entry.day,
-            slot=entry.slot,
-            is_lab_block=entry.is_lab_block,
+            division_id=entry["division_id"],
+            subject_id=entry["subject_id"],
+            faculty_id=entry["faculty_id"],
+            room_id=entry["room_id"],
+            day=entry["day"],
+            slot=entry["slot"],
+            is_lab_block=entry.get("is_lab_block", False),
+            batch_name=entry.get("batch_name"),
+            session_type=entry.get("session_type", "lecture"),
             generated_at=now,
         ))
 
-    # Record successful run history
     db_run = GenerationRun(
         id=batch_id,
         status=result.status,
         solve_time_seconds=result.solve_time_seconds,
-        total_entries=len(result.entries),
-        objective_score=result.objective_score,
+        total_entries=result.total_entries,
         validation_passed=True,
         config_snapshot=config_dict,
         conflicts=[],
         suggestions=[],
-        solver_log=result.solver_log
+        solver_log=stage_log[:4000]
     )
     db.add(db_run)
 
-    # Notify affected faculty members
-    affected_faculty_ids = {entry.faculty_id for entry in result.entries}
+    # Notify affected faculty
+    affected_faculty_ids = {e["faculty_id"] for e in result.entries}
     for faculty_id in affected_faculty_ids:
         notify(
             db,
@@ -750,11 +1080,295 @@ def generate(
     return {
         "batch_id": batch_id,
         "status": result.status,
-        "total_entries": len(result.entries),
+        "total_entries": result.total_entries,
         "solve_time_seconds": result.solve_time_seconds,
-        "objective_score": result.objective_score,
-        "validation_passed": True
+        "validation_passed": True,
+        "message": result.message,
+        "stage_progress": [
+            {"stage": sp.stage_name, "status": sp.status, "placed": sp.total_placed,
+             "time": sp.solve_time_seconds}
+            for sp in result.stage_progress
+        ]
     }
+
+
+@router.post("/generate-staged")
+def generate_staged(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_timetable_manager),
+):
+    """
+    Explicit staged-generation endpoint. Always reads from DB.
+    Returns detailed per-stage progress alongside the generated timetable.
+    """
+    return _run_staged_generate(db)
+
+
+# ---------------------------------------------------------------------------
+# Published Timetable — read/write view endpoints for Flutter / Web
+# ---------------------------------------------------------------------------
+
+@router.post("/publish")
+def publish_timetable(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_current_user),
+):
+    """
+    Publishes and permanently persists a solved timetable into MySQL (TimetableEntry and GenerationRun tables).
+    Once published:
+    1. It shows on the public/faculty timetable views.
+    2. It populates each faculty member's homepage Dashboard 'Today's Schedule' automatically.
+    """
+    timetable_data = payload.get("timetable", {})
+    if not timetable_data:
+        raise HTTPException(status_code=400, detail="No timetable data provided to publish.")
+
+    batch_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+
+    # 1. Config & Days mapping
+    config = db.query(ScheduleConfig).filter(ScheduleConfig.id == "default").first()
+    day_names = (
+        config.day_names
+        if config and config.day_names
+        else ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    )
+    day_map = {name.lower(): i for i, name in enumerate(day_names)}
+    day_map.update({
+        "mon": 0, "monday": 0,
+        "tue": 1, "tues": 1, "tuesday": 1,
+        "wed": 2, "wednesday": 2,
+        "thu": 3, "thur": 3, "thurs": 3, "thursday": 3,
+        "fri": 4, "friday": 4,
+        "sat": 5, "saturday": 5,
+        "sun": 6, "sunday": 6,
+    })
+
+    # Cache or create users/divisions/subjects/rooms
+    user_cache = {u.full_name.lower().strip(): u for u in db.query(User).all() if u.full_name}
+    div_cache = {d.name.lower().strip(): d for d in db.query(Division).all() if d.name}
+    div_code_cache = {d.division_code.lower().strip(): d for d in db.query(Division).all() if d.division_code}
+    sub_cache = {s.name.lower().strip(): s for s in db.query(Subject).all() if s.name}
+    room_cache = {r.name.lower().strip(): r for r in db.query(Room).all() if r.name}
+
+    # Clear old entries
+    db.query(TimetableEntry).delete()
+
+    total_saved = 0
+
+    for class_name, slot_dict in timetable_data.items():
+        if not isinstance(slot_dict, dict):
+            continue
+        c_clean = class_name.strip()
+        div = div_cache.get(c_clean.lower()) or div_code_cache.get(c_clean.lower())
+        if not div:
+            year = 1
+            if "sy" in c_clean.lower() or "second" in c_clean.lower(): year = 2
+            elif "ty" in c_clean.lower() or "third" in c_clean.lower(): year = 3
+            elif "btech" in c_clean.lower() or "final" in c_clean.lower() or "be" in c_clean.lower(): year = 4
+            div = Division(id=str(uuid.uuid4()), name=c_clean, division_code=c_clean, year=year)
+            db.add(div)
+            db.flush()
+            div_cache[c_clean.lower()] = div
+
+        for slot_key, cell_data in slot_dict.items():
+            if not isinstance(cell_data, list) or not cell_data:
+                continue
+            subj_name = str(cell_data[0]).strip()
+            if not subj_name or subj_name in ("-", "Free", "Break", "BREAK"):
+                continue
+
+            fac_name = str(cell_data[1]).strip() if len(cell_data) > 1 else ""
+            room_name = str(cell_data[2]).strip() if len(cell_data) > 2 else ""
+            batch_name = str(cell_data[3]).strip() if len(cell_data) > 3 else "All"
+
+            parts = slot_key.split("_")
+            if len(parts) != 2:
+                continue
+            raw_day = parts[0].lower().strip()
+            raw_slot_num = int(parts[1]) if parts[1].isdigit() else 1
+            day_idx = day_map.get(raw_day, 0)
+            slot_idx = max(0, raw_slot_num - 1)
+
+            sub = sub_cache.get(subj_name.lower())
+            if not sub:
+                sub = Subject(id=str(uuid.uuid4()), name=subj_name, code=subj_name[:10])
+                db.add(sub)
+                db.flush()
+                sub_cache[subj_name.lower()] = sub
+
+            fac_user = user_cache.get(fac_name.lower())
+            if not fac_user and fac_name:
+                for u_name, u_obj in user_cache.items():
+                    if fac_name.lower() in u_name or u_name in fac_name.lower():
+                        fac_user = u_obj
+                        break
+            if not fac_user:
+                fac_email = f"{(fac_name.lower().replace(' ', '.').replace('..', '.') or 'faculty')}@enosis.edu"
+                fac_user = User(
+                    id=str(uuid.uuid4()),
+                    email=fac_email,
+                    full_name=fac_name or "Faculty Member",
+                    hashed_password="hashed_placeholder_pw",
+                    role=UserRole.FACULTY,
+                )
+                db.add(fac_user)
+                db.flush()
+                user_cache[fac_name.lower()] = fac_user
+                if fac_user.full_name:
+                    user_cache[fac_user.full_name.lower()] = fac_user
+
+            room = room_cache.get(room_name.lower()) if room_name else None
+            if not room:
+                is_lab_room = "lab" in subj_name.lower() or "lab" in room_name.lower()
+                room = Room(
+                    id=str(uuid.uuid4()),
+                    name=room_name or ("Lab 1" if is_lab_room else "Classroom 1"),
+                    type=RoomType.LAB if is_lab_room else RoomType.LECTURE,
+                    capacity=60,
+                )
+                db.add(room)
+                db.flush()
+                if room_name:
+                    room_cache[room_name.lower()] = room
+
+            is_lab = "lab" in subj_name.lower() or "practical" in subj_name.lower()
+
+            entry = TimetableEntry(
+                id=str(uuid.uuid4()),
+                batch_id=batch_id,
+                division_id=div.id,
+                subject_id=sub.id,
+                faculty_id=fac_user.id,
+                room_id=room.id,
+                day=day_idx,
+                slot=slot_idx,
+                is_lab_block=is_lab,
+                batch_name=batch_name,
+                session_type="lab" if is_lab else "lecture",
+                generated_at=now,
+            )
+            db.add(entry)
+            total_saved += 1
+
+    db_run = GenerationRun(
+        id=batch_id,
+        status="OPTIMAL",
+        solve_time_seconds=1.0,
+        total_entries=total_saved,
+        validation_passed=True,
+        config_snapshot={
+            "working_days": len(day_names),
+            "periods_per_day": 8,
+            "published_at": now.isoformat(),
+        },
+        conflicts=[],
+        suggestions=[],
+        solver_log="Published via UI",
+    )
+    db.add(db_run)
+    db.commit()
+
+    return {
+        "status": "success",
+        "message": f"Successfully published timetable with {total_saved} scheduled sessions!",
+        "batch_id": batch_id,
+        "total_entries": total_saved,
+    }
+
+
+@router.get("/published")
+def get_published_timetable(
+    view_type: str = "class",
+    target: str | None = None,
+    db: Session = Depends(get_db),
+    _: User | None = Depends(get_optional_current_user),
+):
+    """
+    Returns the latest generated timetable in a grid-friendly format.
+
+    Query params:
+        view_type: "class" | "faculty" | "room"
+        target:    Division name (for class), faculty id (for faculty),
+                   room id (for room).  If omitted, returns all.
+
+    Response shape (matches Flutter's TimetableEntryModel parser):
+        { "TE-A": { "Monday_1": ["DBMS", "Dr. Smith", "Room 301", "All"], ... }, ... }
+    """
+    config = db.query(ScheduleConfig).filter(ScheduleConfig.id == "default").first()
+    day_names = (config.day_names if config and config.day_names
+                 else ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"])
+
+    # Find the latest batch_id
+    latest_run = (
+        db.query(GenerationRun)
+        .filter(GenerationRun.status.in_(["OPTIMAL", "FEASIBLE"]))
+        .order_by(GenerationRun.generated_at.desc())
+        .first()
+    )
+    if not latest_run:
+        return {}  # No timetable has been generated yet
+
+    query = db.query(TimetableEntry).filter(TimetableEntry.batch_id == latest_run.id)
+
+    # Apply target filter
+    if view_type == "class" and target:
+        div = db.query(Division).filter(
+            (Division.name == target) | (Division.division_code == target)
+        ).first()
+        if div:
+            query = query.filter(TimetableEntry.division_id == div.id)
+        else:
+            return {}
+    elif view_type == "faculty" and target:
+        query = query.filter(TimetableEntry.faculty_id == target)
+    elif view_type == "room" and target:
+        query = query.filter(TimetableEntry.room_id == target)
+
+    entries = query.all()
+
+    # Build name caches
+    div_cache: dict[str, str] = {}
+    sub_cache: dict[str, str] = {}
+    fac_cache: dict[str, str] = {}
+    room_cache: dict[str, str] = {}
+
+    grid: dict[str, dict[str, list[str]]] = defaultdict(dict)
+
+    for e in entries:
+        # Lazily populate caches
+        if e.division_id not in div_cache:
+            d = db.get(Division, e.division_id)
+            div_cache[e.division_id] = d.name if d else e.division_id
+        if e.subject_id not in sub_cache:
+            s = db.get(Subject, e.subject_id)
+            sub_cache[e.subject_id] = s.name if s else e.subject_id
+        if e.faculty_id not in fac_cache:
+            f = db.get(User, e.faculty_id)
+            fac_cache[e.faculty_id] = f.full_name if f else e.faculty_id
+        if e.room_id not in room_cache:
+            r = db.get(Room, e.room_id)
+            room_cache[e.room_id] = r.name if r else e.room_id
+
+        day_name = day_names[e.day] if 0 <= e.day < len(day_names) else f"Day_{e.day}"
+        slot_key = f"{day_name}_{e.slot + 1}"  # 1-indexed for display
+
+        if view_type == "class":
+            group_key = div_cache[e.division_id]
+        elif view_type == "faculty":
+            group_key = fac_cache[e.faculty_id]
+        else:
+            group_key = room_cache[e.room_id]
+
+        grid[group_key][slot_key] = [
+            sub_cache[e.subject_id],
+            fac_cache[e.faculty_id],
+            room_cache[e.room_id],
+            e.batch_name or "All"
+        ]
+
+    return dict(grid)
 
 
 # ---------------------------------------------------------------------------
@@ -1239,223 +1853,123 @@ def year_timetable(year: int, db: Session = Depends(get_db), _: User = Depends(g
 
 
 # ---------------------------------------------------------------------------
-# Authoritative Timetable Persistence & Publishing
-# ---------------------------------------------------------------------------
-
-@router.post("/publish")
-def publish_timetable(
-    payload: dict[str, Any],
-    db: Session = Depends(get_db),
-    _: User = Depends(require_timetable_manager)
-):
-    """
-    Persists a generated timetable directly into timetable_entries and generation_history.
-    Accepts: { timetable: { class_name: { "Day_Slot": [subject, faculty, room, batch] } } }
-    """
-    timetable = payload.get("timetable", {})
-    if not timetable:
-        raise HTTPException(status_code=400, detail="No timetable data provided to publish")
-
-    batch_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc)
-
-    # Resolve divisions, subjects, faculty, and rooms maps for stable FK mapping
-    divisions_map = {d.name.lower(): d.id for d in db.query(Division).all()}
-    divisions_code_map = {f"year {d.year} - div {d.division_code}".lower(): d.id for d in db.query(Division).all()}
-    for d in db.query(Division).all():
-        divisions_code_map[f"{d.year}_{d.division_code}".lower()] = d.id
-        divisions_code_map[f"{d.division_code}".lower()] = d.id
-
-    subjects_map = {s.name.lower(): s.id for s in db.query(Subject).all()}
-    users_map = {u.full_name.lower(): u.id for u in db.query(User).all()}
-    rooms_map = {r.name.lower(): r.id for r in db.query(Room).all()}
-
-    # Fallback default entities if exact match not found
-    default_div = db.query(Division).first()
-    default_sub = db.query(Subject).first()
-    default_user = db.query(User).first()
-    default_room = db.query(Room).first()
-
-    if not default_div or not default_sub or not default_user or not default_room:
-        raise HTTPException(status_code=400, detail="Please set up at least one division, subject, user, and room before publishing.")
-
-    # Day name to index mapping
-    day_map = {
-        "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6,
-        "mon": 0, "tue": 1, "wed": 2, "thu": 3, "thur": 3, "fri": 4, "sat": 5, "sun": 6
-    }
-
-    try:
-        # Delete existing active timetable entries
-        db.query(TimetableEntry).delete()
-        total_entries = 0
-
-        for class_name, grid in timetable.items():
-            div_id = divisions_map.get(class_name.lower()) or divisions_code_map.get(class_name.lower()) or default_div.id
-
-            for key, cell in grid.items():
-                if not isinstance(cell, list) or len(cell) == 0:
-                    continue
-                subj_name = cell[0]
-                if subj_name in ("Free", "Break", "Holiday", "-", ""):
-                    continue
-
-                fac_name = cell[1] if len(cell) > 1 else ""
-                room_name = cell[2] if len(cell) > 2 else ""
-                batch_info = cell[3] if len(cell) > 3 else "All"
-
-                parts = key.split("_")
-                if len(parts) < 2:
-                    continue
-                day_str, slot_str = parts[0], parts[1]
-                day_idx = day_map.get(day_str.lower(), 0) if not day_str.isdigit() else int(day_str)
-                slot_idx = int(slot_str) if slot_str.isdigit() else 1
-
-                sub_id = subjects_map.get(subj_name.lower(), default_sub.id)
-                fac_id = users_map.get(fac_name.lower(), default_user.id)
-                rm_id = rooms_map.get(room_name.lower(), default_room.id)
-                is_lab = "lab" in subj_name.lower() or "batch" in batch_info.lower()
-
-                db_entry = TimetableEntry(
-                    batch_id=batch_id,
-                    division_id=div_id,
-                    subject_id=sub_id,
-                    faculty_id=fac_id,
-                    room_id=rm_id,
-                    day=day_idx,
-                    slot=slot_idx,
-                    is_lab_block=is_lab,
-                    batch_name=batch_info,
-                    session_type="lab" if is_lab else "lecture",
-                    generated_at=now
-                )
-                db.add(db_entry)
-                total_entries += 1
-
-        # Record Generation Run
-        config = db.query(ScheduleConfig).filter(ScheduleConfig.id == "default").first()
-        db_run = GenerationRun(
-            id=batch_id,
-            status="OPTIMAL",
-            solve_time_seconds=0.5,
-            total_entries=total_entries,
-            objective_score=100.0,
-            validation_passed=True,
-            config_snapshot={
-                "working_days": config.working_days if config else 6,
-                "periods_per_day": config.periods_per_day if config else 8,
-            },
-            conflicts=[],
-            suggestions=[],
-            solver_log="Published from user UI"
-        )
-        db.add(db_run)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to publish timetable: {str(e)}")
-
-    return {
-        "status": "published",
-        "batch_id": batch_id,
-        "total_entries": total_entries,
-        "message": f"Successfully published timetable with {total_entries} scheduled sessions!"
-    }
-
-
-# ---------------------------------------------------------------------------
-# Excel Import & Template Endpoints for Classrooms & Labs
-# ---------------------------------------------------------------------------
-
-@router.get("/rooms/template-excel")
-def download_rooms_excel_template():
-    """Returns official Excel template for importing Classrooms & Labs."""
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Classrooms_and_Labs"
-
-    ws.append(["INSTRUCTIONS:"])
-    ws.append(["1. Do not change column order."])
-    ws.append(["2. Type must be 'lecture' or 'lab'."])
-    ws.append(["3. Capacity must be a positive integer (e.g., 60)."])
-    ws.append([""])
-    ws.append(["Room Name", "Type (lecture/lab)", "Capacity", "Building / Block", "Equipment (comma separated)"])
-    ws.append(["CR-101", "lecture", 60, "Main Academic Block", "Projector, Smartboard"])
-    ws.append(["LAB-2", "lab", 30, "Computing Center", "30 i7 Workstations, High-speed LAN"])
-
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-    return Response(
-        content=output.getvalue(),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=ENOSIS_Rooms_Labs_Template.xlsx"}
-    )
-
-
-@router.post("/rooms/import-excel")
-def import_rooms_excel(file: UploadFile = File(...), db: Session = Depends(get_db), _: User = Depends(require_timetable_manager)):
-    """Imports Classrooms and Laboratories from an Excel file."""
-    if not file.filename.endswith((".xlsx", ".xls")):
-        raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are supported.")
-
-    contents = file.file.read()
-    wb = openpyxl.load_workbook(io.BytesIO(contents))
-    ws = wb.active
-
-    imported = 0
-    errors = []
-
-    for row_idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
-        if row_idx <= 5: # Skip header/instructions
-            continue
-        if not row or not row[0]:
-            continue
-
-        room_name = str(row[0]).strip()
-        room_type_str = str(row[1]).strip().lower() if len(row) > 1 and row[1] else "lecture"
-        capacity_val = row[2] if len(row) > 2 and row[2] else 60
-        building = str(row[3]).strip() if len(row) > 3 and row[3] else None
-        equipment_str = str(row[4]).strip() if len(row) > 4 and row[4] else ""
-
-        try:
-            capacity = int(capacity_val)
-        except Exception:
-            errors.append(f"Row {row_idx}: Invalid capacity '{capacity_val}' for room {room_name}")
-            continue
-
-        r_type = RoomType.LAB if "lab" in room_type_str else RoomType.LECTURE
-        equipment_list = [e.strip() for e in equipment_str.split(",") if e.strip()]
-
-        existing = db.query(Room).filter(Room.name == room_name).first()
-        if existing:
-            existing.type = r_type
-            existing.capacity = capacity
-            existing.building = building
-            existing.equipment = equipment_list
-        else:
-            new_room = Room(
-                name=room_name,
-                type=r_type,
-                capacity=capacity,
-                building=building,
-                equipment=equipment_list,
-                is_active=True
-            )
-            db.add(new_room)
-        imported += 1
-
-    db.commit()
-    return {"status": "success", "imported_count": imported, "errors": errors}
-
-
-# ---------------------------------------------------------------------------
 # PDF and Excel Timetable Export Endpoints
 # ---------------------------------------------------------------------------
 
+def _resolve_export_grid_data(payload: dict[str, Any], db: Session):
+    config = db.query(ScheduleConfig).filter(ScheduleConfig.id == "default").first()
+    days = payload.get("days")
+    if not days or len(days) == 0:
+        if config and config.day_names:
+            days = config.day_names
+        elif config and config.working_days:
+            all_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            days = all_days[:config.working_days]
+        else:
+            days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
+    time_slots = payload.get("time_slots")
+    if not time_slots or len(time_slots) == 0:
+        db_slots = db.query(TimeSlot).filter(TimeSlot.is_active == True).order_by(TimeSlot.slot_number.asc()).all()
+        if db_slots:
+            time_slots = [
+                {
+                    "slot_number": s.slot_number,
+                    "lecture_number": s.lecture_number,
+                    "start_time": s.start_time or "",
+                    "end_time": s.end_time or "",
+                    "is_break": s.is_break,
+                    "label": s.label or f"Slot {s.slot_number}"
+                }
+                for s in db_slots
+            ]
+        else:
+            periods = config.periods_per_day if config and config.periods_per_day else 8
+            time_slots = []
+            start_hour = 9
+            for p in range(1, periods + 1):
+                s_h = start_hour + (p - 1)
+                e_h = s_h + 1
+                s_ampm = "AM" if s_h < 12 else "PM"
+                e_ampm = "AM" if e_h < 12 else "PM"
+                s12 = s_h if s_h <= 12 else (s_h - 12)
+                e12 = e_h if e_h <= 12 else (e_h - 12)
+                time_slots.append({
+                    "slot_number": p,
+                    "lecture_number": p,
+                    "start_time": f"{s12:02d}:00 {s_ampm}",
+                    "end_time": f"{e12:02d}:00 {e_ampm}",
+                    "is_break": False,
+                    "label": f"Slot {p}"
+                })
+
+    multi_grid_data = payload.get("multi_grid_data") or payload.get("timetables")
+    grid_data = payload.get("grid_data") or {}
+    all_classes_requested = payload.get("all_classes", False) or payload.get("view_title") == "All Classes"
+
+    if (not multi_grid_data or len(multi_grid_data) == 0) and all_classes_requested:
+        # Build multi_grid_data for all classes from DB
+        multi_grid_data = {}
+        day_names_map = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        latest_run = db.query(GenerationRun).order_by(GenerationRun.generated_at.desc()).first()
+        batch_id = latest_run.id if latest_run else None
+
+        all_divs = db.query(Division).all()
+        for div in all_divs:
+            q = db.query(TimetableEntry).filter(TimetableEntry.division_id == div.id)
+            if batch_id:
+                q = q.filter(TimetableEntry.batch_id == batch_id)
+            div_entries = q.all()
+            if div_entries:
+                c_grid = {}
+                for e in div_entries:
+                    d_name = day_names_map[e.day] if 0 <= e.day < len(day_names_map) else "Monday"
+                    s_name = e.subject.name if e.subject else "Course"
+                    f_name = e.faculty.full_name if e.faculty else ""
+                    r_name = e.room.name if e.room else ""
+                    k = f"{d_name}_{e.slot}"
+                    c_grid[k] = [s_name, f_name, r_name]
+                multi_grid_data[div.name or div.division_code] = c_grid
+
+    if (not grid_data or len(grid_data) == 0) and (not multi_grid_data or len(multi_grid_data) == 0):
+        target = (payload.get("target") or "").strip()
+        view_type = payload.get("view_type", "class")
+
+        query = db.query(TimetableEntry)
+        if target and target.lower() not in ("all", ""):
+            if view_type in ("class", "division"):
+                divs = db.query(Division).filter((Division.division_code == target) | (Division.name == target)).all()
+                if divs:
+                    query = query.filter(TimetableEntry.division_id.in_([d.id for d in divs]))
+            elif view_type == "faculty":
+                users = db.query(User).filter(User.full_name.ilike(f"%{target}%")).all()
+                if users:
+                    query = query.filter(TimetableEntry.faculty_id.in_([u.id for u in users]))
+            elif view_type == "room":
+                rooms = db.query(Room).filter(Room.name.ilike(f"%{target}%")).all()
+                if rooms:
+                    query = query.filter(TimetableEntry.room_id.in_([r.id for r in rooms]))
+
+        latest_run = db.query(GenerationRun).order_by(GenerationRun.generated_at.desc()).first()
+        if latest_run:
+            query = query.filter(TimetableEntry.batch_id == latest_run.id)
+
+        entries = query.all()
+        day_names_map = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        for e in entries:
+            d_name = day_names_map[e.day] if 0 <= e.day < len(day_names_map) else "Monday"
+            subj_name = e.subject.name if e.subject else "Course"
+            fac_name = e.faculty.full_name if e.faculty else ""
+            room_name = e.room.name if e.room else ""
+            key = f"{d_name}_{e.slot}"
+            grid_data[key] = [subj_name, fac_name, room_name]
+
+    return days, time_slots, grid_data, multi_grid_data
+
+
 @router.post("/export/excel")
 def export_excel_timetable(payload: dict[str, Any], db: Session = Depends(get_db)):
-    """Exports specified timetable grid to Excel binary file."""
+    """Exports specified timetable grid or all classes to Excel binary file."""
     config = db.query(ScheduleConfig).filter(ScheduleConfig.id == "default").first()
     college = config.college_name if config else settings.COLLEGE_NAME
     dept = config.department_name if config else "Computer Science & Engineering"
@@ -1463,9 +1977,7 @@ def export_excel_timetable(payload: dict[str, Any], db: Session = Depends(get_db
     sem = config.semester if config else "Odd"
 
     view_title = payload.get("view_title", "Department Timetable")
-    days = payload.get("days", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"])
-    time_slots = payload.get("time_slots", [])
-    grid_data = payload.get("grid_data", {})
+    days, time_slots, grid_data, multi_grid_data = _resolve_export_grid_data(payload, db)
 
     excel_bytes = generate_timetable_excel(
         college_name=college,
@@ -1475,7 +1987,8 @@ def export_excel_timetable(payload: dict[str, Any], db: Session = Depends(get_db
         view_title=view_title,
         days=days,
         time_slots=time_slots,
-        grid_data=grid_data
+        grid_data=grid_data,
+        multi_grid_data=multi_grid_data
     )
 
     return Response(
@@ -1487,7 +2000,7 @@ def export_excel_timetable(payload: dict[str, Any], db: Session = Depends(get_db
 
 @router.post("/export/pdf")
 def export_pdf_timetable(payload: dict[str, Any], db: Session = Depends(get_db)):
-    """Exports specified timetable grid to PDF binary file."""
+    """Exports specified timetable grid or all classes to PDF binary file."""
     config = db.query(ScheduleConfig).filter(ScheduleConfig.id == "default").first()
     college = config.college_name if config else settings.COLLEGE_NAME
     dept = config.department_name if config else "Computer Science & Engineering"
@@ -1495,9 +2008,7 @@ def export_pdf_timetable(payload: dict[str, Any], db: Session = Depends(get_db))
     sem = config.semester if config else "Odd"
 
     view_title = payload.get("view_title", "Department Timetable")
-    days = payload.get("days", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"])
-    time_slots = payload.get("time_slots", [])
-    grid_data = payload.get("grid_data", {})
+    days, time_slots, grid_data, multi_grid_data = _resolve_export_grid_data(payload, db)
 
     pdf_bytes = generate_timetable_pdf(
         college_name=college,
@@ -1507,7 +2018,8 @@ def export_pdf_timetable(payload: dict[str, Any], db: Session = Depends(get_db))
         view_title=view_title,
         days=days,
         time_slots=time_slots,
-        grid_data=grid_data
+        grid_data=grid_data,
+        multi_grid_data=multi_grid_data
     )
 
     return Response(
@@ -1515,3 +2027,4 @@ def export_pdf_timetable(payload: dict[str, Any], db: Session = Depends(get_db))
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=Timetable_{view_title.replace(' ', '_')}.pdf"}
     )
+

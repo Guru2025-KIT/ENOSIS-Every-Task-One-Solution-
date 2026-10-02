@@ -239,11 +239,23 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
 
     setState(() => _isParsingNlp = true);
 
-    // Call NLP parsing in provider or backend
-    context.read<TimetableProvider>().addNaturalLanguageConstraint(text);
-    final parsedConstraint = context.read<TimetableProvider>().constraints.last;
+    final provider = context.read<TimetableProvider>();
+    final parsedConstraint = provider.parseNaturalLanguageRule(text);
 
     setState(() => _isParsingNlp = false);
+
+    if (parsedConstraint == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not understand or extract a valid rule from: "$text". Please specify a faculty or subject with day/slot (e.g., "Dr. Priya is unavailable on Tuesday slot 1").'),
+            backgroundColor: Colors.orange.shade800,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
 
     if (!mounted) return;
 
@@ -251,6 +263,8 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
     showDialog(
       context: context,
       builder: (context) {
+        final categoryParts = parsedConstraint.category.split('|');
+        final detectedAction = categoryParts.length >= 2 ? categoryParts[1].toUpperCase() : 'RULE';
         return AlertDialog(
           title: const Row(
             children: [
@@ -263,12 +277,17 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Original Text:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+              Text('Original Input:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
               Text('"$text"', style: const TextStyle(fontStyle: FontStyle.italic)),
 
               const Divider(height: 24),
-              Text('Detected Rule Action:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-              Text(parsedConstraint.category, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
+              Text('Detected Intent Action:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(4)),
+                child: Text(detectedAction, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
+              ),
               const SizedBox(height: 8),
               if (parsedConstraint.facultyNames.isNotEmpty)
                 Text('Faculty: ${parsedConstraint.facultyNames.join(", ")}'),
@@ -284,19 +303,17 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                context.read<TimetableProvider>().removeConstraint(parsedConstraint.id);
-                Navigator.pop(context);
-              },
-              child: const Text('Reject / Cancel', style: TextStyle(color: Colors.red)),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
               onPressed: () {
+                provider.addConstraint(parsedConstraint);
                 _nlpController.clear();
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('NLP Constraint Applied!'), backgroundColor: Colors.green),
+                  const SnackBar(content: Text('Constraint successfully configured and applied!'), backgroundColor: Colors.green),
                 );
               },
               child: const Text('Confirm & Apply', style: TextStyle(color: Colors.white)),
@@ -511,23 +528,70 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
     final subjectList = provider.subjectNames;
     final classList = provider.classesAndBatches;
     final constraints = provider.constraints;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Constraint Builder'),
-        backgroundColor: AppColors.primary,
+        title: const Text('Department & Faculty Constraints', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.white)),
+        backgroundColor: const Color(0xFF0F172A),
+        foregroundColor: Colors.white,
+        elevation: 0,
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: const Color(0xFFF97316),
+          indicatorWeight: 3.5,
+          labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
           tabs: const [
-            Tab(text: 'Hard Constraints'),
-            Tab(text: 'Soft Preferences'),
-            Tab(text: 'NLP Input'),
+            Tab(icon: Icon(Icons.lock_outline, size: 18), text: 'Hard Rules'),
+            Tab(icon: Icon(Icons.tune, size: 18), text: 'Soft Preferences'),
+            Tab(icon: Icon(Icons.psychology_outlined, size: 18), text: 'Natural Language'),
           ],
         ),
       ),
       body: Column(
         children: [
+          // ── STEP 4 GUIDANCE BANNER ───────────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF),
+              border: Border(
+                bottom: BorderSide(
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFDBEAFE),
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF97316),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'Step 4',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Define teacher unavailabilities, fixed lecture timings, and spread preferences to guide the solver.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF1E3A8A),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -542,7 +606,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
           // ACTIVE CONSTRAINTS FOOTER
           Container(
             height: 180,
-            color: Colors.grey.shade50,
+            color: isDark ? const Color(0xFF1E293B) : Colors.grey.shade50,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

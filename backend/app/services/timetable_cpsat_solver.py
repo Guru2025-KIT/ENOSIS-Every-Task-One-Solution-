@@ -25,6 +25,7 @@ from typing import List, Dict, Set, Tuple, Optional, Any, Union
 from collections import defaultdict
 import time
 import re
+import math
 from ortools.sat.python import cp_model
 
 
@@ -411,6 +412,11 @@ class TimetableCpSatSolver:
                     block_slice = teaching_slots[idx : idx + duration]
                     block_slots = [bs.slot_number for bs in block_slice]
 
+                    # Ensure multi-slot blocks (labs) are truly contiguous
+                    # (no break slots in between)
+                    if duration > 1 and (block_slots[-1] - block_slots[0]) != (duration - 1):
+                        continue
+
                     opt_penalty = 0
                     penalty_reasons = []
                     is_valid = True
@@ -459,6 +465,18 @@ class TimetableCpSatSolver:
                                 else:
                                     opt_penalty += 10000
                                     penalty_reasons.append(f"Violates whitelist for {sess.subject}")
+
+                        # 4. Fixed / Force
+                        if con.intent in ("fixed", "force"):
+                            day_bad = con.days and not day_applies
+                            slot_bad = con.slot_numbers and not all(sn in con.slot_numbers for sn in block_slots)
+                            if day_bad or slot_bad:
+                                if strict:
+                                    is_valid = False
+                                    break
+                                else:
+                                    opt_penalty += 50000
+                                    penalty_reasons.append(f"Violates fixed slot requirement for {sess.subject}")
 
                     if is_valid or not strict:
                         opts.append(SessionOption(
@@ -559,6 +577,26 @@ class TimetableCpSatSolver:
             if len(v_list) > 1:
                 if strict:
                     model.AddAtMostOne(v_list)
+
+        # ── Multi-Day Load Balancing: Distribute sessions evenly across Monday–Saturday ──
+        class_day_total_vars: Dict[Tuple[str, str], List[cp_model.IntVar]] = defaultdict(list)
+        for i, (sess, opts) in enumerate(zip(sessions, session_options)):
+            for j, opt in enumerate(opts):
+                var = choice_vars[i][j]
+                for c_name in sess.classes:
+                    class_day_total_vars[(c_name, opt.day)].append(var)
+
+        num_avail_days = max(1, len(available_days))
+        for c_name in {c for s in sessions for c in s.classes}:
+            total_class_sess = sum(1 for s in sessions if c_name in s.classes)
+            if total_class_sess > 0:
+                target_daily = math.ceil(total_class_sess / num_avail_days)
+                max_daily_allowed = max(2, target_daily + 1)
+                for day in available_days:
+                    day_v_list = class_day_total_vars[(c_name, day)]
+                    if len(day_v_list) > max_daily_allowed:
+                        if strict:
+                            model.Add(sum(day_v_list) <= max_daily_allowed)
 
         # ── Objective Function ────────────────────────────────────────────────
         objective_rewards = []
@@ -689,8 +727,19 @@ class TimetableCpSatSolver:
             if not sess_was_placed and not strict:
                 unscheduled_notices.append(f"1 hr of {sess.subject} ({sess.faculty} for {', '.join(sess.classes)}) could not fit into the available week slots")
 
-        status_name = "OPTIMAL" if (strict and not relaxed_notices and not unscheduled_notices) else "FEASIBLE"
-        all_notices = relaxed_notices + unscheduled_notices
+        if unscheduled_notices:
+            all_notices = relaxed_notices + unscheduled_notices
+            return SolverResult(
+                status="FEASIBLE",
+                solve_time_seconds=solve_time,
+                timetable=timetable,
+                detailed_timetable=detailed,
+                conflicts=all_notices,
+                message=f"Timetable generated with partial placement: {scheduled_count} of {len(sessions)} hours scheduled. {len(unscheduled_notices)} session(s) could not fit."
+            )
+
+        status_name = "OPTIMAL" if (strict and not relaxed_notices) else "FEASIBLE"
+        all_notices = relaxed_notices
         msg = f"Timetable generated successfully! ({scheduled_count} hours scheduled)" if not all_notices else f"Timetable generated with optimization! ({scheduled_count} of {len(sessions)} hours scheduled)"
 
         return SolverResult(

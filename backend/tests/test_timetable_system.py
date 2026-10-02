@@ -42,31 +42,12 @@ from app.core.security import create_access_token
 from app.services.timetable_cpsat_solver import TimetableCpSatSolver, Assignment, TimeSlot, Constraint, solve_from_dicts
 
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-def override_get_db():
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-fastapi_app.dependency_overrides[get_db] = override_get_db
+from app.db.base import Base, engine, SessionLocal, get_db
 
 
 @pytest.fixture(autouse=True)
-def setup_db():
-    Base.metadata.create_all(bind=engine)
-    db = TestingSessionLocal()
-    
+def setup_system_db_user():
+    db = SessionLocal()
     user = User(
         id="user-admin-1",
         email="admin@enosis.edu",
@@ -79,9 +60,7 @@ def setup_db():
     db.add(user)
     db.commit()
     db.close()
-    
     yield
-    Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture
@@ -220,7 +199,7 @@ def test_replacement_constraint_support():
 # 6. Transactional Persistence & Publish Endpoint
 def test_transactional_publish_endpoint(auth_headers):
     client = TestClient(fastapi_app)
-    db = TestingSessionLocal()
+    db = SessionLocal()
 
     div = Division(id="d1", name="SY-IT-A", year=2, division_code="A", strength=60)
     sub = Subject(id="s1", name="Data Structures", code="CS201", weekly_lectures=3)
@@ -241,7 +220,7 @@ def test_transactional_publish_endpoint(auth_headers):
     assert res.json()["status"] == "published"
 
     # Verify entry in DB
-    db2 = TestingSessionLocal()
+    db2 = SessionLocal()
     entries = db2.query(TimetableEntry).all()
     assert len(entries) == 1
     assert entries[0].batch_name == "All"

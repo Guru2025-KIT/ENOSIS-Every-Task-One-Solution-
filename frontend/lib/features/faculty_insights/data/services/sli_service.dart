@@ -188,6 +188,17 @@ class SliService {
     return SliAssessment.fromJson(data);
   }
 
+  /// Permanently delete an assessment created by the faculty.
+  Future<void> deleteAssessment(int assessmentId) async {
+    final response = await ApiClient.delete(
+      '/sli/faculty/assessments/$assessmentId',
+      token: _token,
+    );
+
+    _handleCommonErrors(response.statusCode, response.body);
+  }
+
+
   /// Fetch active question bank items for a subject.
   Future<List<Map<String, dynamic>>> getQuestionBank({
     required String subjectId,

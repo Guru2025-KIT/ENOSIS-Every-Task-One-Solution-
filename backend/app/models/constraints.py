@@ -26,7 +26,7 @@ SOFT constraints (optimised, but violation is allowed):
 """
 import uuid
 
-from sqlalchemy import Column, String, Boolean, JSON, DateTime
+from sqlalchemy import Column, String, Boolean, JSON, DateTime, Integer
 from sqlalchemy.sql import func
 
 from app.db.base import Base
@@ -44,6 +44,9 @@ class TimetableConstraint(Base):
     # "soft" → violation is penalised in the objective
     priority = Column(String(10), nullable=False, default="hard")
 
+    # Weight for soft constraints (higher weight = higher penalty/priority when satisfying)
+    weight = Column(Integer, nullable=False, default=10)
+
     # Flexible data bag — exact keys depend on constraint_type (see docstring)
     payload = Column(JSON, nullable=False, default=dict)
 
@@ -52,5 +55,6 @@ class TimetableConstraint(Base):
 
     # Whether this constraint is currently active (UI can toggle without deleting)
     is_active = Column(Boolean, nullable=False, default=True)
+
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

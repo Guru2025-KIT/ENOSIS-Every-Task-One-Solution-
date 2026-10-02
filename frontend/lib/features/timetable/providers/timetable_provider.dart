@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '../../../core/network/api_client.dart';
 import '../data/timetable_repository.dart';
-import '../data/constraint_repository.dart';
 import '../models/teaching_assignment.dart';
 import '../models/time_slot.dart';
 import '../models/timetable_constraint.dart';
@@ -10,7 +9,6 @@ import '../models/room.dart';
 
 class TimetableProvider extends ChangeNotifier {
   final TimetableRepository _repository = TimetableRepository();
-  final ConstraintRepository _constraintRepo = ConstraintRepository();
 
   List<TimeSlot> _timeSlots = [];
   final List<TeachingAssignment> _assignments = [];
@@ -45,6 +43,12 @@ class TimetableProvider extends ChangeNotifier {
   List<String> get facultyNames => _assignments.map((a) => a.facultyName).toSet().toList()..sort();
   List<String> get subjectNames => _assignments.map((a) => a.subjectName).toSet().toList()..sort();
   List<String> get classesAndBatches => _assignments.map((a) => a.className).where((c) => c.isNotEmpty).toSet().toList()..sort();
+  List<String> get days {
+    if (_scheduleConfig != null && _scheduleConfig!.dayNames.isNotEmpty) {
+      return _scheduleConfig!.dayNames;
+    }
+    return const ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  }
 
   // Initialization & Data Loading
   Future<void> initializeData() async {
@@ -74,6 +78,11 @@ class TimetableProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void addAssignment(TeachingAssignment assignment) {
+    _assignments.add(assignment);
+    notifyListeners();
+  }
+
   void addConstraint(TimetableConstraint constraint) {
     _constraints.add(constraint);
     notifyListeners();
@@ -97,29 +106,56 @@ class TimetableProvider extends ChangeNotifier {
     final cfg = _scheduleConfig!;
     final slots = <TimeSlot>[];
     
-    // Calculate wall clock slots based on start_time, lecture_duration, lab_duration, breaks
     final parts = cfg.startTime.split(':');
     int startMins = (int.tryParse(parts[0]) ?? 9) * 60 + (parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0);
     int currentMins = startMins;
 
     int lectureNum = 1;
-    for (int p = 1; p <= cfg.periodsPerDay; p++) {
-      bool isBreak = cfg.breakSlots.contains(p);
-      int duration = isBreak ? 20 : cfg.lectureDurationMinutes;
+    int currentPeriod = 1;
+    final breakSlotIndices = <int>[];
 
-      int endMins = currentMins + duration;
-      String startStr = _formatMins(currentMins);
-      String endStr = _formatMins(endMins);
+    while (currentPeriod <= cfg.periodsPerDay) {
+      // Check if Break 1 applies right here (after break1AfterLectures)
+      if (cfg.break1Enabled && lectureNum == cfg.break1AfterLectures + 1 && slots.isNotEmpty && !slots.last.isBreak) {
+        int endMins = currentMins + cfg.break1DurationMinutes;
+        slots.add(TimeSlot(
+          lectureNumber: 0,
+          startTime: _formatMins(currentMins),
+          endTime: _formatMins(endMins),
+          isBreak: true,
+        ));
+        breakSlotIndices.add(currentPeriod);
+        currentMins = endMins;
+        currentPeriod++;
+        if (currentPeriod > cfg.periodsPerDay) break;
+      }
 
+      // Check if Break 2 applies right here (after break2AfterLectures)
+      if (cfg.break2Enabled && lectureNum == cfg.break2AfterLectures + 1 && slots.isNotEmpty && !slots.last.isBreak) {
+        int endMins = currentMins + cfg.break2DurationMinutes;
+        slots.add(TimeSlot(
+          lectureNumber: 0,
+          startTime: _formatMins(currentMins),
+          endTime: _formatMins(endMins),
+          isBreak: true,
+        ));
+        breakSlotIndices.add(currentPeriod);
+        currentMins = endMins;
+        currentPeriod++;
+        if (currentPeriod > cfg.periodsPerDay) break;
+      }
+
+      // Regular lecture slot
+      int endMins = currentMins + cfg.lectureDurationMinutes;
       slots.add(TimeSlot(
-        lectureNumber: isBreak ? 0 : lectureNum,
-        startTime: startStr,
-        endTime: endStr,
-        isBreak: isBreak,
+        lectureNumber: lectureNum,
+        startTime: _formatMins(currentMins),
+        endTime: _formatMins(endMins),
+        isBreak: false,
       ));
-
-      if (!isBreak) lectureNum++;
       currentMins = endMins;
+      lectureNum++;
+      currentPeriod++;
     }
 
     _timeSlots = slots;
@@ -135,28 +171,105 @@ class TimetableProvider extends ChangeNotifier {
 
   // Rooms
   Future<void> loadRooms() async {
-    _roomModels = await _repository.fetchRooms();
-    notifyListeners();
+    try {
+      final fetched = await _repository.fetchRooms();
+      if (fetched.isNotEmpty) {
+        final Map<String, RoomModel> merged = {};
+        for (final r in _roomModels) {
+          merged[r.name.toLowerCase().trim()] = r;
+        }
+        for (final r in fetched) {
+          merged[r.name.toLowerCase().trim()] = r;
+        }
+        _roomModels = merged.values.toList();
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('loadRooms note: $e');
+    }
   }
 
-  Future<bool> addRoom(Room room, {String? building, String? department, String? equipment}) async {
+  Future<bool> addRoom(Room room, {String? building, String? department, String? equipment, bool isActive = true}) async {
+    final localId = 'room_${DateTime.now().millisecondsSinceEpoch}';
     final model = RoomModel(
-      name: room.name,
+      id: localId,
+      name: room.name.trim(),
       type: room.type,
-      capacity: room.capacity,
+      capacity: room.capacity > 0 ? room.capacity : 60,
       building: building,
       department: department,
       equipment: equipment,
+      isActive: isActive,
     );
-    final saved = await _repository.saveRoom(model);
-    if (saved != null) {
-      _roomModels.add(saved);
-      notifyListeners();
-      return true;
+    final existingIdx = _roomModels.indexWhere((r) => r.name.toLowerCase().trim() == model.name.toLowerCase().trim());
+    if (existingIdx != -1) {
+      _roomModels[existingIdx] = model;
+    } else {
+      _roomModels.add(model);
     }
-    _roomModels.add(model); // local fallback
     notifyListeners();
-    return false;
+
+    try {
+      final saved = await _repository.saveRoom(model);
+      if (saved != null) {
+        final idx = _roomModels.indexWhere((r) => r.name.toLowerCase().trim() == saved.name.toLowerCase().trim() || r.id == localId);
+        if (idx != -1) {
+          _roomModels[idx] = saved;
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('addRoom sync note: $e');
+    }
+    return true;
+  }
+
+  Future<void> bulkAddRooms(List<RoomModel> newRooms) async {
+    final Map<String, RoomModel> map = {};
+    for (final r in _roomModels) {
+      map[r.name.toLowerCase().trim()] = r;
+    }
+    for (final r in newRooms) {
+      map[r.name.toLowerCase().trim()] = r;
+    }
+    _roomModels = map.values.toList();
+    notifyListeners();
+
+    for (final r in newRooms) {
+      try {
+        _repository.saveRoom(r).catchError((_) => null);
+      } catch (_) {}
+    }
+  }
+
+  Future<bool> updateRoom(String id, Room room, {String? building, String? department, String? equipment, bool isActive = true}) async {
+    final model = RoomModel(
+      id: id,
+      name: room.name.trim(),
+      type: room.type,
+      capacity: room.capacity > 0 ? room.capacity : 60,
+      building: building,
+      department: department,
+      equipment: equipment,
+      isActive: isActive,
+    );
+    final idx = _roomModels.indexWhere((r) => r.id == id || r.name.toLowerCase().trim() == model.name.toLowerCase().trim());
+    if (idx != -1) {
+      _roomModels[idx] = model;
+    } else {
+      _roomModels.add(model);
+    }
+    notifyListeners();
+
+    try {
+      final updated = await _repository.updateRoom(id, model);
+      if (updated != null) {
+        final uIdx = _roomModels.indexWhere((r) => r.id == id);
+        if (uIdx != -1) _roomModels[uIdx] = updated;
+        notifyListeners();
+      }
+    } catch (_) {}
+    return true;
   }
 
   Future<bool> removeRoom(String name) async {
@@ -166,7 +279,9 @@ class TimetableProvider extends ChangeNotifier {
       _roomModels.removeAt(idx);
       notifyListeners();
       if (id != null) {
-        return await _repository.deleteRoom(id);
+        try {
+          return await _repository.deleteRoom(id);
+        } catch (_) {}
       }
     }
     return true;
@@ -204,34 +319,37 @@ class TimetableProvider extends ChangeNotifier {
     final t = text.toLowerCase();
     if (t.contains('replace') || t.contains('fill')) return 'fill';
     if (t.contains('between') || t.contains('only in') || t.contains('only at')) return 'whitelist';
-    if (t.contains('not ') || t.contains("don't") || t.contains('unavailable') || t.contains('avoid') || t.contains('no lecture') || t.contains("shouldn't") || t.contains('no theory after lunch')) return 'blacklist';
+    if (t.contains('not ') || t.contains("don't") || t.contains('unavailable') || t.contains('avoid') || t.contains('no lecture') || t.contains("shouldn't") || t.contains('no theory after lunch') || t.contains('off') || t.contains('leave')) return 'blacklist';
     if (t.contains('1st') || t.contains('first') || t.contains('last') || t.contains('keep') || t.contains('fix') || t.contains('assign') || t.contains('schedule') || t.contains('always') || t.contains('set')) return 'fixed';
     return 'fixed';
   }
 
-  void addNaturalLanguageConstraint(String text) {
-    final intent = _detectNlpIntent(text);
-    final lower = text.toLowerCase();
+  TimetableConstraint? parseNaturalLanguageRule(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return null;
+
+    final lower = trimmed.toLowerCase();
+    final intent = _detectNlpIntent(trimmed);
 
     final foundFaculties = intent == 'fill'
         ? <String>[]
-        : facultyNames.where((f) => f.isNotEmpty && _stringMatches(f, text)).toList();
+        : facultyNames.where((f) => f.isNotEmpty && (lower.contains(f.toLowerCase()) || _stringMatches(f, trimmed))).toList();
     final foundSubjects = intent == 'fill'
         ? <String>[]
-        : subjectNames.where((s) => s.isNotEmpty && _stringMatches(s, text)).toList();
+        : subjectNames.where((s) => s.isNotEmpty && (lower.contains(s.toLowerCase()) || _stringMatches(s, trimmed))).toList();
     final foundClasses = intent == 'fill'
         ? <String>[]
         : classesAndBatches.where((c) {
             if (c.isEmpty) return false;
             final cNorm = c.toLowerCase().replaceAll(RegExp(r'[-_]'), ' ');
-            return lower.contains(cNorm) || _stringMatches(c, text);
+            return lower.contains(cNorm) || _stringMatches(c, trimmed);
           }).toSet().toList();
 
     const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     final foundDays = dayNames.where((d) => lower.contains(d)).map((d) => '${d[0].toUpperCase()}${d.substring(1)}').toList();
 
     final foundSlots = <int>[];
-    final rangeRe = RegExp(r'(?:lecture|slot)?\s*([1-8])\s*(?:to|-|and)\s*([1-8])');
+    final rangeRe = RegExp(r'(?:lecture|slot|period)?\s*([1-8])\s*(?:to|-|and)\s*([1-8])');
     final rm = rangeRe.firstMatch(lower);
     if (rm != null) {
       final start = int.parse(rm.group(1)!);
@@ -240,23 +358,39 @@ class TimetableProvider extends ChangeNotifier {
     }
     if (foundSlots.isEmpty) {
       const ords = {'1st': 1, 'first': 1, '2nd': 2, 'second': 2, '3rd': 3, 'third': 3, '4th': 4, 'fourth': 4, '5th': 5, 'fifth': 5, '6th': 6, 'sixth': 6, '7th': 7, 'seventh': 7, '8th': 8, 'eighth': 8};
-      for (final e in ords.entries) { if (lower.contains(e.key)) foundSlots.add(e.value); }
+      for (final e in ords.entries) {
+        if (lower.contains(e.key) || lower.contains('slot ${e.value}') || lower.contains('period ${e.value}') || lower.contains('lecture ${e.value}')) {
+          foundSlots.add(e.value);
+        }
+      }
       if (lower.contains('last')) {
         final last = _timeSlots.where((s) => !s.isBreak).length;
         if (last > 0) foundSlots.add(last);
       }
     }
 
-    _constraints.add(TimetableConstraint(
+    // Strict check: if no entities were matched at all, treat as unrecognized
+    if (foundFaculties.isEmpty && foundSubjects.isEmpty && foundClasses.isEmpty && foundDays.isEmpty && foundSlots.isEmpty) {
+      return null;
+    }
+
+    return TimetableConstraint(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      category: 'NLP|$intent|$text',
+      category: 'NLP|$intent|$trimmed',
       facultyNames: foundFaculties,
       subjectNames: foundSubjects,
       classNames: foundClasses,
       days: foundDays,
-      slotNumbers: foundSlots.isNotEmpty ? foundSlots : [],
-    ));
+      slotNumbers: foundSlots.toSet().toList()..sort(),
+    );
+  }
+
+  bool addNaturalLanguageConstraint(String text) {
+    final constraint = parseNaturalLanguageRule(text);
+    if (constraint == null) return false;
+    _constraints.add(constraint);
     notifyListeners();
+    return true;
   }
 
   // Generation
@@ -315,16 +449,23 @@ class TimetableProvider extends ChangeNotifier {
           .map((g) => g.toList())
           .toList();
 
+      final chosenDays = (_scheduleConfig?.dayNames != null && _scheduleConfig!.dayNames.isNotEmpty)
+          ? _scheduleConfig!.dayNames
+          : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
       final payload = <String, dynamic>{
         'assignments': assignmentsPayload,
         'time_slots': timeSlotsPayload,
         'constraints': constraintsPayload,
         'combined_groups': combinedGroups,
+        'working_days': chosenDays,
         'schedule_config': _scheduleConfig?.toJson(),
+        'lecture_duration_minutes': _scheduleConfig?.lectureDurationMinutes ?? 60,
+        'lab_duration_minutes': _scheduleConfig?.labDurationMinutes ?? 120,
         'time_limit_seconds': 30,
       };
 
-      final response = await ApiClient.postJson('/timetable/generate', payload);
+      final response = await ApiClient.postJson('/timetable/generate', payload, timeoutSeconds: 45);
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       final status = body['status'] as String? ?? 'UNKNOWN';
 
@@ -350,7 +491,7 @@ class TimetableProvider extends ChangeNotifier {
         final msg = body['message'] as String?;
         _generationError = msg?.isNotEmpty == true
             ? msg!
-            : 'The solver could not find a valid timetable with the current assignments and constraints.';
+            : 'The solver could not find a valid timetable ($status) with the current constraints.';
       }
     } catch (e) {
       _generationError = 'Network or server error: $e';
@@ -391,10 +532,11 @@ class TimetableProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('Failed to publish timetable: $e');
     }
-    isTimetableSaved = true;
+    isTimetableSaved = false;
     notifyListeners();
     return false;
   }
+
 
   void saveTimetable() { saveTimetableToBackend(); }
 
@@ -422,11 +564,47 @@ class TimetableProvider extends ChangeNotifier {
   }
 
   // PDF & Excel Export
-  Future<List<int>> exportPdf({required String viewTitle, required String viewType, String target = ''}) {
-    return _repository.exportPdf(viewTitle: viewTitle, viewType: viewType, target: target);
+  Future<List<int>> exportPdf({
+    required String viewTitle,
+    required String viewType,
+    String target = '',
+    List<String>? days,
+    List<Map<String, dynamic>>? timeSlots,
+    Map<String, dynamic>? gridData,
+    bool allClasses = false,
+    Map<String, dynamic>? multiGridData,
+  }) {
+    return _repository.exportPdf(
+      viewTitle: viewTitle,
+      viewType: viewType,
+      target: target,
+      days: days,
+      timeSlots: timeSlots,
+      gridData: gridData,
+      allClasses: allClasses,
+      multiGridData: multiGridData,
+    );
   }
 
-  Future<List<int>> exportExcel({required String viewTitle, required String viewType, String target = ''}) {
-    return _repository.exportExcel(viewTitle: viewTitle, viewType: viewType, target: target);
+  Future<List<int>> exportExcel({
+    required String viewTitle,
+    required String viewType,
+    String target = '',
+    List<String>? days,
+    List<Map<String, dynamic>>? timeSlots,
+    Map<String, dynamic>? gridData,
+    bool allClasses = false,
+    Map<String, dynamic>? multiGridData,
+  }) {
+    return _repository.exportExcel(
+      viewTitle: viewTitle,
+      viewType: viewType,
+      target: target,
+      days: days,
+      timeSlots: timeSlots,
+      gridData: gridData,
+      allClasses: allClasses,
+      multiGridData: multiGridData,
+    );
   }
 }

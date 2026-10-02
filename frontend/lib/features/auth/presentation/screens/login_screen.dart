@@ -8,6 +8,7 @@ import '../../../../core/widgets/enosis_wordmark.dart';
 import '../../../../core/widgets/loading_indicator.dart';
 import '../../../../core/widgets/primary_button.dart';
 import '../../../dashboard/presentation/screens/main_shell.dart';
+import '../../../../core/network/api_client.dart';
 import '../../data/auth_repository.dart';
 import 'signup_screen.dart';
 
@@ -36,6 +37,64 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _isSubmitting = false;
   bool _rememberMe = false;
+
+  void _showServerConfigDialog() {
+    final controller = TextEditingController(text: ApiClient.baseUrl);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Backend Server URL', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter your PC\'s Wi-Fi IP and port (e.g. http://10.78.141.143:8000):',
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Server URL',
+                hintText: 'http://10.78.141.143:8000',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.lan_outlined),
+              ),
+              keyboardType: TextInputType.url,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final newUrl = controller.text.trim();
+              if (newUrl.isNotEmpty) {
+                ApiClient.customBaseUrl = newUrl;
+                setState(() {});
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Server URL set to: $newUrl'),
+                    backgroundColor: AppColors.primary,
+                  ),
+                );
+              }
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -89,7 +148,16 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.settings_ethernet_rounded, color: AppColors.textSecondary),
+                          tooltip: 'Configure Server URL (${ApiClient.baseUrl})',
+                          onPressed: _showServerConfigDialog,
+                        ),
+                      ],
+                    ),
                     Center(
                       child: Image.asset(
                         'assets/branding/enosis_logo.png',

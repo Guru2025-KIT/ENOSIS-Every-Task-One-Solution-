@@ -55,6 +55,14 @@ def get_faculty_dashboard_summary(
     day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     day_name = day_names[day_idx] if 0 <= day_idx < 7 else "Today"
 
+    # Helper to clean faculty names
+    def _normalize_name(name_str: str) -> str:
+        s = name_str.lower().strip()
+        for prefix in ["dr.", "dr ", "prof.", "prof ", "mr.", "mr ", "mrs.", "mrs ", "ms.", "ms "]:
+            if s.startswith(prefix):
+                s = s[len(prefix):].strip()
+        return s
+
     # 1. Fetch Schedule Config for time calculations
     config = db.query(ScheduleConfig).first()
 
@@ -62,27 +70,59 @@ def get_faculty_dashboard_summary(
     active_run = db.query(GenerationRun).filter(GenerationRun.status == "OPTIMAL").order_by(GenerationRun.generated_at.desc()).first()
     batch_id = active_run.id if active_run else None
 
-    # 3. Query Faculty Timetable for Today
+    # 3. Query Faculty Timetable for Selected Day
+    is_admin = (
+        (faculty_user.role.value if hasattr(faculty_user.role, "value") else str(faculty_user.role)).lower() == "admin"
+    )
+
+    # Resolve all matching user IDs for this faculty
+    target_clean = _normalize_name(faculty_user.full_name or "")
+    target_tokens = set(target_clean.split())
+
+    all_users = db.query(User).all()
+    matched_user_ids = {faculty_user.id}
+
+    if target_clean:
+        for u in all_users:
+            if not u.full_name:
+                continue
+            u_clean = _normalize_name(u.full_name)
+            u_tokens = set(u_clean.split())
+            if target_clean in u_clean or u_clean in target_clean or (target_tokens and target_tokens.issubset(u_tokens)):
+                matched_user_ids.add(u.id)
+            elif u.email and faculty_user.email:
+                if u.email.split('@')[0].lower() == faculty_user.email.split('@')[0].lower():
+                    matched_user_ids.add(u.id)
+
+    # Query entries for matched users on the requested day
     query = db.query(TimetableEntry).filter(
-        TimetableEntry.faculty_id == faculty_user.id,
+        TimetableEntry.faculty_id.in_(list(matched_user_ids)),
         TimetableEntry.day == day_idx,
     )
     if batch_id:
         query = query.filter(TimetableEntry.batch_id == batch_id)
-
     entries = query.order_by(TimetableEntry.slot.asc()).all()
 
-    # Fallback to any batch if active batch had no entries for today
-    if not entries and batch_id:
+    # Fallback 1: if no entries in latest batch, search across any batch
+    if not entries:
         entries = (
             db.query(TimetableEntry)
             .filter(
-                TimetableEntry.faculty_id == faculty_user.id,
+                TimetableEntry.faculty_id.in_(list(matched_user_ids)),
                 TimetableEntry.day == day_idx,
             )
             .order_by(TimetableEntry.slot.asc())
             .all()
         )
+
+    # Fallback 2: if Admin user and no personal schedule, show today's departmental lecture overview
+    if not entries and is_admin:
+        admin_q = db.query(TimetableEntry).filter(TimetableEntry.day == day_idx)
+        if batch_id:
+            admin_q = admin_q.filter(TimetableEntry.batch_id == batch_id)
+        entries = admin_q.order_by(TimetableEntry.slot.asc()).limit(8).all()
+        if not entries:
+            entries = db.query(TimetableEntry).filter(TimetableEntry.day == day_idx).order_by(TimetableEntry.slot.asc()).limit(8).all()
 
     # 4. Map Timetable Entries to TodayScheduleSlotOut
     today_schedule: list[TodayScheduleSlotOut] = []

@@ -39,8 +39,7 @@ class AuthRepository {
     } catch (e) {
       debugPrint('[AuthRepository] Login error: $e (resolved baseUrl=${ApiClient.baseUrl})');
       throw AuthException(
-        'Could not reach the ENOSIS server. Make sure the backend is running '
-        'and ApiClient.baseUrl is set correctly for how you\'re running the app.',
+        'Could not reach the ENOSIS server at ${ApiClient.baseUrl}. ($e)',
       );
     }
   }
@@ -67,7 +66,8 @@ class AuthRepository {
     } on AuthException {
       rethrow;
     } catch (e) {
-      throw AuthException('Could not reach the ENOSIS server.');
+      debugPrint('[AuthRepository] Signup error: $e (resolved baseUrl=${ApiClient.baseUrl})');
+      throw AuthException('Could not reach the ENOSIS server at ${ApiClient.baseUrl}. ($e)');
     }
   }
 
@@ -75,13 +75,15 @@ class AuthRepository {
     final response = await ApiClient.get('/auth/me', token: AuthSession.token);
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      AuthSession.userId = data['id'] as String;
-      AuthSession.fullName = data['full_name'] as String;
-      AuthSession.email = data['email'] as String;
-      AuthSession.role = data['role'] as String?;
-      AuthSession.department = data['department'] as String?;
-      AuthSession.employeeId = data['employee_id'] as String?;
+      AuthSession.userId = data['id']?.toString() ?? '';
+      AuthSession.fullName = data['full_name']?.toString() ?? '';
+      AuthSession.email = data['email']?.toString() ?? '';
+      AuthSession.role = data['role']?.toString();
+      AuthSession.department = data['department']?.toString();
+      AuthSession.employeeId = data['employee_id']?.toString();
       AuthSession.canManageTimetable = data['can_manage_timetable'] as bool? ?? false;
+    } else {
+      throw AuthException(_extractErrorMessage(response.body, fallback: 'Failed to retrieve profile.'));
     }
   }
 

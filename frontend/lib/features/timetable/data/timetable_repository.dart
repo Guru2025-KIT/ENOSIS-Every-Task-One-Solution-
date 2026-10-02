@@ -5,7 +5,7 @@ import '../../../core/network/api_client.dart';
 
 /// Room Data Model with full attributes
 class RoomModel {
-  final int? id;
+  final String? id;
   final String name;
   final String type; // 'Classroom' or 'Lab'
   final int capacity;
@@ -26,24 +26,28 @@ class RoomModel {
   });
 
   factory RoomModel.fromJson(Map<String, dynamic> json) => RoomModel(
-        id: json['id'] as int?,
+        id: json['id']?.toString(),
         name: json['name'] as String? ?? '',
         type: json['type'] as String? ?? 'Classroom',
         capacity: json['capacity'] as int? ?? 60,
         building: json['building'] as String?,
         department: json['department'] as String?,
-        equipment: json['equipment'] as String?,
+        equipment: json['equipment'] is List
+            ? (json['equipment'] as List).join(', ')
+            : json['equipment'] as String?,
         isActive: json['is_active'] as bool? ?? true,
       );
 
   Map<String, dynamic> toJson() => {
         if (id != null) 'id': id,
         'name': name,
-        'type': type,
+        'type': type.toLowerCase() == 'lab' ? 'lab' : 'lecture',
         'capacity': capacity,
         'building': building,
         'department': department,
-        'equipment': equipment,
+        'equipment': equipment != null && equipment!.isNotEmpty
+            ? equipment!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList()
+            : [],
         'is_active': isActive,
       };
 }
@@ -88,6 +92,12 @@ class ScheduleConfigModel {
   final int tutorialDurationMinutes;
   final String startTime;
   final String endTime;
+  final bool break1Enabled;
+  final int break1AfterLectures;
+  final int break1DurationMinutes;
+  final bool break2Enabled;
+  final int break2AfterLectures;
+  final int break2DurationMinutes;
   final List<int> breakSlots;
   final Map<String, String> breakLabels;
   final String collegeName;
@@ -108,6 +118,12 @@ class ScheduleConfigModel {
     required this.tutorialDurationMinutes,
     required this.startTime,
     this.endTime = '17:00',
+    this.break1Enabled = true,
+    this.break1AfterLectures = 2,
+    this.break1DurationMinutes = 15,
+    this.break2Enabled = true,
+    this.break2AfterLectures = 5,
+    this.break2DurationMinutes = 30,
     required this.breakSlots,
     required this.breakLabels,
     this.collegeName = '',
@@ -130,6 +146,12 @@ class ScheduleConfigModel {
       tutorialDurationMinutes: json['tutorial_duration_minutes'] as int? ?? 50,
       startTime: json['start_time'] as String? ?? '09:00',
       endTime: json['end_time'] as String? ?? '17:00',
+      break1Enabled: json['break1_enabled'] as bool? ?? true,
+      break1AfterLectures: json['break1_after_lectures'] as int? ?? 2,
+      break1DurationMinutes: json['break1_duration_minutes'] as int? ?? 15,
+      break2Enabled: json['break2_enabled'] as bool? ?? true,
+      break2AfterLectures: json['break2_after_lectures'] as int? ?? 5,
+      break2DurationMinutes: json['break2_duration_minutes'] as int? ?? 30,
       breakSlots: (json['break_slots'] as List?)?.cast<int>() ?? [],
       breakLabels: (json['break_labels'] as Map?)?.cast<String, String>() ?? {},
       collegeName: json['college_name'] as String? ?? '',
@@ -152,6 +174,12 @@ class ScheduleConfigModel {
         'tutorial_duration_minutes': tutorialDurationMinutes,
         'start_time': startTime,
         'end_time': endTime,
+        'break1_enabled': break1Enabled,
+        'break1_after_lectures': break1AfterLectures,
+        'break1_duration_minutes': break1DurationMinutes,
+        'break2_enabled': break2Enabled,
+        'break2_after_lectures': break2AfterLectures,
+        'break2_duration_minutes': break2DurationMinutes,
         'break_slots': breakSlots,
         'break_labels': breakLabels,
         'college_name': collegeName,
@@ -213,12 +241,16 @@ class GenerateResult {
   final double solveTimeSeconds;
   final String status;
   final String? message;
+  final String? batchId;
+  final List<Map<String, dynamic>> stageProgress;
 
   GenerateResult({
     required this.totalEntries,
     required this.solveTimeSeconds,
     this.status = 'OPTIMAL',
     this.message,
+    this.batchId,
+    this.stageProgress = const [],
   });
 
   factory GenerateResult.fromJson(Map<String, dynamic> json) => GenerateResult(
@@ -226,6 +258,11 @@ class GenerateResult {
         solveTimeSeconds: (json['solve_time_seconds'] as num?)?.toDouble() ?? 0,
         status: json['status'] as String? ?? 'OPTIMAL',
         message: json['message'] as String?,
+        batchId: json['batch_id'] as String?,
+        stageProgress: (json['stage_progress'] as List<dynamic>?)
+                ?.map((e) => Map<String, dynamic>.from(e as Map))
+                .toList() ??
+            [],
       );
 }
 
@@ -260,9 +297,25 @@ class TimetableRepository {
     return null;
   }
 
-  Future<bool> deleteRoom(int roomId) async {
+  Future<RoomModel?> updateRoom(String roomId, RoomModel room) async {
+    final response = await ApiClient.putJson('/timetable/rooms/$roomId', room.toJson());
+    if (response.statusCode == 200) {
+      return RoomModel.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    return null;
+  }
+
+  Future<bool> deleteRoom(String roomId) async {
     final response = await ApiClient.delete('/timetable/rooms/$roomId');
     return response.statusCode == 200;
+  }
+
+  Future<List<int>> downloadRoomExcelTemplate() async {
+    final response = await ApiClient.get('/timetable/rooms/template-excel');
+    if (response.statusCode == 200) {
+      return response.bodyBytes;
+    }
+    throw TimetableException('Failed to download room template');
   }
 
   Future<Map<String, dynamic>> importRoomsExcel(List<int> bytes, String filename) async {
@@ -279,6 +332,7 @@ class TimetableRepository {
     final body = jsonDecode(response.body);
     throw TimetableException(body['detail'] ?? 'Excel import failed');
   }
+
 
 
   Future<List<SubjectModel>> fetchSubjects() async {
@@ -322,7 +376,21 @@ class TimetableRepository {
       if (response.statusCode == 200) {
         return GenerateResult.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
       }
-    } catch (_) {}
+      // Handle 422 (staged solver infeasible) with structured error
+      if (response.statusCode == 422) {
+        final detail = jsonDecode(response.body) as Map<String, dynamic>;
+        final inner = detail['detail'] as Map<String, dynamic>? ?? detail;
+        throw TimetableException(
+          inner['message'] as String? ?? 'Solver could not find a valid timetable.',
+          conflicts: inner['conflicts'] as List?,
+          suggestions: inner['suggestions'] as List?,
+        );
+      }
+    } on TimetableException {
+      rethrow;
+    } catch (e) {
+      throw TimetableException('Network or server error: $e');
+    }
     return GenerateResult(totalEntries: 0, solveTimeSeconds: 0);
   }
 
@@ -398,11 +466,21 @@ class TimetableRepository {
     required String viewTitle,
     required String viewType,
     String target = '',
+    List<String>? days,
+    List<Map<String, dynamic>>? timeSlots,
+    Map<String, dynamic>? gridData,
+    bool allClasses = false,
+    Map<String, dynamic>? multiGridData,
   }) async {
     final response = await ApiClient.postJson('/timetable/export/pdf', {
       'view_title': viewTitle,
       'view_type': viewType,
       'target': target,
+      'all_classes': allClasses,
+      if (days != null) 'days': days,
+      if (timeSlots != null) 'time_slots': timeSlots,
+      if (gridData != null) 'grid_data': gridData,
+      if (multiGridData != null) 'multi_grid_data': multiGridData,
     });
     if (response.statusCode == 200) {
       return response.bodyBytes;
@@ -414,11 +492,21 @@ class TimetableRepository {
     required String viewTitle,
     required String viewType,
     String target = '',
+    List<String>? days,
+    List<Map<String, dynamic>>? timeSlots,
+    Map<String, dynamic>? gridData,
+    bool allClasses = false,
+    Map<String, dynamic>? multiGridData,
   }) async {
     final response = await ApiClient.postJson('/timetable/export/excel', {
       'view_title': viewTitle,
       'view_type': viewType,
       'target': target,
+      'all_classes': allClasses,
+      if (days != null) 'days': days,
+      if (timeSlots != null) 'time_slots': timeSlots,
+      if (gridData != null) 'grid_data': gridData,
+      if (multiGridData != null) 'multi_grid_data': multiGridData,
     });
     if (response.statusCode == 200) {
       return response.bodyBytes;
@@ -426,3 +514,4 @@ class TimetableRepository {
     throw TimetableException('Failed to export Excel');
   }
 }
+

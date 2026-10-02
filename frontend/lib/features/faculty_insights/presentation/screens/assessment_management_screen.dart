@@ -903,6 +903,17 @@ class _AssessmentManagementScreenState extends State<AssessmentManagementScreen>
                     onPressed: () => _updateStatus(a, 'PUBLISHED'),
                   ),
                 ],
+
+                // Delete Assessment Provision
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.delete_outline_rounded, size: 16, color: AppColors.error),
+                  label: const Text('Delete', style: TextStyle(fontSize: 12, color: AppColors.error, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: AppColors.error.withOpacity(0.5)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () => _confirmDeleteAssessment(a),
+                ),
               ],
             ),
           ],
@@ -910,4 +921,69 @@ class _AssessmentManagementScreenState extends State<AssessmentManagementScreen>
       ),
     );
   }
+
+  Future<void> _confirmDeleteAssessment(SliAssessment assessment) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.error.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.delete_forever_rounded, color: AppColors.error, size: 22),
+            ),
+            const SizedBox(width: 10),
+            const Text('Delete Assessment', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to permanently delete the ${assessment.assessmentType} Assessment for ${widget.teachingContext.subjectName}?\n\nThis action cannot be undone.',
+          style: const TextStyle(fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete Permanently', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await _sliService.deleteAssessment(assessment.assessmentId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${assessment.assessmentType} Assessment has been deleted.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      _loadAssessments();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete assessment: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
 }
+

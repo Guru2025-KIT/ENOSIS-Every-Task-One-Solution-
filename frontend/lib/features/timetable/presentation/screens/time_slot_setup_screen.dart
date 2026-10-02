@@ -19,15 +19,30 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
   int _labDurationMinutes = 120;
   int _periodsPerDay = 7;
 
+  // Break 1 Configuration
+  bool _break1Enabled = true;
+  int _break1AfterLectures = 2;
+  int _break1DurationMinutes = 15;
+
+  // Break 2 Configuration (Lunch)
+  bool _break2Enabled = true;
+  int _break2AfterLectures = 5;
+  int _break2DurationMinutes = 30;
+
   final List<String> _allDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   final Set<String> _selectedDays = {'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'};
-  final Set<int> _breakSlots = {3, 6}; // 3rd slot short break, 6th slot lunch
+
+  late final TextEditingController _lectureDurationController;
+  late final TextEditingController _labDurationController;
 
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
+    _lectureDurationController = TextEditingController(text: _lectureDurationMinutes.toString());
+    _labDurationController = TextEditingController(text: _labDurationMinutes.toString());
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final config = context.read<TimetableProvider>().scheduleConfig;
       if (config != null) {
@@ -41,6 +56,13 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
         });
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _lectureDurationController.dispose();
+    _labDurationController.dispose();
+    super.dispose();
   }
 
   void _loadConfig(ScheduleConfigModel config) {
@@ -61,11 +83,19 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
 
     _lectureDurationMinutes = config.lectureDurationMinutes;
     _labDurationMinutes = config.labDurationMinutes;
+    _lectureDurationController.text = _lectureDurationMinutes.toString();
+    _labDurationController.text = _labDurationMinutes.toString();
+
     _periodsPerDay = config.periodsPerDay;
+    _break1Enabled = config.break1Enabled;
+    _break1AfterLectures = config.break1AfterLectures;
+    _break1DurationMinutes = config.break1DurationMinutes;
+    _break2Enabled = config.break2Enabled;
+    _break2AfterLectures = config.break2AfterLectures;
+    _break2DurationMinutes = config.break2DurationMinutes;
+
     _selectedDays.clear();
     _selectedDays.addAll(config.dayNames);
-    _breakSlots.clear();
-    _breakSlots.addAll(config.breakSlots);
   }
 
   String _formatTimeOfDay(TimeOfDay time) {
@@ -90,31 +120,61 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
     int currentMins = startMins;
 
     int lectureNum = 1;
-    for (int p = 1; p <= _periodsPerDay; p++) {
-      if (currentMins >= endLimitMins) break;
+    int currentPeriod = 1;
 
-      bool isBreak = _breakSlots.contains(p);
-      int duration = isBreak ? (p == 6 ? 45 : 20) : _lectureDurationMinutes;
-      int slotEndMins = currentMins + duration;
+    while (currentPeriod <= _periodsPerDay && currentMins < endLimitMins) {
+      // Check Break 1
+      if (_break1Enabled && lectureNum == _break1AfterLectures + 1 && intervals.isNotEmpty && !(intervals.last['is_break'] as bool)) {
+        int endMins = currentMins + _break1DurationMinutes;
+        intervals.add({
+          'slot_num': currentPeriod,
+          'lecture_num': 0,
+          'start': _formatMinsToWallClock(currentMins),
+          'end': _formatMinsToWallClock(endMins),
+          'is_break': true,
+          'label': 'Break 1 (Morning / Tea)',
+          'duration': _break1DurationMinutes,
+        });
+        currentMins = endMins;
+        currentPeriod++;
+        if (currentPeriod > _periodsPerDay || currentMins >= endLimitMins) break;
+      }
 
-      String typeLabel = isBreak ? (p == 6 ? 'Lunch Break' : 'Short Break') : 'Lecture';
-      
+      // Check Break 2 (Lunch)
+      if (_break2Enabled && lectureNum == _break2AfterLectures + 1 && intervals.isNotEmpty && !(intervals.last['is_break'] as bool)) {
+        int endMins = currentMins + _break2DurationMinutes;
+        intervals.add({
+          'slot_num': currentPeriod,
+          'lecture_num': 0,
+          'start': _formatMinsToWallClock(currentMins),
+          'end': _formatMinsToWallClock(endMins),
+          'is_break': true,
+          'label': 'Break 2 (Lunch Break)',
+          'duration': _break2DurationMinutes,
+        });
+        currentMins = endMins;
+        currentPeriod++;
+        if (currentPeriod > _periodsPerDay || currentMins >= endLimitMins) break;
+      }
+
+      // Regular lecture
+      int endMins = currentMins + _lectureDurationMinutes;
       intervals.add({
-        'slot_num': p,
-        'lecture_num': isBreak ? 0 : lectureNum,
+        'slot_num': currentPeriod,
+        'lecture_num': lectureNum,
         'start': _formatMinsToWallClock(currentMins),
-        'end': _formatMinsToWallClock(slotEndMins),
-        'is_break': isBreak,
-        'label': typeLabel,
-        'duration': duration,
+        'end': _formatMinsToWallClock(endMins),
+        'is_break': false,
+        'label': 'Lecture $lectureNum',
+        'duration': _lectureDurationMinutes,
       });
-
-      if (!isBreak) lectureNum++;
-      currentMins = slotEndMins;
+      currentMins = endMins;
+      lectureNum++;
+      currentPeriod++;
     }
 
     // Add explicit Lab sample interval preview showing independent duration
-    int labStartMins = startMins + (_lectureDurationMinutes * 2) + 20; // after slot 2 & short break
+    int labStartMins = startMins + (_lectureDurationMinutes * 2) + (_break1Enabled ? _break1DurationMinutes : 0);
     int labEndMins = labStartMins + _labDurationMinutes;
     intervals.add({
       'slot_num': 99,
@@ -147,10 +207,14 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
       tutorialDurationMinutes: _lectureDurationMinutes,
       startTime: startStr,
       endTime: endStr,
-      breakSlots: _breakSlots.toList(),
-      breakLabels: {
-        for (var b in _breakSlots) b.toString(): b == 6 ? 'Lunch Break' : 'Short Break'
-      },
+      break1Enabled: _break1Enabled,
+      break1AfterLectures: _break1AfterLectures,
+      break1DurationMinutes: _break1DurationMinutes,
+      break2Enabled: _break2Enabled,
+      break2AfterLectures: _break2AfterLectures,
+      break2DurationMinutes: _break2DurationMinutes,
+      breakSlots: [],
+      breakLabels: {},
     );
 
     final success = await provider.saveScheduleConfig(updatedConfig);
@@ -159,8 +223,8 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(success ? 'Global Schedule Configuration Saved!' : 'Saved locally (offline mode).'),
-          backgroundColor: success ? Colors.green : Colors.orange,
+          content: Text(success ? 'Global Schedule Configuration Saved to Database!' : 'Failed to save configuration. Please check backend connection.'),
+          backgroundColor: success ? Colors.green : Colors.red,
         ),
       );
     }
@@ -168,19 +232,31 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final previewIntervals = _generatePreviewIntervals();
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Time Structure & Schedule Setup'),
-        backgroundColor: AppColors.primary,
+        elevation: 0,
+        backgroundColor: const Color(0xFF0F172A),
+        foregroundColor: Colors.white,
+        title: const Text('Time Structure & Daily Slots', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.white)),
         actions: [
-          IconButton(
-            icon: _isSaving
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Icon(Icons.check),
-            onPressed: _isSaving ? null : _saveConfig,
-            tooltip: 'Save Schedule Config',
+          Padding(
+            padding: const EdgeInsets.only(right: 12.0),
+            child: ElevatedButton.icon(
+              icon: _isSaving
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.check, size: 18),
+              label: const Text('Save Structure', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF97316),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: _isSaving ? null : _saveConfig,
+            ),
           ),
         ],
       ),
@@ -189,9 +265,51 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── STEP 1 GUIDANCE BANNER ───────────────────────────────────────
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFDBEAFE),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF97316),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'Step 1',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Define your institution\'s daily working days (Mon–Sat), lecture/lab duration, and break slots.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF1E3A8A),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
             // ── GLOBAL COLLEGE TIMINGS ──────────────────────────────────────
             Card(
-              elevation: 2,
+              elevation: 1,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
@@ -199,7 +317,7 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.school_outlined, color: AppColors.primary),
+                        const Icon(Icons.school_outlined, color: Color(0xFF1E3A8A)),
                         const SizedBox(width: 8),
                         Text(
                           'Global College Timings',
@@ -268,32 +386,40 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                       children: [
                         Expanded(
                           child: TextFormField(
-                            initialValue: _lectureDurationMinutes.toString(),
+                            controller: _lectureDurationController,
                             keyboardType: TextInputType.number,
                             decoration: const InputDecoration(
                               labelText: 'Lecture Duration (mins)',
                               border: OutlineInputBorder(),
                               suffixText: 'min',
+                              prefixIcon: Icon(Icons.menu_book, size: 20),
                             ),
                             onChanged: (val) {
                               final v = int.tryParse(val);
-                              if (v != null && v > 0) setState(() => _lectureDurationMinutes = v);
+                              if (v != null && v > 0) {
+                                _lectureDurationMinutes = v;
+                                setState(() {});
+                              }
                             },
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: TextFormField(
-                            initialValue: _labDurationMinutes.toString(),
+                            controller: _labDurationController,
                             keyboardType: TextInputType.number,
                             decoration: const InputDecoration(
                               labelText: 'Lab Duration (mins)',
                               border: OutlineInputBorder(),
                               suffixText: 'min',
+                              prefixIcon: Icon(Icons.science, size: 20),
                             ),
                             onChanged: (val) {
                               final v = int.tryParse(val);
-                              if (v != null && v > 0) setState(() => _labDurationMinutes = v);
+                              if (v != null && v > 0) {
+                                _labDurationMinutes = v;
+                                setState(() {});
+                              }
                             },
                           ),
                         ),
@@ -303,7 +429,142 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                     Text(
                       'Lab duration is calculated independently in actual minutes (e.g. $_labDurationMinutes mins = ${(_labDurationMinutes / _lectureDurationMinutes).toStringAsFixed(1)} lecture slots).',
                       style: const TextStyle(fontSize: 11, color: Colors.blueGrey, fontStyle: FontStyle.italic),
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
+            const SizedBox(height: 16),
+
+            // ── DYNAMIC BREAKS & LUNCH MANAGEMENT ───────────────────────────
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.coffee_outlined, color: AppColors.primary),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Break & Lunch Management',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // BREAK 1
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.amber.shade300),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Break 1 (Morning / Tea Break)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              Switch(
+                                value: _break1Enabled,
+                                activeColor: AppColors.primary,
+                                onChanged: (v) => setState(() => _break1Enabled = v),
+                              ),
+                            ],
+                          ),
+                          if (_break1Enabled) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: DropdownButtonFormField<int>(
+                                    value: _break1AfterLectures,
+                                    decoration: const InputDecoration(labelText: 'After Lectures', border: OutlineInputBorder(), isDense: true),
+                                    items: List.generate(6, (i) => i + 1)
+                                        .map((n) => DropdownMenuItem(value: n, child: Text('After $n slot${n > 1 ? "s" : ""}')))
+                                        .toList(),
+                                    onChanged: (val) => setState(() => _break1AfterLectures = val!),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: DropdownButtonFormField<int>(
+                                    value: _break1DurationMinutes,
+                                    decoration: const InputDecoration(labelText: 'Duration', border: OutlineInputBorder(), isDense: true),
+                                    items: [10, 15, 20, 25, 30]
+                                        .map((d) => DropdownMenuItem(value: d, child: Text('$d mins')))
+                                        .toList(),
+                                    onChanged: (val) => setState(() => _break1DurationMinutes = val!),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // BREAK 2 (LUNCH)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.shade300),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Break 2 (Lunch Break)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              Switch(
+                                value: _break2Enabled,
+                                activeColor: AppColors.primary,
+                                onChanged: (v) => setState(() => _break2Enabled = v),
+                              ),
+                            ],
+                          ),
+                          if (_break2Enabled) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: DropdownButtonFormField<int>(
+                                    value: _break2AfterLectures,
+                                    decoration: const InputDecoration(labelText: 'After Lectures', border: OutlineInputBorder(), isDense: true),
+                                    items: List.generate(8, (i) => i + 1)
+                                        .map((n) => DropdownMenuItem(value: n, child: Text('After $n slot${n > 1 ? "s" : ""}')))
+                                        .toList(),
+                                    onChanged: (val) => setState(() => _break2AfterLectures = val!),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: DropdownButtonFormField<int>(
+                                    value: _break2DurationMinutes,
+                                    decoration: const InputDecoration(labelText: 'Duration', border: OutlineInputBorder(), isDense: true),
+                                    items: [30, 40, 45, 50, 60]
+                                        .map((d) => DropdownMenuItem(value: d, child: Text('$d mins')))
+                                        .toList(),
+                                    onChanged: (val) => setState(() => _break2DurationMinutes = val!),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   ],
                 ),

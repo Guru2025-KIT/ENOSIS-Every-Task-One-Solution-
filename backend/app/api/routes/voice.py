@@ -207,59 +207,146 @@ Return ONLY valid JSON, no markdown formatting blocks, no explanations outside J
 
 
 def _fallback_keyword_parse(text: str, db: Session) -> ParseConstraintResponse:
-    """Fallback simple string parsing if LLM is down/unset."""
-    input_lower = text.lower()
+    """Fallback rule-based string parsing when LLM is unavailable."""
+    input_lower = text.lower().strip()
+    if not input_lower:
+        return ParseConstraintResponse(
+            constraint=None,
+            confirmation_message="Speech text was empty.",
+            raw_text=text,
+            parsed_successfully=False
+        )
 
-    
-    # Check for faculty unavailability keywords
-    if "unavailable" in input_lower or "not available" in input_lower or "off" in input_lower:
-        # Match first faculty name
-        faculties = db.query(User).all()
-        target_fac = None
-        for f in faculties:
-            if f.full_name.lower() in input_lower:
-                target_fac = f
-                break
-        
-        if not target_fac:
-            target_fac = faculties[0] if faculties else None
+    faculties = db.query(User).all()
+    subjects = db.query(Subject).all()
+    rooms = db.query(Room).all()
 
-        if target_fac:
-            # Simple day matching
-            day = 0
-            if "tuesday" in input_lower: day = 1
-            elif "wednesday" in input_lower: day = 2
-            elif "thursday" in input_lower: day = 3
-            elif "friday" in input_lower: day = 4
-            elif "saturday" in input_lower: day = 5
-            
-            # Simple slot matching
-            slot = 0
-            for i in range(1, 9):
-                if f"slot {i}" in input_lower or f"period {i}" in input_lower:
-                    slot = i - 1
+    # Match Faculty
+    matched_faculty = None
+    for f in faculties:
+        if f.full_name and f.full_name.lower() in input_lower:
+            matched_faculty = f
+            break
+        # Also check partial names like "Priya" or "Sharma" if >= 4 chars
+        if f.full_name:
+            for part in f.full_name.lower().split():
+                if len(part) >= 4 and part in input_lower:
+                    matched_faculty = f
                     break
-            
-            days_str = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-            desc = f"{target_fac.full_name} unavailable on {days_str[day]} Slot {slot + 1}"
-            
-            constraint = ConstraintCreate(
-                constraint_type="faculty_unavailability",
-                priority="hard",
-                payload={"faculty_id": target_fac.id, "day": day, "slot": slot},
-                description=desc
-            )
-            
+        if matched_faculty:
+            break
+
+    # Match Subject
+    matched_subject = None
+    for s in subjects:
+        if s.name and (s.name.lower() in input_lower or (s.code and s.code.lower() in input_lower)):
+            matched_subject = s
+            break
+
+    # Match Day (0=Mon ... 5=Sat)
+    day = None
+    days_map = {
+        "monday": 0, "mon": 0,
+        "tuesday": 1, "tue": 1,
+        "wednesday": 2, "wed": 2,
+        "thursday": 3, "thu": 3,
+        "friday": 4, "fri": 4,
+        "saturday": 5, "sat": 5
+    }
+    for d_name, d_idx in days_map.items():
+        if d_name in input_lower:
+            day = d_idx
+            break
+
+    # Match Slot (0-indexed)
+    slot = None
+    for i in range(1, 10):
+        if f"slot {i}" in input_lower or f"period {i}" in input_lower or f"lecture {i}" in input_lower:
+            slot = i - 1
+            break
+    if slot is None:
+        if "1st" in input_lower or "first" in input_lower:
+            slot = 0
+        elif "2nd" in input_lower or "second" in input_lower:
+            slot = 1
+        elif "3rd" in input_lower or "third" in input_lower:
+            slot = 2
+        elif "4th" in input_lower or "fourth" in input_lower:
+            slot = 3
+        elif "5th" in input_lower or "fifth" in input_lower:
+            slot = 4
+
+    days_str = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
+    # 1. Avoid first period
+    if ("avoid" in input_lower or "no " in input_lower or "don't" in input_lower) and ("first" in input_lower or "1st" in input_lower or "morning" in input_lower):
+        if matched_faculty:
+            desc = f"Avoid first period for {matched_faculty.full_name}"
             return ParseConstraintResponse(
-                constraint=constraint,
-                confirmation_message=f"Configured unavailability: {desc}.",
+                constraint=ConstraintCreate(
+                    constraint_type="avoid_first_period",
+                    priority="soft",
+                    payload={"faculty_id": matched_faculty.id},
+                    description=desc
+                ),
+                confirmation_message=f"Configured preference: {desc}.",
                 raw_text=text,
                 parsed_successfully=True
             )
 
+    # 2. Avoid last period
+    if ("avoid" in input_lower or "no " in input_lower or "don't" in input_lower) and ("last" in input_lower or "evening" in input_lower):
+        if matched_faculty:
+            desc = f"Avoid last period for {matched_faculty.full_name}"
+            return ParseConstraintResponse(
+                constraint=ConstraintCreate(
+                    constraint_type="avoid_last_period",
+                    priority="soft",
+                    payload={"faculty_id": matched_faculty.id},
+                    description=desc
+                ),
+                confirmation_message=f"Configured preference: {desc}.",
+                raw_text=text,
+                parsed_successfully=True
+            )
+
+    # 3. Faculty Unavailability
+    if ("unavailable" in input_lower or "not available" in input_lower or "leave" in input_lower or "off" in input_lower) and matched_faculty:
+        assigned_day = day if day is not None else 0
+        assigned_slot = slot if slot is not None else 0
+        desc = f"{matched_faculty.full_name} unavailable on {days_str[assigned_day]} Slot {assigned_slot + 1}"
+        return ParseConstraintResponse(
+            constraint=ConstraintCreate(
+                constraint_type="faculty_unavailability",
+                priority="hard",
+                payload={"faculty_id": matched_faculty.id, "day": assigned_day, "slot": assigned_slot},
+                description=desc
+            ),
+            confirmation_message=f"Configured unavailability: {desc}.",
+            raw_text=text,
+            parsed_successfully=True
+        )
+
+    # 4. Preferred Subject Slot / Fixed
+    if matched_subject and day is not None and slot is not None:
+        desc = f"Schedule {matched_subject.name} on {days_str[day]} Slot {slot + 1}"
+        return ParseConstraintResponse(
+            constraint=ConstraintCreate(
+                constraint_type="preferred_slot",
+                priority="soft",
+                payload={"subject_id": matched_subject.id, "day": day, "slot": slot},
+                description=desc
+            ),
+            confirmation_message=f"Configured preference: {desc}.",
+            raw_text=text,
+            parsed_successfully=True
+        )
+
+    # Unrecognized input (e.g. "hellow", "test")
     return ParseConstraintResponse(
         constraint=None,
-        confirmation_message="I heard: \"" + text + "\", but couldn't map it to a valid constraint. Try saying: 'Dr. Priya Sharma is unavailable on Tuesday slot 1'.",
+        confirmation_message=f"Could not understand or extract a timetable constraint from: \"{text}\". Please specify a faculty or subject with day/slot (e.g., 'Dr. Priya Sharma is unavailable on Tuesday slot 1').",
         raw_text=text,
         parsed_successfully=False
     )
+

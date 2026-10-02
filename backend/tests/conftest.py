@@ -1,57 +1,54 @@
 """
 Shared pytest setup for the whole test suite.
 
-IMPORTANT: the test-database env var and any stale-file cleanup MUST happen
-here, in conftest.py, and MUST run before any test module does
-`from app.main import app`. pytest always imports conftest.py before
-collecting test files in the same directory, which is exactly the timing
-we need — see the DEV_DIARY entry about why deleting the SQLite file after
-the app's connection to it already exists causes spurious "readonly
-database" errors.
+Sets DATABASE_URL to in-memory SQLite BEFORE any app imports, so the
+app.db.base module creates its engine pointing at the test database.
+We then reuse that SAME engine everywhere — no separate test engine,
+no monkey-patching, no dependency overrides needed.
 """
 import os
 
-if os.path.exists("test_enosis.db"):
-    os.remove("test_enosis.db")
-os.environ["DATABASE_URL"] = "sqlite:///./test_enosis.db"
+# Must happen before ANY app import
+os.environ["DATABASE_URL"] = "sqlite://"
 
 import pytest
+from sqlalchemy import event
 
 from app.core.security import create_access_token, hash_password
-from app.db.base import Base, engine, SessionLocal
+from app.db.base import Base, engine, SessionLocal, get_db
 from app.models.user import User, UserRole
+import app.models.academic
+import app.models.timetable
+import app.models.schedule_config
+import app.models.constraints
+import app.models.generation_history
+import app.models.achievement
+import app.models.attendance
+import app.models.document
+import app.models.notification
+import app.models.todo
+import app.models.sli
 
+# Enable foreign-key enforcement (off by default in SQLite)
+@event.listens_for(engine, "connect")
+def _set_sqlite_pragma(dbapi_conn, connection_record):
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
 
 
 @pytest.fixture(autouse=True)
 def setup_db_tables():
-    """Initializes all database tables before every test function."""
+    """Creates all tables before each test, drops them after."""
     Base.metadata.create_all(bind=engine)
     yield
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_after_all_tests():
-    """Removes test DB file after the entire test suite finishes."""
-    yield
-    if os.path.exists("test_enosis.db"):
-        try:
-            os.remove("test_enosis.db")
-        except PermissionError:
-            pass
-
-
-
+    Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture
 def admin_token():
     """
-    Creates an admin user directly via the database (bypassing the public
-    /auth/signup endpoint, which always creates FACULTY accounts — there's
-    no public "make me an admin" endpoint, on purpose) and returns a valid
-    JWT for them. In real deployments, the first admin account would be
-    created by a one-off seed script, not through the API.
+    Creates an admin user directly via the database and returns a valid JWT.
     """
     db = SessionLocal()
     unique = os.urandom(4).hex()

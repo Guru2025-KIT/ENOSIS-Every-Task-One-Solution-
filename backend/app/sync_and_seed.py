@@ -232,6 +232,18 @@ def sync_database_schema():
             sc_cols = {col["name"] for col in inspector.get_columns("schedule_config")}
             if "end_time" not in sc_cols:
                 conn.execute(text("ALTER TABLE schedule_config ADD COLUMN end_time VARCHAR(10) NULL DEFAULT '17:00';"))
+            if "break1_enabled" not in sc_cols:
+                conn.execute(text("ALTER TABLE schedule_config ADD COLUMN break1_enabled BOOLEAN NOT NULL DEFAULT 1;"))
+            if "break1_after_lectures" not in sc_cols:
+                conn.execute(text("ALTER TABLE schedule_config ADD COLUMN break1_after_lectures INT NOT NULL DEFAULT 2;"))
+            if "break1_duration_minutes" not in sc_cols:
+                conn.execute(text("ALTER TABLE schedule_config ADD COLUMN break1_duration_minutes INT NOT NULL DEFAULT 15;"))
+            if "break2_enabled" not in sc_cols:
+                conn.execute(text("ALTER TABLE schedule_config ADD COLUMN break2_enabled BOOLEAN NOT NULL DEFAULT 1;"))
+            if "break2_after_lectures" not in sc_cols:
+                conn.execute(text("ALTER TABLE schedule_config ADD COLUMN break2_after_lectures INT NOT NULL DEFAULT 5;"))
+            if "break2_duration_minutes" not in sc_cols:
+                conn.execute(text("ALTER TABLE schedule_config ADD COLUMN break2_duration_minutes INT NOT NULL DEFAULT 30;"))
 
         # 14. rooms
         if "rooms" in inspector.get_table_names():

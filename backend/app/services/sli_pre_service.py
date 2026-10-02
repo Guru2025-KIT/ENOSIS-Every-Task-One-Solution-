@@ -42,13 +42,28 @@ def get_faculty_teaching_contexts(
 
     assigned_pairs_set: set[tuple[str, str]] = set()
 
+    faculty_ids = [faculty_id]
+    if not is_admin:
+        from app.models.user import User
+        user = db.query(User).filter(User.id == faculty_id).first()
+        if user and user.full_name:
+            target_name = user.full_name.lower().strip()
+            all_users = db.query(User).all()
+            matched = [
+                u.id for u in all_users
+                if (u.full_name and (target_name in u.full_name.lower() or u.full_name.lower() in target_name))
+                or (u.email and user.email and u.email.split('@')[0].lower() == user.email.split('@')[0].lower())
+            ]
+            if matched:
+                faculty_ids = list(set(faculty_ids + matched))
+
     # 1. Timetable entries for faculty
     query = db.query(
         TimetableEntry.subject_id,
         TimetableEntry.division_id,
     )
     if not is_admin:
-        query = query.filter(TimetableEntry.faculty_id == faculty_id)
+        query = query.filter(TimetableEntry.faculty_id.in_(faculty_ids))
     if active_batch_id:
         query = query.filter(TimetableEntry.batch_id == active_batch_id)
 
@@ -56,13 +71,23 @@ def get_faculty_teaching_contexts(
         if pair[0] and pair[1]:
             assigned_pairs_set.add((pair[0], pair[1]))
 
+    # Fallback to any batch if active_batch_id yielded nothing
+    if not assigned_pairs_set and active_batch_id and not is_admin:
+        fallback_query = db.query(
+            TimetableEntry.subject_id,
+            TimetableEntry.division_id,
+        ).filter(TimetableEntry.faculty_id.in_(faculty_ids))
+        for pair in fallback_query.distinct().all():
+            if pair[0] and pair[1]:
+                assigned_pairs_set.add((pair[0], pair[1]))
+
     # 2. Explicit teaching assignments for faculty
     ta_query = db.query(
         TeachingAssignment.subject_id,
         TeachingAssignment.division_id,
     )
     if not is_admin:
-        ta_query = ta_query.filter(TeachingAssignment.faculty_id == faculty_id)
+        ta_query = ta_query.filter(TeachingAssignment.faculty_id.in_(faculty_ids))
     for pair in ta_query.distinct().all():
         if pair[0] and pair[1]:
             assigned_pairs_set.add((pair[0], pair[1]))
@@ -70,7 +95,8 @@ def get_faculty_teaching_contexts(
     # 3. Explicit assessments created by faculty
     assessments_query = db.query(Assessment.subject_id, Assessment.class_id)
     if not is_admin:
-        assessments_query = assessments_query.filter(Assessment.faculty_id == faculty_id)
+        assessments_query = assessments_query.filter(Assessment.faculty_id.in_(faculty_ids))
+
     for sub_id, cls_id in assessments_query.distinct().all():
         if sub_id and cls_id:
             ac = db.query(AcademicClass).filter(AcademicClass.class_id == cls_id).first()

@@ -41,6 +41,9 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+# Alias /login and /signup at root for API compatibility
+app.post("/login", response_model=auth.Token, tags=["auth"], include_in_schema=False)(auth.login)
+app.post("/signup", response_model=auth.UserOut, status_code=201, tags=["auth"], include_in_schema=False)(auth.signup)
 app.include_router(timetable.router)
 app.include_router(users.router)
 app.include_router(todo.router)
