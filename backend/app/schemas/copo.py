@@ -8,6 +8,12 @@ class CourseMaster(BaseModel):
     semester: str = "Semester IV"
     academic_year: str = "2025-2026"
     target_attainment: float = 2.25
+    direct_weight: float = 0.9
+    indirect_weight: float = 0.1
+    passing_threshold_percent: float = 50.0
+    level3_cutoff_percent: float = 80.0
+    level2_cutoff_percent: float = 60.0
+    level1_cutoff_percent: float = 40.0
 
 class CourseOutcome(BaseModel):
     co_id: str  # CO1, CO2, CO3, CO4, CO5

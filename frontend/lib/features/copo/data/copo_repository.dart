@@ -515,6 +515,12 @@ class CourseMaster {
   String semester;
   String academicYear;
   double targetAttainment;
+  double directWeight;
+  double indirectWeight;
+  double passingThresholdPercent;
+  double level3CutoffPercent;
+  double level2CutoffPercent;
+  double level1CutoffPercent;
   String facultyInCharge;
   String ise1Name;
   String ise1MappedCo;
@@ -528,6 +534,12 @@ class CourseMaster {
     this.semester = 'Semester IV',
     this.academicYear = '2025-2026',
     this.targetAttainment = 2.25,
+    this.directWeight = 90.0,
+    this.indirectWeight = 10.0,
+    this.passingThresholdPercent = 50.0,
+    this.level3CutoffPercent = 80.0,
+    this.level2CutoffPercent = 60.0,
+    this.level1CutoffPercent = 40.0,
     this.facultyInCharge = 'Dr. Priya Sharma',
     this.ise1Name = 'Assignment 1',
     this.ise1MappedCo = 'CO1',
@@ -542,6 +554,12 @@ class CourseMaster {
     'semester': semester,
     'academic_year': academicYear,
     'target_attainment': targetAttainment,
+    'direct_weight': directWeight,
+    'indirect_weight': indirectWeight,
+    'passing_threshold_percent': passingThresholdPercent,
+    'level3_cutoff_percent': level3CutoffPercent,
+    'level2_cutoff_percent': level2CutoffPercent,
+    'level1_cutoff_percent': level1CutoffPercent,
     'faculty_in_charge': facultyInCharge,
     'ise1_name': ise1Name,
     'ise1_mapped_co': ise1MappedCo,
@@ -836,6 +854,12 @@ class CopoRepository {
   void updateConfig(AttainmentConfig newConfig) {
     config = newConfig;
     master.targetAttainment = newConfig.targetBenchmark;
+    master.directWeight = newConfig.directWeightPercent;
+    master.indirectWeight = newConfig.indirectWeightPercent;
+    master.passingThresholdPercent = newConfig.passingThresholdPercent;
+    master.level3CutoffPercent = newConfig.level3CutoffPercent;
+    master.level2CutoffPercent = newConfig.level2CutoffPercent;
+    master.level1CutoffPercent = newConfig.level1CutoffPercent;
   }
 
   // Active state

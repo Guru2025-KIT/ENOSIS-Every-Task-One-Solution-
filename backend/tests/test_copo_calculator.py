@@ -170,3 +170,50 @@ def test_parse_excel_spreadsheet():
     assert records[0]["roll_no"] == "CS101"
     assert records[0]["question_scores"]["Q1"] == 4.5
     assert records[0]["question_scores"]["Q2"] == 8.0
+
+def test_dynamic_attainment_weights():
+    # Test 80/20 dynamic split instead of default 90/10
+    master = CourseMaster(
+        course_code="CS201",
+        course_name="Data Structures",
+        target_attainment=2.0,
+        direct_weight=80.0,
+        indirect_weight=20.0,
+    )
+    matrix = CopoMatrix(matrix=[
+        [3, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 2, 3, 2],
+        [3, 3, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2, 3, 2],
+        [3, 2, 3, 2, 0, 0, 0, 0, 0, 0, 0, 2, 2, 3],
+        [2, 2, 2, 3, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2],
+        [3, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3],
+    ])
+    ise1 = IseExamData(
+        exam_type="ISE1",
+        max_marks=10.0,
+        mapped_co="CO1",
+        scores=[StudentIseScore(roll_no="R1", marks=8.0)],
+    )
+    ise2 = IseExamData(exam_type="ISE2", max_marks=10.0, mapped_co="CO2", scores=[])
+    mse = QuestionWiseExamData(exam_type="MSE", questions=[], student_scores=[])
+    ese = QuestionWiseExamData(exam_type="ESE", questions=[], student_scores=[])
+    survey = ExitSurveyData(responses=[
+        ExitSurveyCoData(co_id="CO1", strongly_agree_3=0, agree_2=0, neutral_1=10), # 1.0 indirect score
+    ])
+    req = CopoCalculationRequest(
+        master=master,
+        matrix=matrix,
+        total_strength=1,
+        ise1=ise1,
+        ise2=ise2,
+        mse=mse,
+        ese=ese,
+        survey=survey,
+    )
+    report = CopoCalculator.calculate_report(req)
+    co1 = report.co_attainments[0]
+    # Direct = 3.0, Indirect = 1.0
+    # Final = (0.8 * 3.0) + (0.2 * 1.0) = 2.4 + 0.2 = 2.6
+    assert co1.direct_attainment == 3.0
+    assert co1.indirect_attainment == 1.0
+    assert co1.final_attainment == 2.6
+
