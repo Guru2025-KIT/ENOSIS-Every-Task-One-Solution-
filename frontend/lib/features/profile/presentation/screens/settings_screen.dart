@@ -26,8 +26,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _pushNotifications = true;
   bool _emailAlerts = false;
 
-  void _handleLogout() {
-    AuthSession.clear();
+  Future<void> _handleLogout() async {
+    await AuthSession.clear();
+    if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (route) => false,
@@ -140,7 +141,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           );
                         },
                       ),
-                      if (AuthSession.canAccessTimetableGeneration) ...[
+                      if (AuthSession.isAdmin) ...[
                         const Divider(height: 1),
                         ListTile(
                           leading: const Icon(Icons.admin_panel_settings_outlined, color: AppColors.primary),

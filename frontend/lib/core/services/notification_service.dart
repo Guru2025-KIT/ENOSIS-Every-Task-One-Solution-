@@ -37,10 +37,10 @@ class NotificationService {
       );
 
       await _notificationsPlugin.initialize(
-        initSettings,
-        onDidReceiveNotificationResponse: (NotificationResponse response) {
-          debugPrint('Notification clicked with payload: ${response.payload}');
-        },
+       settings: initSettings,
+       onDidReceiveNotificationResponse: (NotificationResponse response) {
+       debugPrint('Notification clicked with payload: ${response.payload}');
+       },
       );
 
       _isInitialized = true;
@@ -113,16 +113,14 @@ class NotificationService {
       final tzDateTime = tz.TZDateTime.from(scheduledDate, tz.local);
 
       await _notificationsPlugin.zonedSchedule(
-        id,
-        title,
-        body,
-        tzDateTime,
-        _buildNotificationDetails(priority),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        payload: payload,
-      );
+       id: id,
+       title: title,
+       body: body,
+       scheduledDate: tzDateTime,
+       notificationDetails: _buildNotificationDetails(priority),
+       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+       payload: payload,
+     );
       debugPrint('Scheduled notification $id for $scheduledDate (priority: $priority)');
     } catch (e) {
       debugPrint('Notice scheduling local notification $id: $e');
@@ -141,11 +139,11 @@ class NotificationService {
     try {
       await initialize();
       await _notificationsPlugin.show(
-        id,
-        title,
-        body,
-        _buildNotificationDetails(priority),
-        payload: payload,
+       id: id,
+       title: title,
+       body: body,
+       notificationDetails: _buildNotificationDetails(priority),
+       payload: payload,
       );
     } catch (e) {
       debugPrint('Notice showing immediate notification $id: $e');
@@ -155,7 +153,7 @@ class NotificationService {
   Future<void> cancelNotification(int id) async {
     if (kIsWeb) return;
     try {
-      await _notificationsPlugin.cancel(id);
+      await _notificationsPlugin.cancel(id: id);
     } catch (e) {
       debugPrint('Notice cancelling notification $id: $e');
     }

@@ -21,6 +21,8 @@ dependencies:
   excel: ^3.0.0
   url_launcher: ^6.3.0
   universal_html: ^2.2.4
+  timezone: ^0.11.1
+  flutter_local_notifications: ^22.3.1
 
 
 dev_dependencies:

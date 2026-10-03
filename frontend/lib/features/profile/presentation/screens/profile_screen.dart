@@ -151,7 +151,7 @@ class ProfileScreen extends StatelessWidget {
                           );
                         },
                       ),
-                      if (AuthSession.canAccessTimetableGeneration) ...[
+                      if (AuthSession.isAdmin) ...[
                         const Divider(height: 1),
                         ListTile(
                           leading: const Icon(Icons.admin_panel_settings_outlined, color: AppColors.primary),

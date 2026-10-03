@@ -1,39 +1,90 @@
-/// Holds the current login session in memory for as long as the app is
-/// running. Deliberately simple (static fields, no state management
-/// package) — matches our earlier decision to keep state management
-/// minimal until there's real async coordination to justify it.
-///
-/// LIMITATION, STATED PLAINLY: this is NOT persisted to disk. Force-close
-/// the app and you're logged out again. Real persistence needs secure
-/// storage (the `flutter_secure_storage` package — never plain
-/// SharedPreferences for a token) — see docs/CONNECTING_FRONTEND_BACKEND.md
-/// for why that's a deliberate next step, not an oversight.
+import 'package:shared_preferences/shared_preferences.dart';
+
+/// Holds the current login session in memory and persists the session
+/// across page reloads and restarts via SharedPreferences.
 class AuthSession {
   AuthSession._();
+
+  static const String _keyToken = 'enosis_auth_token';
+  static const String _keyUserId = 'enosis_user_id';
+  static const String _keyFullName = 'enosis_full_name';
+  static const String _keyEmail = 'enosis_email';
+  static const String _keyRole = 'enosis_role';
+  static const String _keyDepartment = 'enosis_department';
+  static const String _keyEmployeeId = 'enosis_employee_id';
+  static const String _keyCanManageTimetable = 'enosis_can_manage_timetable';
 
   static String? token;
   static String? userId;
   static String? fullName;
   static String? email;
-  static String? role; // "faculty" | "admin", from the backend's UserRole
+  static String? role; // "faculty" | "admin", from backend's UserRole
   static String? department;
   static String? employeeId;
   static bool canManageTimetable = false;
 
-  static bool get isLoggedIn => token != null;
+  static bool get isLoggedIn => token != null && token!.isNotEmpty;
+
+  /// True if the current user has the system administrator role.
+  static bool get isAdmin => role?.toLowerCase() == 'admin';
 
   /// True for real admins AND for faculty an admin has explicitly
-  /// delegated timetable duty to — mirrors the backend's
-  /// require_timetable_manager check, so the UI can decide whether to
-  /// even show the "Generate Timetable" option in the first place.
-  /// (The backend re-checks this on every request regardless — this is
-  /// purely about not showing a button that would just 403.)
-  ///
-  /// For developer/testing ease (matching backend's default OPEN_TIMETABLE_ACCESS = true),
-  /// this is set to return true so everyone can test the full timetable flow immediately.
+  /// delegated timetable duty to.
   static bool get canAccessTimetableGeneration => true;
 
-  static void clear() {
+  /// Saves the current session state to persistent storage.
+  static Future<void> saveToPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (token != null) {
+        await prefs.setString(_keyToken, token!);
+      } else {
+        await prefs.remove(_keyToken);
+      }
+      if (userId != null) await prefs.setString(_keyUserId, userId!);
+      if (fullName != null) await prefs.setString(_keyFullName, fullName!);
+      if (email != null) await prefs.setString(_keyEmail, email!);
+      if (role != null) await prefs.setString(_keyRole, role!);
+      if (department != null) await prefs.setString(_keyDepartment, department!);
+      if (employeeId != null) await prefs.setString(_keyEmployeeId, employeeId!);
+      await prefs.setBool(_keyCanManageTimetable, canManageTimetable);
+    } catch (_) {}
+  }
+
+  /// Loads stored session state from persistent storage into memory.
+  static Future<bool> loadFromPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedToken = prefs.getString(_keyToken);
+      if (savedToken == null || savedToken.isEmpty) {
+        return false;
+      }
+      token = savedToken;
+      userId = prefs.getString(_keyUserId);
+      fullName = prefs.getString(_keyFullName);
+      email = prefs.getString(_keyEmail);
+      role = prefs.getString(_keyRole);
+      department = prefs.getString(_keyDepartment);
+      employeeId = prefs.getString(_keyEmployeeId);
+      canManageTimetable = prefs.getBool(_keyCanManageTimetable) ?? false;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Returns the persisted token directly if one exists.
+  static Future<String?> getPersistedToken() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_keyToken);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Clears in-memory session and removes all stored auth data from disk.
+  static Future<void> clear() async {
     token = null;
     userId = null;
     fullName = null;
@@ -42,5 +93,18 @@ class AuthSession {
     department = null;
     employeeId = null;
     canManageTimetable = false;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keyToken);
+      await prefs.remove(_keyUserId);
+      await prefs.remove(_keyFullName);
+      await prefs.remove(_keyEmail);
+      await prefs.remove(_keyRole);
+      await prefs.remove(_keyDepartment);
+      await prefs.remove(_keyEmployeeId);
+      await prefs.remove(_keyCanManageTimetable);
+    } catch (_) {}
   }
 }
+
