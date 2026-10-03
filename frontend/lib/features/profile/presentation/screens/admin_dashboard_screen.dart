@@ -130,6 +130,319 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
+  // ─── CREDENTIAL RESULT DIALOG ─────────────────────────────────────────────
+
+  void _showCredentialDialog(String title, String facultyName, String email, String tempPassword, bool emailSent) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: emailSent ? AppColors.success.withOpacity(0.15) : AppColors.warning.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                emailSent ? Icons.mark_email_read : Icons.email_outlined,
+                color: emailSent ? AppColors.success : AppColors.warning,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
+          ],
+        ),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Faculty: $facultyName', style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.email_outlined, size: 16, color: AppColors.textSecondary),
+                        const SizedBox(width: 8),
+                        Expanded(child: SelectableText(email, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Icon(Icons.key, size: 16, color: AppColors.textSecondary),
+                        const SizedBox(width: 8),
+                        Expanded(child: SelectableText(tempPassword, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.primary, letterSpacing: 1))),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: emailSent ? AppColors.success.withOpacity(0.08) : AppColors.warning.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      emailSent ? Icons.check_circle_outline : Icons.warning_amber_rounded,
+                      size: 18,
+                      color: emailSent ? AppColors.success : AppColors.warning,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        emailSent
+                            ? 'Credentials have been emailed to the faculty member.'
+                            : 'SMTP not configured. Please copy the password above and share it manually.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: emailSent ? AppColors.success : AppColors.warning,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── EMAIL SETTINGS DIALOG ────────────────────────────────────────────────
+
+  void _openEmailSettingsDialog() async {
+    try {
+      final settings = await _repository.getEmailSettings();
+      if (!mounted) return;
+
+      final adminEmailCtrl = TextEditingController(text: settings['admin_email'] as String? ?? '');
+      final smtpHostCtrl = TextEditingController(text: settings['smtp_host'] as String? ?? '');
+      final smtpPortCtrl = TextEditingController(text: (settings['smtp_port'] as int? ?? 587).toString());
+      final smtpUserCtrl = TextEditingController(text: settings['smtp_user'] as String? ?? '');
+      final smtpPassCtrl = TextEditingController();
+      bool smtpConfigured = settings['smtp_configured'] as bool? ?? false;
+
+      showDialog(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(8)),
+                  child: const Icon(Icons.settings_outlined, color: AppColors.primary, size: 22),
+                ),
+                const SizedBox(width: 10),
+                const Text('Email & SMTP Settings', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: SizedBox(
+                width: 500,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: smtpConfigured ? AppColors.success.withOpacity(0.08) : AppColors.warning.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            smtpConfigured ? Icons.check_circle : Icons.warning_amber_rounded,
+                            size: 18,
+                            color: smtpConfigured ? AppColors.success : AppColors.warning,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            smtpConfigured ? 'SMTP is configured — emails will be sent.' : 'SMTP not configured — emails will be printed to server console.',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: smtpConfigured ? AppColors.success : AppColors.warning),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: adminEmailCtrl,
+                      decoration: const InputDecoration(labelText: 'Admin / Sender Email', prefixIcon: Icon(Icons.alternate_email), helperText: 'The "From" address for outgoing emails'),
+                    ),
+                    const SizedBox(height: 14),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    const Text('SMTP Server Configuration', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: smtpHostCtrl,
+                      decoration: const InputDecoration(labelText: 'SMTP Host (e.g., smtp.gmail.com)', prefixIcon: Icon(Icons.dns_outlined)),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: smtpPortCtrl,
+                            decoration: const InputDecoration(labelText: 'SMTP Port', prefixIcon: Icon(Icons.numbers)),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: smtpUserCtrl,
+                      decoration: const InputDecoration(labelText: 'SMTP Username / Email', prefixIcon: Icon(Icons.person_outline)),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: smtpPassCtrl,
+                      obscureText: true,
+                      decoration: const InputDecoration(labelText: 'SMTP Password (leave blank to keep current)', prefixIcon: Icon(Icons.lock_outline)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                icon: const Icon(Icons.save, size: 18),
+                label: const Text('Save Settings'),
+                onPressed: () async {
+                  final payload = <String, dynamic>{
+                    'admin_email': adminEmailCtrl.text.trim(),
+                    'smtp_host': smtpHostCtrl.text.trim(),
+                    'smtp_port': int.tryParse(smtpPortCtrl.text.trim()) ?? 587,
+                    'smtp_user': smtpUserCtrl.text.trim(),
+                  };
+                  if (smtpPassCtrl.text.isNotEmpty) {
+                    payload['smtp_password'] = smtpPassCtrl.text;
+                  }
+                  try {
+                    await _repository.updateEmailSettings(payload);
+                    if (ctx.mounted) Navigator.of(ctx).pop();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Email settings updated successfully!'), backgroundColor: AppColors.success),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed to update: $e'), backgroundColor: AppColors.error),
+                      );
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load email settings: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  // ─── PASSWORD RESET ACTION ────────────────────────────────────────────────
+
+  void _resetFacultyPassword(FacultyModel faculty) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Reset Password?', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text('Generate a new temporary password for ${faculty.name} and send it via email?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning, foregroundColor: Colors.white),
+            onPressed: () => Navigator.of(c).pop(true),
+            child: const Text('Reset Password'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      final result = await _repository.resetFacultyPassword(faculty.id);
+      if (mounted) {
+        _showCredentialDialog(
+          'Password Reset Complete',
+          result['faculty_name'] as String? ?? faculty.name,
+          result['faculty_email'] as String? ?? faculty.email,
+          result['temp_password'] as String? ?? '',
+          result['email_sent'] as bool? ?? false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Password reset failed: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  void _resendOnboarding(FacultyModel faculty) async {
+    try {
+      final result = await _repository.sendOnboardingEmail(faculty.id);
+      if (mounted) {
+        _showCredentialDialog(
+          'Onboarding Email Sent',
+          result['faculty_name'] as String? ?? faculty.name,
+          result['faculty_email'] as String? ?? faculty.email,
+          result['temp_password'] as String? ?? '',
+          result['email_sent'] as bool? ?? false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Onboarding failed: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
   // ─── FACULTY CRUD ACTIONS ──────────────────────────────────────────────────
 
   void _openAddFacultyDialog() {
@@ -223,7 +536,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         ? emailCtrl.text.trim()
                         : '${nameCtrl.text.trim().toLowerCase().replaceAll(' ', '.')}@enosis.edu.in';
                     try {
-                      await _repository.createFaculty(
+                      final result = await _repository.createFaculty(
                         name: nameCtrl.text.trim(),
                         email: email,
                         employeeId: empCtrl.text.trim(),
@@ -234,8 +547,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       if (ctx.mounted) Navigator.of(ctx).pop();
                       await _loadDashboardData();
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Faculty ${nameCtrl.text.trim()} added successfully!'), backgroundColor: AppColors.success),
+                        final tempPass = result['temp_password'] as String? ?? '';
+                        final emailSent = result['email_sent'] as bool? ?? false;
+                        _showCredentialDialog(
+                          'Faculty Created Successfully',
+                          nameCtrl.text.trim(),
+                          email,
+                          tempPass,
+                          emailSent,
                         );
                       }
                     } catch (e) {
@@ -623,6 +942,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.settings_outlined, color: Colors.white),
+            tooltip: 'Email & SMTP Settings',
+            onPressed: _openEmailSettingsDialog,
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             tooltip: 'Refresh Records from Database',
             onPressed: _loadDashboardData,
@@ -841,17 +1165,38 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           ),
                         ),
                         const SizedBox(width: 16),
-                        Row(
+                        Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
                           children: [
                             OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
-                              icon: const Icon(Icons.edit_outlined, size: 16),
-                              label: const Text('Edit'),
+                              style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6)),
+                              icon: const Icon(Icons.edit_outlined, size: 15),
+                              label: const Text('Edit', style: TextStyle(fontSize: 12)),
                               onPressed: () => _openEditFacultyDialog(faculty),
                             ),
-                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.warning,
+                                side: BorderSide(color: AppColors.warning.withOpacity(0.5)),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              ),
+                              icon: const Icon(Icons.lock_reset, size: 15),
+                              label: const Text('Reset Pwd', style: TextStyle(fontSize: 12)),
+                              onPressed: () => _resetFacultyPassword(faculty),
+                            ),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.secondary,
+                                side: BorderSide(color: AppColors.secondary.withOpacity(0.5)),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              ),
+                              icon: const Icon(Icons.send, size: 15),
+                              label: const Text('Onboard', style: TextStyle(fontSize: 12)),
+                              onPressed: () => _resendOnboarding(faculty),
+                            ),
                             IconButton(
-                              icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                              icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
                               tooltip: 'Deactivate Faculty',
                               onPressed: () async {
                                 final confirm = await showDialog<bool>(

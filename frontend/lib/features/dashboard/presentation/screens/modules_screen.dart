@@ -22,6 +22,8 @@ class ModuleItem {
     this.subtitle,
   });
 }
+
+class ModulesScreen extends StatelessWidget {
   const ModulesScreen({super.key});
 
   void _handleModuleTap(BuildContext context, String label) {

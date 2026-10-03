@@ -66,5 +66,18 @@ class Settings(BaseSettings):
     # the full timetable flow immediately without an admin-delegation step.
     OPEN_TIMETABLE_ACCESS: bool = True
 
+    # ─── SMTP Email Dispatch ───────────────────────────────────────────
+    # Used by admin faculty onboarding & password-reset flows.
+    # Leave blank to use console-only fallback (prints email to server log).
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True
+    # The "From:" address shown in outgoing emails. Editable at runtime
+    # via PUT /admin/settings/email so a production admin can change it
+    # without redeploying.
+    ADMIN_EMAIL: str = ""
+
 
 settings = Settings()

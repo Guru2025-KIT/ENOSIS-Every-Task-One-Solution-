@@ -597,3 +597,111 @@ def process_governance_action(db: Session, request_id: str, payload: GovernanceA
             status="APPROVED",
             submitted_at=achievement.created_at or datetime.now(timezone.utc),
         )
+
+
+# ─── 6. PASSWORD RESET & CREDENTIAL DISPATCH ────────────────────────────────
+
+def _generate_temp_password(length: int = 12) -> str:
+    """Generate a secure random password for faculty onboarding / reset."""
+    import secrets
+    import string
+    alphabet = string.ascii_letters + string.digits + "!@#$%"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+def reset_faculty_password(db: Session, user_id: str, send_email_flag: bool = True) -> dict:
+    """Admin-triggered password reset: generates a new temp password and
+    optionally sends it to the faculty member's email."""
+    from app.services.email_service import send_password_reset_email
+
+    user = db.query(User).filter(User.id == user_id, User.role == UserRole.FACULTY).first()
+    if not user:
+        raise KeyError("Faculty member not found.")
+
+    temp_password = _generate_temp_password()
+    user.hashed_password = hash_password(temp_password)
+    db.commit()
+
+    email_sent = False
+    if send_email_flag:
+        email_sent = send_password_reset_email(user.email, temp_password)
+
+    return {
+        "status": "password_reset",
+        "faculty_name": user.full_name,
+        "faculty_email": user.email,
+        "temp_password": temp_password,  # returned so admin can see it in the UI
+        "email_sent": email_sent,
+    }
+
+
+def send_onboarding_credentials(db: Session, user_id: str, password: str) -> dict:
+    """Send (or re-send) the onboarding welcome email with credentials."""
+    from app.services.email_service import send_onboarding_email
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise KeyError("User not found.")
+
+    email_sent = send_onboarding_email(user.full_name, user.email, password)
+    return {
+        "status": "onboarding_sent",
+        "faculty_name": user.full_name,
+        "email_sent": email_sent,
+    }
+
+
+def create_single_faculty_with_email(db: Session, payload) -> tuple:
+    """Create a faculty member AND send onboarding credentials.
+    Returns (FacultyOut, temp_password, email_sent)."""
+    from app.services.email_service import send_onboarding_email
+
+    temp_password = payload.password or _generate_temp_password()
+    # Override the payload password with the generated one
+    payload_dict = payload.model_dump()
+    payload_dict["password"] = temp_password
+
+    from app.schemas.user import FacultyCreate
+    updated_payload = FacultyCreate(**payload_dict)
+
+    faculty_out = create_single_faculty(db, updated_payload)
+    email_sent = send_onboarding_email(faculty_out.full_name, faculty_out.email, temp_password)
+
+    return faculty_out, temp_password, email_sent
+
+
+# ─── 7. ADMIN EMAIL SETTINGS (runtime-editable) ─────────────────────────────
+
+def get_email_settings() -> dict:
+    """Return current SMTP / admin email configuration (passwords masked)."""
+    from app.core.config import settings as s
+    return {
+        "admin_email": s.ADMIN_EMAIL,
+        "smtp_host": s.SMTP_HOST,
+        "smtp_port": s.SMTP_PORT,
+        "smtp_user": s.SMTP_USER,
+        "smtp_configured": bool(s.SMTP_HOST and s.SMTP_USER and s.SMTP_PASSWORD),
+    }
+
+
+def update_email_settings(payload) -> dict:
+    """Update SMTP / admin email settings at runtime (in-memory).
+    For persistence across restarts, these should also be written to .env,
+    but for now we just patch the settings singleton."""
+    from app.core.config import settings as s
+
+    if payload.admin_email is not None:
+        s.ADMIN_EMAIL = payload.admin_email
+    if payload.smtp_host is not None:
+        s.SMTP_HOST = payload.smtp_host
+    if payload.smtp_port is not None:
+        s.SMTP_PORT = payload.smtp_port
+    if payload.smtp_user is not None:
+        s.SMTP_USER = payload.smtp_user
+    if payload.smtp_password is not None:
+        s.SMTP_PASSWORD = payload.smtp_password
+    if payload.smtp_use_tls is not None:
+        s.SMTP_USE_TLS = payload.smtp_use_tls
+
+    return get_email_settings()
+

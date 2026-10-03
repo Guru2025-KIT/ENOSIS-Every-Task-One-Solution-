@@ -13,6 +13,9 @@ from app.schemas.admin import (
     SubjectReassignRequest,
 )
 from app.schemas.user import (
+    AdminEmailSettingsOut,
+    AdminEmailSettingsUpdate,
+    AdminResetPasswordRequest,
     FacultyCreate,
     FacultyImportPayload,
     FacultyOut,
@@ -47,16 +50,27 @@ def get_faculty_list(
     return admin_service.list_faculty(db, department=department)
 
 
-@router.post("/faculty", response_model=FacultyOut, status_code=status.HTTP_201_CREATED)
+@router.post("/faculty", status_code=status.HTTP_201_CREATED)
 def create_faculty(
     payload: FacultyCreate,
+    send_email: bool = True,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
     """
-    Manually creates a new faculty member in Central Master Data.
+    Creates a new faculty member and optionally sends onboarding credentials
+    via email. Returns the created faculty profile plus the temp password
+    so the admin can share it manually if email delivery fails.
     """
-    return admin_service.create_single_faculty(db, payload)
+    try:
+        faculty_out, temp_password, email_sent = admin_service.create_single_faculty_with_email(db, payload)
+        return {
+            "faculty": faculty_out.model_dump(),
+            "temp_password": temp_password,
+            "email_sent": email_sent,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.put("/faculty/{faculty_id}", response_model=FacultyOut)
@@ -83,6 +97,51 @@ def delete_faculty(
     """
     return admin_service.delete_single_faculty(db, faculty_id)
 
+
+# ─── Password Reset ─────────────────────────────────────────────────────────
+
+@router.post("/faculty/{faculty_id}/reset-password")
+def reset_faculty_password(
+    faculty_id: str,
+    payload: AdminResetPasswordRequest | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """
+    Admin-triggered password reset for a faculty member. Generates a new
+    temporary password, updates the database, and optionally sends it
+    via email. The temp password is always returned in the response so
+    the admin can copy it from the UI.
+    """
+    send_flag = payload.send_email if payload else True
+    try:
+        return admin_service.reset_faculty_password(db, faculty_id, send_flag)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/faculty/{faculty_id}/send-onboarding")
+def send_onboarding_email(
+    faculty_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """
+    Re-sends the onboarding welcome email. Generates a fresh temp password,
+    updates the database, and dispatches the welcome email.
+    """
+    try:
+        result = admin_service.reset_faculty_password(db, faculty_id, send_email_flag=True)
+        # Also send the onboarding-style email
+        from app.services.email_service import send_onboarding_email as _send
+        _send(result["faculty_name"], result["faculty_email"], result["temp_password"])
+        result["status"] = "onboarding_resent"
+        return result
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+# ─── Spreadsheet Upload & Import ─────────────────────────────────────────────
 
 @router.post("/faculty/validate-upload", response_model=FacultyValidationResult)
 async def validate_faculty_upload(
@@ -111,6 +170,8 @@ def import_faculty(
     """
     return admin_service.bulk_import_faculty(db, payload)
 
+
+# ─── Subject Allocations ─────────────────────────────────────────────────────
 
 @router.get("/allocations", response_model=list[SubjectAllocationOut])
 def get_subject_allocations(
@@ -149,6 +210,8 @@ def reassign_subject_allocation(
     return admin_service.reassign_subject_allocation(db, allocation_id, payload)
 
 
+# ─── Governance & Approval Requests ──────────────────────────────────────────
+
 @router.get("/governance-requests", response_model=list[GovernanceRequestOut])
 def get_governance_requests(
     status_filter: str | None = None,
@@ -172,3 +235,28 @@ def process_governance_action(
     Approves or rejects a governance/advancement request.
     """
     return admin_service.process_governance_action(db, request_id, payload)
+
+
+# ─── Admin Email Settings ────────────────────────────────────────────────────
+
+@router.get("/settings/email", response_model=AdminEmailSettingsOut)
+def get_email_settings(
+    _: User = Depends(require_admin),
+):
+    """
+    Returns current admin email / SMTP configuration (passwords masked).
+    """
+    return admin_service.get_email_settings()
+
+
+@router.put("/settings/email", response_model=AdminEmailSettingsOut)
+def update_email_settings(
+    payload: AdminEmailSettingsUpdate,
+    _: User = Depends(require_admin),
+):
+    """
+    Updates the admin email / SMTP settings at runtime. This is an in-memory
+    update — for persistence, update the .env file as well.
+    """
+    return admin_service.update_email_settings(payload)
+
