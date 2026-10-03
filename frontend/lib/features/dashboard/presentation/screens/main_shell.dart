@@ -14,6 +14,12 @@ import '../../../profile/presentation/screens/profile_screen.dart';
 import '../../../timetable/presentation/screens/generate_timetable_screen.dart';
 import '../../../timetable/presentation/screens/timetable_hub_screen.dart';
 import '../../../todo/presentation/screens/my_day_screen.dart';
+import 'package:provider/provider.dart';
+import '../providers/dashboard_provider.dart';
+import '../../../faculty_insights/presentation/providers/sli_pre_provider.dart';
+import '../../../faculty_insights/presentation/providers/sli_mid_provider.dart';
+import '../../../faculty_insights/presentation/providers/sli_end_provider.dart';
+import '../../../timetable/providers/timetable_provider.dart';
 import 'dashboard_screen.dart';
 
 /// The main navigation shell for ENOSIS.
@@ -48,6 +54,21 @@ class _MainShellState extends State<MainShell> {
   void _setTabIndex(int index) {
     if (index >= 0 && index < _tabs.length) {
       setState(() => _currentIndex = index);
+      if (index == 0) {
+        try {
+          context.read<DashboardProvider>().loadDashboard();
+        } catch (_) {}
+      } else if (index == 1) {
+        try {
+          context.read<TimetableProvider>().fetchPublishedTimetable();
+        } catch (_) {}
+      } else if (index == 5) {
+        try {
+          context.read<SliPreProvider>().fetchTeachingContexts();
+          context.read<SliMidProvider>().fetchTeachingContexts();
+          context.read<SliEndProvider>().fetchTeachingContexts();
+        } catch (_) {}
+      }
     }
   }
 

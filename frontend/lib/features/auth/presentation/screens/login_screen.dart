@@ -49,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Enter your PC\'s Wi-Fi IP and port (e.g. http://10.78.141.143:8000):',
+              'Enter your PC\'s Wi-Fi IP and port (e.g. http://10.199.8.143:8000):',
               style: TextStyle(fontSize: 13, color: Colors.grey),
             ),
             const SizedBox(height: 12),
@@ -57,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
               controller: controller,
               decoration: const InputDecoration(
                 labelText: 'Server URL',
-                hintText: 'http://10.78.141.143:8000',
+                hintText: 'http://10.199.8.143:8000',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.lan_outlined),
               ),

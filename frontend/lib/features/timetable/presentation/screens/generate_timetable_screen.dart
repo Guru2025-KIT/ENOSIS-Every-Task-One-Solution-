@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_html/html.dart' as html;
 import '../../../dashboard/presentation/providers/dashboard_provider.dart';
+import '../../../faculty_insights/presentation/providers/sli_end_provider.dart';
+import '../../../faculty_insights/presentation/providers/sli_mid_provider.dart';
+import '../../../faculty_insights/presentation/providers/sli_pre_provider.dart';
 import '../../providers/timetable_provider.dart';
 import 'timetable_display_screen.dart';
 
@@ -100,6 +103,12 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
         if (_selectedDivision == null || !provider.generatedTimetable.containsKey(_selectedDivision)) {
           _selectedDivision = provider.generatedTimetable.keys.first;
         }
+        try {
+          context.read<DashboardProvider>().loadDashboard();
+          context.read<SliPreProvider>().fetchTeachingContexts();
+          context.read<SliMidProvider>().fetchTeachingContexts();
+          context.read<SliEndProvider>().fetchTeachingContexts();
+        } catch (_) {}
       }
     } finally {
       _stepTimer?.cancel();
@@ -235,6 +244,9 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                           if (ok) {
                             try {
                               context.read<DashboardProvider>().loadDashboard();
+                              context.read<SliPreProvider>().fetchTeachingContexts();
+                              context.read<SliMidProvider>().fetchTeachingContexts();
+                              context.read<SliEndProvider>().fetchTeachingContexts();
                             } catch (_) {}
                           }
                           ScaffoldMessenger.of(context).showSnackBar(

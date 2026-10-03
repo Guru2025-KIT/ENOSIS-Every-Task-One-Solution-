@@ -241,18 +241,19 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
         elevation: 0,
         backgroundColor: const Color(0xFF0F172A),
         foregroundColor: Colors.white,
-        title: const Text('Time Structure & Daily Slots', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.white)),
+        title: const Text('Time Structure', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.white)),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 12.0),
+            padding: const EdgeInsets.only(right: 10.0),
             child: ElevatedButton.icon(
               icon: _isSaving
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Icon(Icons.check, size: 18),
-              label: const Text('Save Structure', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.check, size: 16),
+              label: const Text('Save', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFF97316),
                 foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               onPressed: _isSaving ? null : _saveConfig,

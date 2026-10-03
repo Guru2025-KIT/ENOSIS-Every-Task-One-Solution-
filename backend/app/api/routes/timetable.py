@@ -17,6 +17,7 @@ from app.models.academic import (
     Division, Subject, Room, RoomType, TeachingAssignment, FacultyUnavailability,
     InstitutionalCourse, SharedCourse
 )
+from app.models.sli import Department, Semester, AcademicClass, Enrollment, Student
 from app.models.timetable import TimetableEntry
 from app.models.user import User, UserRole
 from app.models.schedule_config import ScheduleConfig
@@ -958,6 +959,20 @@ def generate(
             else:
                 effective_working_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
+        # Persist faculty's chosen working days and schedule config to DB
+        config = db.query(ScheduleConfig).filter(ScheduleConfig.id == "default").first()
+        if not config:
+            config = ScheduleConfig(id="default")
+            db.add(config)
+        if effective_working_days:
+            config.working_days = len(effective_working_days)
+            config.day_names = effective_working_days
+        if payload.schedule_config and isinstance(payload.schedule_config, dict):
+            for k, v in payload.schedule_config.items():
+                if hasattr(config, k) and v is not None and k != "id":
+                    setattr(config, k, v)
+        db.commit()
+
         solver_result = solve_from_dicts(
             assignments_raw=payload.assignments,
             constraints_raw=payload.constraints,
@@ -968,6 +983,22 @@ def generate(
             lecture_duration_minutes=payload.lecture_duration_minutes,
             lab_duration_minutes=payload.lab_duration_minutes,
         )
+
+        # Auto-persist optimal/feasible timetable to database for immediate live reflection
+        if solver_result.status in ("OPTIMAL", "FEASIBLE") and solver_result.timetable:
+            try:
+                publish_timetable(
+                    payload={
+                        "timetable": solver_result.timetable,
+                        "working_days": effective_working_days,
+                        "schedule_config": payload.schedule_config,
+                        "assignments": payload.assignments,
+                    },
+                    db=db,
+                    current_user=current_user
+                )
+            except Exception as e:
+                print(f"[Auto-Publish Warning]: {e}")
 
         return TimetableGenerateResponseBody(
             status=solver_result.status,
@@ -1115,10 +1146,12 @@ def publish_timetable(
     current_user: User | None = Depends(get_optional_current_user),
 ):
     """
-    Publishes and permanently persists a solved timetable into MySQL (TimetableEntry and GenerationRun tables).
+    Publishes and permanently persists a solved timetable into MySQL/SQLite (TimetableEntry and GenerationRun tables).
+    Also stores all imported Divisions, AcademicClasses, Subjects, and TeachingAssignments from Excel.
     Once published:
     1. It shows on the public/faculty timetable views.
     2. It populates each faculty member's homepage Dashboard 'Today's Schedule' automatically.
+    3. It populates the SLI module for assessment creation and student roster.
     """
     timetable_data = payload.get("timetable", {})
     if not timetable_data:
@@ -1127,8 +1160,25 @@ def publish_timetable(
     batch_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
 
-    # 1. Config & Days mapping
+    # 1. Config & Days mapping — store faculty's chosen working days
     config = db.query(ScheduleConfig).filter(ScheduleConfig.id == "default").first()
+    if not config:
+        config = ScheduleConfig(id="default")
+        db.add(config)
+
+    working_days_input = payload.get("working_days")
+    if working_days_input and isinstance(working_days_input, list):
+        config.working_days = len(working_days_input)
+        config.day_names = working_days_input
+
+    schedule_cfg_input = payload.get("schedule_config")
+    if schedule_cfg_input and isinstance(schedule_cfg_input, dict):
+        for k, v in schedule_cfg_input.items():
+            if hasattr(config, k) and v is not None and k != "id":
+                setattr(config, k, v)
+    db.commit()
+    db.refresh(config)
+
     day_names = (
         config.day_names
         if config and config.day_names
@@ -1145,18 +1195,201 @@ def publish_timetable(
         "sun": 6, "sunday": 6,
     })
 
-    # Cache or create users/divisions/subjects/rooms
-    user_cache = {u.full_name.lower().strip(): u for u in db.query(User).all() if u.full_name}
+    # Helper to clean and normalize names
+    def _clean_title(name_str: str) -> str:
+        s = name_str.lower().strip()
+        for prefix in ["dr.", "dr ", "prof.", "prof ", "mr.", "mr ", "mrs.", "mrs ", "ms.", "ms ", "er.", "er "]:
+            if s.startswith(prefix):
+                s = s[len(prefix):].strip()
+        return s
+
+    dept = db.query(Department).first()
+    dept_id = dept.department_id if dept else 1
+
+    sem = db.query(Semester).filter(Semester.status == "ACTIVE").first()
+    if not sem:
+        sem = db.query(Semester).first()
+    if not sem:
+        sem = Semester(
+            semester_id=1,
+            semester_number=1,
+            academic_year="2026-27",
+            status="ACTIVE",
+        )
+        db.add(sem)
+        db.flush()
+
+    # Cache existing records
+    all_existing_users = db.query(User).all()
+    user_cache = {u.full_name.lower().strip(): u for u in all_existing_users if u.full_name}
     div_cache = {d.name.lower().strip(): d for d in db.query(Division).all() if d.name}
     div_code_cache = {d.division_code.lower().strip(): d for d in db.query(Division).all() if d.division_code}
     sub_cache = {s.name.lower().strip(): s for s in db.query(Subject).all() if s.name}
     room_cache = {r.name.lower().strip(): r for r in db.query(Room).all() if r.name}
 
-    # Clear old entries
+    # 2. Process and store imported assignments from Excel
+    assignments_input = payload.get("assignments", [])
+    if isinstance(assignments_input, list):
+        for a in assignments_input:
+            if not isinstance(a, dict):
+                continue
+            a_fac = str(a.get("facultyName") or a.get("faculty_name") or "").strip()
+            a_sub_name = str(a.get("subjectName") or a.get("subject_name") or "").strip()
+            a_sub_code = str(a.get("subjectCode") or a.get("subject_code") or "").strip()
+            a_class = str(a.get("className") or a.get("class_name") or "").strip()
+            a_type = str(a.get("type", "Theory")).lower()
+            a_hours = int(a.get("weeklyHours") or a.get("weekly_hours") or 3)
+            a_batch = str(a.get("batch") or "All")
+            a_joint = a.get("joint_group_id")
+
+            if not a_class or not a_sub_name:
+                continue
+
+            # Ensure Division
+            div = div_cache.get(a_class.lower()) or div_code_cache.get(a_class.lower())
+            if not div:
+                year = 1
+                c_low = a_class.lower()
+                if "sy" in c_low or "second" in c_low or "2" in c_low: year = 2
+                elif "ty" in c_low or "third" in c_low or "3" in c_low: year = 3
+                elif "btech" in c_low or "final" in c_low or "be" in c_low or "4" in c_low: year = 4
+                div_code = "A"
+                if "-" in a_class:
+                    cand = a_class.split("-")[-1].strip().upper()
+                    if cand in ("A", "B", "C", "D", "E"):
+                        div_code = cand
+                div = Division(id=str(uuid.uuid4()), name=a_class, division_code=div_code, year=year)
+                db.add(div)
+                db.flush()
+                div_cache[a_class.lower()] = div
+                div_code_cache[div.division_code.lower()] = div
+
+            # Ensure AcademicClass for SLI
+            ac = db.query(AcademicClass).filter(AcademicClass.division_id == div.id).first()
+            if not ac:
+                ac = db.query(AcademicClass).filter(
+                    AcademicClass.year_level == div.year,
+                    AcademicClass.division == div.division_code,
+                ).first()
+            if not ac:
+                ac = AcademicClass(
+                    department_id=dept_id,
+                    year_level=div.year,
+                    division=div.division_code,
+                    division_id=div.id,
+                    academic_year="2026-27",
+                )
+                db.add(ac)
+                db.flush()
+            elif not ac.division_id:
+                ac.division_id = div.id
+                db.flush()
+
+            # Ensure Subject
+            sub = sub_cache.get(a_sub_name.lower())
+            if not sub and a_sub_code:
+                sub = db.query(Subject).filter(Subject.code == a_sub_code).first()
+            if not sub:
+                sub = Subject(
+                    id=str(uuid.uuid4()),
+                    name=a_sub_name,
+                    code=a_sub_code or a_sub_name[:10].upper(),
+                    weekly_lectures=a_hours,
+                    is_lab=(a_type == "lab"),
+                    sli_department_id=dept_id,
+                )
+                db.add(sub)
+                db.flush()
+                sub_cache[a_sub_name.lower()] = sub
+            elif a_sub_code and sub.code != a_sub_code:
+                sub.code = a_sub_code
+                db.flush()
+
+            # Match Faculty User
+            fac_clean = _clean_title(a_fac)
+            fac_tokens = set(fac_clean.replace(".", " ").split())
+            fac_user = user_cache.get(a_fac.lower())
+            if not fac_user and fac_clean:
+                if current_user and current_user.full_name:
+                    cur_clean = _clean_title(current_user.full_name)
+                    cur_tokens = set(cur_clean.replace(".", " ").split())
+                    if fac_clean in cur_clean or cur_clean in fac_clean or (fac_tokens and fac_tokens.intersection(cur_tokens)):
+                        fac_user = current_user
+                if not fac_user:
+                    for u in all_existing_users:
+                        if not u.full_name:
+                            continue
+                        u_clean = _clean_title(u.full_name)
+                        u_tokens = set(u_clean.replace(".", " ").split())
+                        if fac_clean == u_clean or fac_clean in u_clean or u_clean in fac_clean or (fac_tokens and fac_tokens.intersection(u_tokens)):
+                            fac_user = u
+                            break
+            if not fac_user:
+                fac_email = f"{(fac_clean.replace(' ', '.').replace('..', '.') or 'faculty')}@enosis.edu"
+                fac_user = User(
+                    id=str(uuid.uuid4()),
+                    email=fac_email,
+                    full_name=a_fac or "Faculty Member",
+                    hashed_password="hashed_placeholder_pw",
+                    role=UserRole.FACULTY,
+                )
+                db.add(fac_user)
+                db.flush()
+                all_existing_users.append(fac_user)
+                user_cache[a_fac.lower()] = fac_user
+                if fac_user.full_name:
+                    user_cache[fac_user.full_name.lower()] = fac_user
+
+            # Upsert TeachingAssignment
+            ta = db.query(TeachingAssignment).filter(
+                TeachingAssignment.faculty_id == fac_user.id,
+                TeachingAssignment.subject_id == sub.id,
+                TeachingAssignment.division_id == div.id,
+            ).first()
+            if not ta:
+                ta = TeachingAssignment(
+                    id=str(uuid.uuid4()),
+                    faculty_id=fac_user.id,
+                    subject_id=sub.id,
+                    division_id=div.id,
+                    session_type=a_type,
+                    weekly_count=a_hours,
+                    batch_name=a_batch,
+                    joint_group_id=a_joint,
+                )
+                db.add(ta)
+                db.flush()
+
+            # Ensure current logged-in faculty also gets teaching assignment if matching or author
+            if current_user and current_user.id != fac_user.id:
+                cur_clean = _clean_title(current_user.full_name or "")
+                cur_tokens = set(cur_clean.replace(".", " ").split())
+                if fac_clean in cur_clean or cur_clean in fac_clean or (fac_tokens and fac_tokens.intersection(cur_tokens)):
+                    cur_ta = db.query(TeachingAssignment).filter(
+                        TeachingAssignment.faculty_id == current_user.id,
+                        TeachingAssignment.subject_id == sub.id,
+                        TeachingAssignment.division_id == div.id,
+                    ).first()
+                    if not cur_ta:
+                        cur_ta = TeachingAssignment(
+                            id=str(uuid.uuid4()),
+                            faculty_id=current_user.id,
+                            subject_id=sub.id,
+                            division_id=div.id,
+                            session_type=a_type,
+                            weekly_count=a_hours,
+                            batch_name=a_batch,
+                        )
+                        db.add(cur_ta)
+                        db.flush()
+
+    # Clear old timetable entries
     db.query(TimetableEntry).delete()
 
     total_saved = 0
+    enrolled_class_subjects: set[tuple[int, str, int]] = set()
 
+    # 3. Store timetable grid entries
     for class_name, slot_dict in timetable_data.items():
         if not isinstance(slot_dict, dict):
             continue
@@ -1164,10 +1397,16 @@ def publish_timetable(
         div = div_cache.get(c_clean.lower()) or div_code_cache.get(c_clean.lower())
         if not div:
             year = 1
-            if "sy" in c_clean.lower() or "second" in c_clean.lower(): year = 2
-            elif "ty" in c_clean.lower() or "third" in c_clean.lower(): year = 3
-            elif "btech" in c_clean.lower() or "final" in c_clean.lower() or "be" in c_clean.lower(): year = 4
-            div = Division(id=str(uuid.uuid4()), name=c_clean, division_code=c_clean, year=year)
+            c_low = c_clean.lower()
+            if "sy" in c_low or "second" in c_low or "2" in c_low: year = 2
+            elif "ty" in c_low or "third" in c_low or "3" in c_low: year = 3
+            elif "btech" in c_low or "final" in c_low or "be" in c_low or "4" in c_low: year = 4
+            div_code = "A"
+            if "-" in c_clean:
+                cand = c_clean.split("-")[-1].strip().upper()
+                if cand in ("A", "B", "C", "D", "E"):
+                    div_code = cand
+            div = Division(id=str(uuid.uuid4()), name=c_clean, division_code=div_code, year=year)
             db.add(div)
             db.flush()
             div_cache[c_clean.lower()] = div
@@ -1193,19 +1432,36 @@ def publish_timetable(
 
             sub = sub_cache.get(subj_name.lower())
             if not sub:
-                sub = Subject(id=str(uuid.uuid4()), name=subj_name, code=subj_name[:10])
+                sub = Subject(id=str(uuid.uuid4()), name=subj_name, code=subj_name[:10].upper(), sli_department_id=dept_id)
                 db.add(sub)
                 db.flush()
                 sub_cache[subj_name.lower()] = sub
 
+            fac_clean = _clean_title(fac_name)
+            fac_tokens = set(fac_clean.replace(".", " ").split())
+
             fac_user = user_cache.get(fac_name.lower())
-            if not fac_user and fac_name:
-                for u_name, u_obj in user_cache.items():
-                    if fac_name.lower() in u_name or u_name in fac_name.lower():
-                        fac_user = u_obj
-                        break
+            if not fac_user and fac_clean:
+                # Check current_user first
+                if current_user and current_user.full_name:
+                    cur_clean = _clean_title(current_user.full_name)
+                    cur_tokens = set(cur_clean.replace(".", " ").split())
+                    if fac_clean in cur_clean or cur_clean in fac_clean or (fac_tokens and fac_tokens.intersection(cur_tokens)):
+                        fac_user = current_user
+
+                # Search all existing users
+                if not fac_user:
+                    for u in all_existing_users:
+                        if not u.full_name:
+                            continue
+                        u_clean = _clean_title(u.full_name)
+                        u_tokens = set(u_clean.replace(".", " ").split())
+                        if fac_clean == u_clean or fac_clean in u_clean or u_clean in fac_clean or (fac_tokens and fac_tokens.intersection(u_tokens)):
+                            fac_user = u
+                            break
+
             if not fac_user:
-                fac_email = f"{(fac_name.lower().replace(' ', '.').replace('..', '.') or 'faculty')}@enosis.edu"
+                fac_email = f"{(fac_clean.replace(' ', '.').replace('..', '.') or 'faculty')}@enosis.edu"
                 fac_user = User(
                     id=str(uuid.uuid4()),
                     email=fac_email,
@@ -1215,9 +1471,17 @@ def publish_timetable(
                 )
                 db.add(fac_user)
                 db.flush()
+                all_existing_users.append(fac_user)
                 user_cache[fac_name.lower()] = fac_user
                 if fac_user.full_name:
                     user_cache[fac_user.full_name.lower()] = fac_user
+
+            # If current_user is creating timetable and matches fac_name, ensure fac_user is current_user
+            if current_user and current_user.full_name:
+                cur_clean = _clean_title(current_user.full_name)
+                cur_tokens = set(cur_clean.replace(".", " ").split())
+                if fac_clean in cur_clean or cur_clean in fac_clean or (fac_tokens and fac_tokens.intersection(cur_tokens)):
+                    fac_user = current_user
 
             room = room_cache.get(room_name.lower()) if room_name else None
             if not room:
@@ -1252,15 +1516,87 @@ def publish_timetable(
             db.add(entry)
             total_saved += 1
 
+            # Ensure TeachingAssignment exists for faculty
+            ta = db.query(TeachingAssignment).filter(
+                TeachingAssignment.faculty_id == fac_user.id,
+                TeachingAssignment.subject_id == sub.id,
+                TeachingAssignment.division_id == div.id,
+            ).first()
+            if not ta:
+                ta = TeachingAssignment(
+                    id=str(uuid.uuid4()),
+                    faculty_id=fac_user.id,
+                    subject_id=sub.id,
+                    division_id=div.id,
+                )
+                db.add(ta)
+
+            # Ensure AcademicClass exists for SLI
+            ac = db.query(AcademicClass).filter(AcademicClass.division_id == div.id).first()
+            if not ac:
+                ac = db.query(AcademicClass).filter(
+                    AcademicClass.year_level == div.year,
+                    AcademicClass.division == div.division_code,
+                ).first()
+            if not ac:
+                ac = AcademicClass(
+                    department_id=dept_id,
+                    year_level=div.year,
+                    division=div.division_code,
+                    division_id=div.id,
+                    academic_year="2026-27",
+                )
+                db.add(ac)
+                db.flush()
+            elif not ac.division_id:
+                ac.division_id = div.id
+                db.flush()
+
+            # Ensure student enrollments exist so SLI assessments and roster work
+            if ac and sem:
+                key = (ac.class_id, sub.id, sem.semester_id)
+                if key not in enrolled_class_subjects:
+                    enrolled_class_subjects.add(key)
+                    enr_count = db.query(Enrollment).filter(
+                        Enrollment.class_id == ac.class_id,
+                        Enrollment.subject_id == sub.id,
+                        Enrollment.semester_id == sem.semester_id,
+                    ).count()
+                    if enr_count == 0:
+                        students = db.query(Student).filter(
+                            Student.current_year == div.year,
+                            Student.division == div.division_code,
+                        ).all()
+
+                        for stu in students:
+                            existing_enr = db.query(Enrollment).filter(
+                                Enrollment.student_id == stu.student_id,
+                                Enrollment.class_id == ac.class_id,
+                                Enrollment.subject_id == sub.id,
+                                Enrollment.semester_id == sem.semester_id,
+                            ).first()
+                            if not existing_enr:
+                                enr = Enrollment(
+                                    student_id=stu.student_id,
+                                    class_id=ac.class_id,
+                                    subject_id=sub.id,
+                                    semester_id=sem.semester_id,
+                                )
+                                db.add(enr)
+                        if students:
+                            db.flush()
+
     db_run = GenerationRun(
         id=batch_id,
         status="OPTIMAL",
         solve_time_seconds=1.0,
         total_entries=total_saved,
         validation_passed=True,
+        generated_at=now,
         config_snapshot={
             "working_days": len(day_names),
-            "periods_per_day": 8,
+            "day_names": day_names,
+            "periods_per_day": config.periods_per_day if config else 8,
             "published_at": now.isoformat(),
         },
         conflicts=[],

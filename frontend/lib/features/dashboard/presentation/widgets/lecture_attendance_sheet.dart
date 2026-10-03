@@ -471,6 +471,13 @@ class _LectureAttendanceSheetState extends State<LectureAttendanceSheet> {
                           );
                           widget.onAttendanceSaved?.call();
                           Navigator.of(context).pop();
+                        } else if (!success && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(provider.errorMessage ?? 'Failed to save attendance. Please check network connection.'),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
                         }
                       },
                 style: ElevatedButton.styleFrom(

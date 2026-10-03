@@ -24,9 +24,10 @@ from app.models import (  # noqa: F401
 # reversible instead of just "drop and recreate the table."
 Base.metadata.create_all(bind=engine)
 
-from app.sync_and_seed import sync_database_schema, seed_admin_user
+from app.sync_and_seed import sync_database_schema, seed_admin_user, seed_all_faculty_profiles
 sync_database_schema()
 seed_admin_user()
+seed_all_faculty_profiles()
 
 app = FastAPI(title=settings.APP_NAME)
 

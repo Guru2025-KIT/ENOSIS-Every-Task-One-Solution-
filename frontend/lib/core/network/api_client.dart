@@ -36,6 +36,7 @@ class ApiClient {
       list.add('http://localhost:8000');
     } else if (defaultTargetPlatform == TargetPlatform.android) {
       // Physical device Wi-Fi IP (Current PC IP), followed by emulator loopback
+      list.add('http://10.199.8.143:8000');
       list.add('http://10.78.141.143:8000');
       list.add('http://10.0.2.2:8000');
       list.add('http://10.0.3.2:8000');

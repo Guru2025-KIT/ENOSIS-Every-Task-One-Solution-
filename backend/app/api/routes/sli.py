@@ -394,6 +394,24 @@ def delete_assessment(
     )
 
 
+@router.delete(
+    "/faculty/assessments-all/purge",
+    status_code=status.HTTP_200_OK,
+)
+@router.post(
+    "/faculty/assessments-all/purge",
+    status_code=status.HTTP_200_OK,
+)
+def purge_all_assessments(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Purges all assessments, student responses (PRE, MID, END), and manual teaching assignments.
+    """
+    return sli_assessment_service.purge_all_assessments(db=db)
+
+
 
 # ---------------------------------------------------------------------------
 # Question Bank Endpoints (Faculty)
