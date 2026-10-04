@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Response
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from app.schemas.copo import (
     CopoCalculationRequest,
     CopoAttainmentReport,
@@ -16,18 +16,57 @@ from app.schemas.copo import (
 )
 from app.services.copo_calculator import CopoCalculator
 
+from app.schemas.copo import CourseAttainmentConfig
+
 router = APIRouter(prefix="/api/copo", tags=["CO-PO Attainment"])
 
-@router.post("/calculate", response_model=CopoAttainmentReport)
-def calculate_copo_attainment(req: CopoCalculationRequest):
+@router.put("/config", response_model=CourseAttainmentConfig)
+@router.put("/courses/{course_id}/config", response_model=CourseAttainmentConfig)
+def update_course_config(config: CourseAttainmentConfig, course_id: Optional[str] = "UCSC0501"):
     """
-    Computes direct attainment, exit survey indirect attainment,
-    90/10 final attainment, target comparison, and correlation-weighted PO attainments.
+    Updates dynamic weights, rubric thresholds, question target percentage,
+    and survey scale for a course. Validates weight sums.
+    """
+    # Validate direct weights sum to 1.0 (if present)
+    if config.direct_assessment_weights:
+        total_direct = sum(config.direct_assessment_weights.values())
+        if abs(total_direct - 1.0) > 0.01 and abs(total_direct - 100.0) > 0.01:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Direct assessment weights must sum to 1.0 (100%). Current sum: {round(total_direct, 2)}"
+            )
+
+    # Validate overall CO weights sum to 1.0 (if present)
+    if config.overall_co_weights:
+        total_co = sum(config.overall_co_weights.values())
+        if abs(total_co - 1.0) > 0.01 and abs(total_co - 100.0) > 0.01:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Overall CO weights (direct + indirect) must sum to 1.0 (100%). Current sum: {round(total_co, 2)}"
+            )
+
+    return config
+
+@router.post("/calculate", response_model=CopoAttainmentReport)
+@router.post("/courses/{course_id}/calculate-attainment", response_model=CopoAttainmentReport)
+def calculate_copo_attainment(req: CopoCalculationRequest, course_id: Optional[str] = None):
+    """
+    Triggers real-time calculation pipeline using dynamic configuration rules.
     """
     try:
         return CopoCalculator.calculate_report(req)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Calculation error: {str(e)}")
+
+@router.get("/courses/{course_id}/report", response_model=CopoAttainmentReport)
+def get_course_attainment_report(course_id: str = "UCSC0501"):
+    """
+    Retrieves full audit trail JSON report for a course including student scores,
+    per-CO direct/indirect breakdowns, and correlation PO matrix.
+    """
+    req = get_sample_copo_dataset()
+    req.master.course_code = course_id
+    return CopoCalculator.calculate_report(req)
 
 @router.post("/parse-spreadsheet")
 async def parse_spreadsheet(file: UploadFile = File(...)):

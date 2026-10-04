@@ -17,7 +17,7 @@ from app.models.user import User, UserRole
 client = TestClient(app)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def intervention_test_data():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
@@ -208,7 +208,18 @@ def test_get_enrollment_interventions_history(intervention_test_data):
     token = intervention_test_data["faculty_token"]
     enrollment_id = intervention_test_data["enrollment_id"]
 
-    # Log a second intervention
+    client.post(
+        "/sli/interventions/log",
+        json={
+            "enrollment_id": enrollment_id,
+            "intervention_type": "1-on-1 Tutoring",
+            "implementation_date": "2026-09-12",
+            "notes": "Review session",
+            "status": "COMPLETED",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
     client.post(
         "/sli/interventions/log",
         json={
@@ -240,6 +251,18 @@ def test_student_analytics_includes_interventions(intervention_test_data):
     token = intervention_test_data["faculty_token"]
     enrollment_id = intervention_test_data["enrollment_id"]
 
+    client.post(
+        "/sli/interventions/log",
+        json={
+            "enrollment_id": enrollment_id,
+            "intervention_type": "1-on-1 Tutoring",
+            "implementation_date": "2026-09-12",
+            "notes": "Review session",
+            "status": "COMPLETED",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
     resp = client.get(
         f"/sli/faculty/analytics/student/{enrollment_id}",
         headers={"Authorization": f"Bearer {token}"},
@@ -249,5 +272,5 @@ def test_student_analytics_includes_interventions(intervention_test_data):
 
     assert "interventions" in data
     assert isinstance(data["interventions"], list)
-    assert len(data["interventions"]) >= 2
+    assert len(data["interventions"]) >= 1
     assert any(i["intervention_type"] == "1-on-1 Tutoring" for i in data["interventions"])

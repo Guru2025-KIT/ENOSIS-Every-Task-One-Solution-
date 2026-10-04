@@ -1,19 +1,43 @@
 from typing import Optional, Dict, List, Any
 from pydantic import BaseModel, Field
 
+class RubricLevelThreshold(BaseModel):
+    level: int
+    min_student_percentage: float
+
+class CourseAttainmentConfig(BaseModel):
+    question_target_percentage: float = Field(default=50.0, ge=0.0, le=100.0)
+    attainment_rubric_levels: List[RubricLevelThreshold] = Field(
+        default_factory=lambda: [
+            RubricLevelThreshold(level=3, min_student_percentage=70.0),
+            RubricLevelThreshold(level=2, min_student_percentage=60.0),
+            RubricLevelThreshold(level=1, min_student_percentage=50.0),
+            RubricLevelThreshold(level=0, min_student_percentage=0.0),
+        ]
+    )
+    direct_assessment_weights: Dict[str, float] = Field(
+        default_factory=lambda: {"INTERNAL": 0.20, "EXTERNAL": 0.80}
+    )
+    overall_co_weights: Dict[str, float] = Field(
+        default_factory=lambda: {"direct_weight": 0.80, "indirect_weight": 0.20}
+    )
+    indirect_scale_max: float = Field(default=3.0, gt=0.0)
+
 class CourseMaster(BaseModel):
-    course_code: str = "CS201"
-    course_name: str = "Data Structures & Algorithms"
-    department: str = "Computer Engineering"
-    semester: str = "Semester IV"
-    academic_year: str = "2025-2026"
+    course_code: str = "UCSC0501"
+    course_name: str = "Database Engineering"
+    department: str = "Computer Science & Engineering"
+    semester: str = "Semester V"
+    academic_year: str = "2024-2025"
     target_attainment: float = 2.25
-    direct_weight: float = 0.9
-    indirect_weight: float = 0.1
+    config: CourseAttainmentConfig = Field(default_factory=CourseAttainmentConfig)
+    # Legacy backward-compatible fields
+    direct_weight: float = 0.8
+    indirect_weight: float = 0.2
     passing_threshold_percent: float = 50.0
-    level3_cutoff_percent: float = 80.0
+    level3_cutoff_percent: float = 70.0
     level2_cutoff_percent: float = 60.0
-    level1_cutoff_percent: float = 40.0
+    level1_cutoff_percent: float = 50.0
 
 class CourseOutcome(BaseModel):
     co_id: str  # CO1, CO2, CO3, CO4, CO5
@@ -38,6 +62,7 @@ class IseExamData(BaseModel):
     exam_type: str  # "ISE1" or "ISE2"
     max_marks: float = 10.0
     mapped_co: str = "CO1"  # Default CO
+    mapped_cos: List[str] = []
     scores: List[StudentIseScore] = []
 
 class QuestionConfig(BaseModel):

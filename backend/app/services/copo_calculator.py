@@ -189,8 +189,8 @@ class CopoCalculator:
         co_breakdowns: List[CoAttainmentBreakdown] = []
 
         for co in co_list:
-            ise1_lvl = ise1_stats.attainment_level if req.ise1.mapped_co == co else None
-            ise2_lvl = ise2_stats.attainment_level if req.ise2.mapped_co == co else None
+            ise1_lvl = ise1_stats.attainment_level if (co in req.ise1.mapped_cos or req.ise1.mapped_co == co) else None
+            ise2_lvl = ise2_stats.attainment_level if (co in req.ise2.mapped_cos or req.ise2.mapped_co == co) else None
             mse_lvl = mse_co_levels.get(co)
             ese_lvl = ese_co_levels.get(co)
 

@@ -605,19 +605,22 @@ class IseExamData {
   final String examType; // "ISE1" or "ISE2"
   double maxMarks;
   String mappedCo;
+  List<String> mappedCos;
   List<StudentIseScore> scores;
 
   IseExamData({
     required this.examType,
     this.maxMarks = 10.0,
     required this.mappedCo,
+    List<String>? mappedCos,
     required this.scores,
-  });
+  }) : mappedCos = mappedCos ?? [mappedCo];
 
   Map<String, dynamic> toJson() => {
     'exam_type': examType,
     'max_marks': maxMarks,
     'mapped_co': mappedCo,
+    'mapped_cos': mappedCos,
     'scores': scores.map((s) => s.toJson()).toList(),
   };
 }
@@ -803,40 +806,52 @@ class CopoAttainmentReport {
 
 class AttainmentConfig {
   final double passingThresholdPercent; // e.g. 50.0% of max marks
-  final double directWeightPercent;     // e.g. 90.0% or 80.0%
-  final double indirectWeightPercent;   // e.g. 10.0% or 20.0%
-  final double level3CutoffPercent;     // e.g. 80.0%
+  final double directWeightPercent;     // e.g. 80.0%
+  final double indirectWeightPercent;   // e.g. 20.0%
+  final double internalWeightPercent;   // e.g. 20.0% (Internal Assessment Weight)
+  final double externalWeightPercent;   // e.g. 80.0% (External Exam Weight)
+  final double level3CutoffPercent;     // e.g. 70.0%
   final double level2CutoffPercent;     // e.g. 60.0%
-  final double level1CutoffPercent;     // e.g. 40.0%
-  final double targetBenchmark;         // e.g. 2.50 out of 3.0
+  final double level1CutoffPercent;     // e.g. 50.0%
+  final double targetBenchmark;         // e.g. 2.25 out of 3.0
+  final double indirectScaleMax;        // e.g. 3.0 or 5.0 scale
 
   const AttainmentConfig({
     this.passingThresholdPercent = 50.0,
-    this.directWeightPercent = 90.0,
-    this.indirectWeightPercent = 10.0,
-    this.level3CutoffPercent = 80.0,
+    this.directWeightPercent = 80.0,
+    this.indirectWeightPercent = 20.0,
+    this.internalWeightPercent = 20.0,
+    this.externalWeightPercent = 80.0,
+    this.level3CutoffPercent = 70.0,
     this.level2CutoffPercent = 60.0,
-    this.level1CutoffPercent = 40.0,
-    this.targetBenchmark = 2.50,
+    this.level1CutoffPercent = 50.0,
+    this.targetBenchmark = 2.25,
+    this.indirectScaleMax = 3.0,
   });
 
   AttainmentConfig copyWith({
     double? passingThresholdPercent,
     double? directWeightPercent,
     double? indirectWeightPercent,
+    double? internalWeightPercent,
+    double? externalWeightPercent,
     double? level3CutoffPercent,
     double? level2CutoffPercent,
     double? level1CutoffPercent,
     double? targetBenchmark,
+    double? indirectScaleMax,
   }) {
     return AttainmentConfig(
       passingThresholdPercent: passingThresholdPercent ?? this.passingThresholdPercent,
       directWeightPercent: directWeightPercent ?? this.directWeightPercent,
       indirectWeightPercent: indirectWeightPercent ?? this.indirectWeightPercent,
+      internalWeightPercent: internalWeightPercent ?? this.internalWeightPercent,
+      externalWeightPercent: externalWeightPercent ?? this.externalWeightPercent,
       level3CutoffPercent: level3CutoffPercent ?? this.level3CutoffPercent,
       level2CutoffPercent: level2CutoffPercent ?? this.level2CutoffPercent,
       level1CutoffPercent: level1CutoffPercent ?? this.level1CutoffPercent,
       targetBenchmark: targetBenchmark ?? this.targetBenchmark,
+      indirectScaleMax: indirectScaleMax ?? this.indirectScaleMax,
     );
   }
 }
@@ -864,13 +879,7 @@ class CopoRepository {
 
   // Active state
   CourseMaster master = CourseMaster();
-  List<List<int>> matrix = [
-    [3, 2, 2, 1, 2, 1, 0, 0, 1, 1, 0, 2, 3, 2], // CO1
-    [3, 3, 2, 2, 2, 1, 0, 0, 1, 1, 0, 2, 3, 2], // CO2
-    [3, 2, 3, 2, 2, 2, 1, 0, 1, 1, 1, 2, 2, 3], // CO3
-    [2, 2, 2, 3, 2, 1, 1, 0, 2, 1, 1, 2, 2, 2], // CO4
-    [3, 2, 2, 2, 3, 2, 1, 1, 2, 2, 1, 3, 3, 3], // CO5
-  ];
+  List<List<int>> matrix = List.generate(5, (_) => List.generate(14, (_) => 0));
 
   List<StudentRosterItem> roster = [];
   late IseExamData ise1;
@@ -886,6 +895,50 @@ class CopoRepository {
     'CO5: Formulate solutions for engineering challenges',
   ];
 
+  void syncRosterWithExams() {
+    if (roster.isEmpty) return;
+
+    // 1. Sync ISE 1
+    final ise1ScoresMap = {for (var s in ise1.scores) s.rollNo: s.marks};
+    ise1.scores = roster.map((student) {
+      return StudentIseScore(
+        rollNo: student.rollNo,
+        marks: ise1ScoresMap[student.rollNo] ?? 7.5,
+      );
+    }).toList();
+
+    // 2. Sync ISE 2
+    final ise2ScoresMap = {for (var s in ise2.scores) s.rollNo: s.marks};
+    ise2.scores = roster.map((student) {
+      return StudentIseScore(
+        rollNo: student.rollNo,
+        marks: ise2ScoresMap[student.rollNo] ?? 7.0,
+      );
+    }).toList();
+
+    // 3. Sync MSE
+    final mseScoresMap = {for (var s in mse.studentScores) s.rollNo: s.scores};
+    mse.studentScores = roster.map((student) {
+      final existingMap = mseScoresMap[student.rollNo] ?? {};
+      final qMap = <String, double?>{};
+      for (final q in mse.questions) {
+        qMap[q.questionId] = existingMap[q.questionId] ?? (q.maxMarks * 0.7);
+      }
+      return StudentQuestionScore(rollNo: student.rollNo, scores: qMap);
+    }).toList();
+
+    // 4. Sync ESE
+    final eseScoresMap = {for (var s in ese.studentScores) s.rollNo: s.scores};
+    ese.studentScores = roster.map((student) {
+      final existingMap = eseScoresMap[student.rollNo] ?? {};
+      final qMap = <String, double?>{};
+      for (final q in ese.questions) {
+        qMap[q.questionId] = existingMap[q.questionId] ?? (q.maxMarks * 0.7);
+      }
+      return StudentQuestionScore(rollNo: student.rollNo, scores: qMap);
+    }).toList();
+  }
+
   bool _initialized = false;
 
   void initializeWithSampleData() {
@@ -898,13 +951,7 @@ class CopoRepository {
       targetAttainment: 2.25,
     );
 
-    matrix = [
-      [3, 2, 2, 1, 2, 1, 0, 0, 1, 1, 0, 2, 3, 2], // CO1
-      [3, 3, 2, 2, 2, 1, 0, 0, 1, 1, 0, 2, 3, 2], // CO2
-      [3, 2, 3, 2, 2, 2, 1, 0, 1, 1, 1, 2, 2, 3], // CO3
-      [2, 2, 2, 3, 2, 1, 1, 0, 2, 1, 1, 2, 2, 2], // CO4
-      [3, 2, 2, 2, 3, 2, 1, 1, 2, 2, 1, 3, 3, 3], // CO5
-    ];
+    matrix = List.generate(5, (_) => List.generate(14, (_) => 0));
 
     const studentNames = [
       'Aarav Sharma', 'Aditi Patel', 'Ananya Iyer', 'Aryan Verma', 'Bhavya Deshmukh',
@@ -1000,9 +1047,70 @@ class CopoRepository {
     _initialized = true;
   }
 
+  void initializeEmptyData() {
+    master = CourseMaster(
+      courseCode: 'CS201',
+      courseName: 'Data Structures & Algorithms',
+      department: 'Computer Engineering',
+      semester: 'Semester IV',
+      academicYear: '2025-2026',
+      targetAttainment: 2.25,
+    );
+
+    matrix = List.generate(5, (_) => List.generate(14, (_) => 0));
+    roster = [];
+
+    ise1 = IseExamData(
+      examType: 'ISE1',
+      maxMarks: 10.0,
+      mappedCo: 'CO1',
+      scores: [],
+    );
+
+    ise2 = IseExamData(
+      examType: 'ISE2',
+      maxMarks: 10.0,
+      mappedCo: 'CO2',
+      scores: [],
+    );
+
+    mse = QuestionWiseExamData(
+      examType: 'MSE',
+      questions: [
+        QuestionConfig(questionId: 'Q1', coTag: 'CO1', maxMarks: 5.0),
+        QuestionConfig(questionId: 'Q2', coTag: 'CO2', maxMarks: 5.0),
+        QuestionConfig(questionId: 'Q3', coTag: 'CO3', maxMarks: 10.0),
+        QuestionConfig(questionId: 'Q4', coTag: 'CO4', maxMarks: 10.0),
+      ],
+      studentScores: [],
+    );
+
+    ese = QuestionWiseExamData(
+      examType: 'ESE',
+      questions: [
+        QuestionConfig(questionId: 'Q1', coTag: 'CO1', maxMarks: 10.0),
+        QuestionConfig(questionId: 'Q2', coTag: 'CO2', maxMarks: 10.0),
+        QuestionConfig(questionId: 'Q3', coTag: 'CO3', maxMarks: 10.0),
+        QuestionConfig(questionId: 'Q4', coTag: 'CO4', maxMarks: 10.0),
+        QuestionConfig(questionId: 'Q5', coTag: 'CO5', maxMarks: 20.0),
+      ],
+      studentScores: [],
+    );
+
+    surveyResponses = [
+      ExitSurveyCoData(coId: 'CO1', stronglyAgree3: 0, agree2: 0, neutral1: 0),
+      ExitSurveyCoData(coId: 'CO2', stronglyAgree3: 0, agree2: 0, neutral1: 0),
+      ExitSurveyCoData(coId: 'CO3', stronglyAgree3: 0, agree2: 0, neutral1: 0),
+      ExitSurveyCoData(coId: 'CO4', stronglyAgree3: 0, agree2: 0, neutral1: 0),
+      ExitSurveyCoData(coId: 'CO5', stronglyAgree3: 0, agree2: 0, neutral1: 0),
+    ];
+
+    _initialized = true;
+  }
+
   void ensureInitialized() {
     if (!_initialized) {
-      initializeWithSampleData();
+      initializeEmptyData();
     }
   }
 
@@ -1149,8 +1257,8 @@ class CopoRepository {
     final indirectWeight = currentCfg.indirectWeightPercent / 100.0;
 
     for (final co in cos) {
-      final ise1Lvl = ise1.mappedCo == co ? ise1Stats.attainmentLevel : null;
-      final ise2Lvl = ise2.mappedCo == co ? ise2Stats.attainmentLevel : null;
+      final ise1Lvl = (ise1.mappedCos.contains(co) || ise1.mappedCo == co) ? ise1Stats.attainmentLevel : null;
+      final ise2Lvl = (ise2.mappedCos.contains(co) || ise2.mappedCo == co) ? ise2Stats.attainmentLevel : null;
       final mseLvl = mseCoLevels[co];
       final eseLvl = eseCoLevels[co];
 

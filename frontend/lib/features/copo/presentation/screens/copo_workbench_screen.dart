@@ -90,14 +90,16 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
   static const List<String> _stepNames = [
     'Master Matrix',
     'Roll Call',
-    'In-Sem (ISE)',
-    'Question-wise (MSE/ESE)',
+    'ISE 1',
+    'MSE',
+    'ISE 2',
+    'ESE',
     'Exit Survey',
     'Attainment Report',
   ];
 
   void _goToTab(int index) {
-    if (index >= 0 && index < 6) {
+    if (index >= 0 && index < 8) {
       _tabController.animateTo(index);
     }
   }
@@ -106,7 +108,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
   void initState() {
     super.initState();
     _hasStartedMapping = widget.initialMappingStarted;
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 8, vsync: this);
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -1111,21 +1113,32 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           ),
           const SizedBox(width: 6),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white.withOpacity(0.65),
-          indicatorColor: AppColors.secondary,
-          indicatorWeight: 3.5,
-          tabs: const [
-            Tab(icon: Icon(Icons.grid_on, size: 18), text: '1. Master & Matrix'),
-            Tab(icon: Icon(Icons.people_outline, size: 18), text: '2. Roll Call'),
-            Tab(icon: Icon(Icons.assignment_outlined, size: 18), text: '3. In-Sem (ISE)'),
-            Tab(icon: Icon(Icons.quiz_outlined, size: 18), text: '4. Question-wise (MSE/ESE)'),
-            Tab(icon: Icon(Icons.rate_review_outlined, size: 18), text: '5. Exit Survey'),
-            Tab(icon: Icon(Icons.analytics_outlined, size: 18), text: '6. Attainment Report'),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(102),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildCategorizedCategoryBar(),
+              TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white.withOpacity(0.65),
+                indicatorColor: AppColors.secondary,
+                indicatorWeight: 3.5,
+                tabs: const [
+                  Tab(icon: Icon(Icons.grid_on, size: 16), text: '1. Master & Matrix'),
+                  Tab(icon: Icon(Icons.people_outline, size: 16), text: '2. Roll Call'),
+                  Tab(icon: Icon(Icons.assignment_outlined, size: 16), text: '3. ISE 1'),
+                  Tab(icon: Icon(Icons.quiz_outlined, size: 16), text: '4. MSE'),
+                  Tab(icon: Icon(Icons.assignment_turned_in_outlined, size: 16), text: '5. ISE 2'),
+                  Tab(icon: Icon(Icons.school_outlined, size: 16), text: '6. ESE'),
+                  Tab(icon: Icon(Icons.rate_review_outlined, size: 16), text: '7. Exit Survey'),
+                  Tab(icon: Icon(Icons.analytics_outlined, size: 16), text: '8. Attainment Report'),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: _buildWorkbenchBottomBar(report),
@@ -1141,10 +1154,128 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 children: [
                   _buildMasterMatrixTab(),
                   _buildRollCallTab(),
-                  _buildIseTab(report),
-                  _buildQuestionWiseTab(report),
+                  _buildSingleIseTab(report, _repository.ise1, report.ise1Stats, 2),
+                  _buildSingleQuestionWiseTab(report, _repository.mse, report.mseQuestionStats, report.mseCoLevels, 3),
+                  _buildSingleIseTab(report, _repository.ise2, report.ise2Stats, 4),
+                  _buildSingleQuestionWiseTab(report, _repository.ese, report.eseQuestionStats, report.eseCoLevels, 5),
                   _buildExitSurveyTab(report),
                   _buildAttainmentReportTab(report),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategorizedCategoryBar() {
+    final currentIdx = _tabController.index;
+    final activeCat = currentIdx <= 5 ? 0 : (currentIdx == 6 ? 1 : 2);
+
+    return Container(
+      width: double.infinity,
+      color: AppColors.primary,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth > 750;
+          return Row(
+            children: [
+              Expanded(
+                child: _buildCategoryChip(
+                  title: '1. Direct Attainment',
+                  subtitle: isWide ? 'ISE1, MSE, ISE2, ESE & Matrix' : '6 Assessment Steps',
+                  icon: Icons.assignment_turned_in_rounded,
+                  isSelected: activeCat == 0,
+                  onTap: () {
+                    if (currentIdx > 5) _goToTab(0);
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildCategoryChip(
+                  title: '2. Indirect Attainment',
+                  subtitle: isWide ? 'Course Exit Survey Feedback' : 'Student Survey',
+                  icon: Icons.rate_review_rounded,
+                  isSelected: activeCat == 1,
+                  onTap: () => _goToTab(6),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildCategoryChip(
+                  title: '3. Overall Summary',
+                  subtitle: isWide ? 'Direct + Indirect Attainment & Reports' : 'Final Audit & Chart',
+                  icon: Icons.analytics_rounded,
+                  isSelected: activeCat == 2,
+                  onTap: () => _goToTab(7),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildCategoryChip({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.white.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? AppColors.secondary : Colors.white24,
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: isSelected
+              ? [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 4, offset: const Offset(0, 2))]
+              : null,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: isSelected ? AppColors.primary : Colors.white70,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                      color: isSelected ? AppColors.primary : Colors.white,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: isSelected ? AppColors.textSecondary : Colors.white70,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),
@@ -1366,35 +1497,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Course details card
-          Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Course Master Configuration', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 20,
-                    runSpacing: 12,
-                    children: [
-                      _buildConfigChip('Course Code', _repository.master.courseCode),
-                      _buildConfigChip('Course Name', _repository.master.courseName),
-                      _buildConfigChip('Semester', _repository.master.semester),
-                      _buildConfigChip('Target Level', '${_repository.master.targetAttainment} / 3.00'),
-                      _buildConfigChip('CO Count', '5 Course Outcomes (CO1-CO5)'),
-                      _buildConfigChip('PO/PSO Columns', '14 (PO1-PO12, PSO1-PSO2)'),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // 5x14 Matrix Card
+          // ─── STEP 1A: COURSE OUTCOME DEFINITIONS (CO1 - CO5) ────────────────
           Card(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
@@ -1408,9 +1511,103 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('CO-PO & PSO Correlation Matrix (Master)', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+                          Text(
+                            'Step 1: Course Outcomes (CO1 - CO5) Entry',
+                            style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold),
+                          ),
                           const SizedBox(height: 4),
-                          Text('Tap any cell to cycle values: 0 (-) → 1 (Low) → 2 (Medium) → 3 (High)', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                          Text(
+                            'Enter or customize the 5 Course Outcome (CO) statements for ${_repository.master.courseCode}',
+                            style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Course Outcomes (CO1 - CO5) confirmed! Now complete the CO-PO correlation matrix below.'),
+                              backgroundColor: AppColors.success,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.check_circle_outline, size: 16),
+                        label: const Text('Save CO Definitions'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(height: 1),
+                  const SizedBox(height: 16),
+                  for (int i = 0; i < 5; i++) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 60,
+                            height: 42,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'CO${i + 1}',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextFormField(
+                              initialValue: i < _repository.coDescriptions.length
+                                  ? _repository.coDescriptions[i]
+                                  : 'CO${i + 1}: Outcome statement...',
+                              decoration: InputDecoration(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                hintText: 'Enter CO${i + 1} statement...',
+                              ),
+                              onChanged: (val) {
+                                while (_repository.coDescriptions.length <= i) {
+                                  _repository.coDescriptions.add('');
+                                }
+                                _repository.coDescriptions[i] = val;
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // ─── STEP 1B: CO-PO & PSO CORRELATION MATRIX ──────────────────────
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Step 2: CO-PO & PSO Correlation Matrix', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text('Click any cell to cycle values: 0 (-) → 1 (Low) → 2 (Medium) → 3 (High)', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
                         ],
                       ),
                       OutlinedButton.icon(
@@ -1577,54 +1774,169 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Student Roll Call (${roster.length} enrolled)', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text('Master student list joined with all exam evaluations via Roll No.', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
-                ],
-              ),
-              Row(
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: _isProcessing ? null : _handleUploadRoster,
-                    icon: const Icon(Icons.upload_file, size: 16),
-                    label: const Text('Upload Roll Call (Excel/CSV)'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
+          // Header & Upload Controls Card
           Card(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: roster.length,
-              separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.divider),
-              itemBuilder: (context, index) {
-                final student = roster[index];
-                return ListTile(
-                  dense: true,
-                  leading: CircleAvatar(
-                    radius: 14,
-                    backgroundColor: AppColors.primarySoft,
-                    child: Text('${student.srNo}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Step 2: Student Master Roll Call (${roster.length} Enrolled)', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text('Upload or manage the master list of all students with Sr. No., Roll No., Name, and PRN.', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                        ],
+                      ),
+                      Wrap(
+                        spacing: 10,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              CopoSpreadsheetService.downloadCsvFile(
+                                '${_repository.master.courseCode}_RollCall_Sample_Template.csv',
+                                CopoSpreadsheetService.getRollCallCsvTemplate(),
+                              );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Downloaded Roll Call Sample Template (.csv)'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.download_for_offline_outlined, size: 16),
+                            label: const Text('Download Excel Template'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              side: const BorderSide(color: AppColors.primary),
+                            ),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: _isProcessing ? null : _handleUploadRoster,
+                            icon: const Icon(Icons.upload_file, size: 16),
+                            label: const Text('Upload Student List (Excel/CSV)'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  title: Text(student.name, style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
-                  subtitle: Text('Roll No: ${student.rollNo} ${student.prn != null ? "· PRN: ${student.prn}" : ""}'),
-                );
-              },
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // Master Student Data Table Card
+          // Master Student Data Table Card
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Enrolled Student Roster', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+                      Chip(
+                        label: Text('Total Students: ${roster.length}'),
+                        backgroundColor: AppColors.primarySoft,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (roster.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceVariant.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: const BoxDecoration(
+                              color: AppColors.primarySoft,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.people_outline_rounded, size: 36, color: AppColors.primary),
+                          ),
+                          const SizedBox(height: 14),
+                          const Text(
+                            'No Student Roll Call Loaded Yet',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Upload your Excel/CSV file with Sr. No., Roll No., Student Name, and PRN to populate the roster across all assessment modules.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+                          ),
+                          const SizedBox(height: 18),
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 12,
+                            runSpacing: 10,
+                            children: [
+                              ElevatedButton.icon(
+                                onPressed: _isProcessing ? null : _handleUploadRoster,
+                                icon: const Icon(Icons.upload_file, size: 16),
+                                label: const Text('Upload Student List (Excel/CSV)'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                                ),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: _resetToSample,
+                                icon: const Icon(Icons.playlist_add_check, size: 16),
+                                label: const Text('Load Demo Dataset'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        headingRowColor: MaterialStateProperty.all(AppColors.primarySoft),
+                        columns: const [
+                          DataColumn(label: Text('Sr. No.', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Roll No.', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('Student Name', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(label: Text('PRN', style: TextStyle(fontWeight: FontWeight.bold))),
+                        ],
+                        rows: roster.map((student) {
+                          return DataRow(cells: [
+                            DataCell(Text('${student.srNo}', style: const TextStyle(fontWeight: FontWeight.bold))),
+                            DataCell(Text(student.rollNo, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.primary))),
+                            DataCell(Text(student.name, style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold))),
+                            DataCell(Text(student.prn ?? '24250${student.rollNo}', style: const TextStyle(fontFamily: 'monospace'))),
+                          ]);
+                        }).toList(),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -1635,62 +1947,97 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     );
   }
 
-  // ─── TAB 3: IN-SEM EVALUATIONS (ISE 1 & 2) ──────────────────────────────────
-
-  Widget _buildIseTab(CopoAttainmentReport report) {
-    final exam = _selectedIseIndex == 0 ? _repository.ise1 : _repository.ise2;
-    final stats = _selectedIseIndex == 0 ? report.ise1Stats : report.ise2Stats;
-
+  // ─── TAB 3 & TAB 5: SINGLE IN-SEM EVALUATIONS (ISE 1 & ISE 2) ────────────────
+  Widget _buildSingleIseTab(CopoAttainmentReport report, IseExamData exam, ExamKpiStats stats, int stepIndex) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Sub-tabs ISE1 vs ISE2
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              SegmentedButton<int>(
-                segments: const [
-                  ButtonSegment(value: 0, label: Text('ISE 1 (In-Sem 1)'), icon: Icon(Icons.looks_one)),
-                  ButtonSegment(value: 1, label: Text('ISE 2 (In-Sem 2)'), icon: Icon(Icons.looks_two)),
-                ],
-                selected: {_selectedIseIndex},
-                onSelectionChanged: (val) => setState(() => _selectedIseIndex = val.first),
+              Text(
+                '${exam.examType} (In-Semester Evaluation)',
+                style: AppTypography.h2.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary),
               ),
-              ElevatedButton.icon(
-                onPressed: _isProcessing ? null : () => _handleUploadIseMarks(exam),
-                icon: const Icon(Icons.cloud_upload_outlined, size: 16),
-                label: Text('Upload ${exam.examType} Marks (Excel/CSV)'),
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary, foregroundColor: Colors.white),
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      final content = CopoSpreadsheetService.getIseCsvTemplate(exam.examType, _repository.roster);
+                      final filename = '${_repository.master.courseCode}_${exam.examType}_Sample_Template.csv';
+                      CopoSpreadsheetService.downloadCsvFile(filename, content);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Downloaded $filename with ${_repository.roster.length} students'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.download_for_offline_outlined, size: 16),
+                    label: Text('Download ${exam.examType} Template'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.secondary,
+                      side: const BorderSide(color: AppColors.secondary),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: _isProcessing ? null : () => _handleUploadIseMarks(exam),
+                    icon: const Icon(Icons.cloud_upload_outlined, size: 16),
+                    label: Text('Upload ${exam.examType} Marks (Excel/CSV)'),
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary, foregroundColor: Colors.white),
+                  ),
+                ],
               ),
             ],
           ),
           const SizedBox(height: 16),
 
-          // Config row
+          // Config row for Mapped COs
           Card(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const Text('Mapped Course Outcome: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text('Mapped COs for ${exam.examType}: ', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   const SizedBox(width: 8),
-                  DropdownButton<String>(
-                    value: exam.mappedCo,
-                    underline: const SizedBox(),
-                    items: ['CO1', 'CO2', 'CO3', 'CO4', 'CO5'].map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)))).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() {
-                          exam.mappedCo = val;
-                          _recalculate();
-                        });
-                      }
-                    },
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: ['CO1', 'CO2', 'CO3', 'CO4', 'CO5'].map((co) {
+                        final isSelected = exam.mappedCos.contains(co) || exam.mappedCo == co;
+                        return FilterChip(
+                          selected: isSelected,
+                          showCheckmark: isSelected,
+                          label: Text(co, style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? Colors.white : AppColors.textPrimary, fontSize: 12)),
+                          selectedColor: AppColors.secondary,
+                          checkmarkColor: Colors.white,
+                          onSelected: (selected) {
+                            setState(() {
+                              if (selected) {
+                                if (!exam.mappedCos.contains(co)) {
+                                  exam.mappedCos.add(co);
+                                }
+                              } else {
+                                if (exam.mappedCos.length > 1) {
+                                  exam.mappedCos.remove(co);
+                                }
+                              }
+                              if (exam.mappedCos.isNotEmpty) {
+                                exam.mappedCo = exam.mappedCos.first;
+                              }
+                              _recalculate();
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
                   ),
-                  const Spacer(),
                   Text('Max Marks: ${exam.maxMarks.toStringAsFixed(0)}', style: AppTypography.captionBold),
                 ],
               ),
@@ -1725,7 +2072,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     children: [
                       Expanded(
                         child: Text(
-                          'Student Marks (Out of 10) — Manual Entry or Extracted',
+                          'Student Marks (Out of 10) — Pre-filled from Roll Call',
                           style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1754,10 +2101,12 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                         children: [
                           SizedBox(width: 80, child: Text(scoreItem.rollNo, style: const TextStyle(fontWeight: FontWeight.bold))),
                           Expanded(child: Text(student.name, style: AppTypography.bodyMedium)),
+                          SizedBox(width: 130, child: Text(student.prn ?? 'PRN-${student.rollNo}', style: const TextStyle(fontSize: 11, fontFamily: 'monospace'))),
                           SizedBox(
                             width: 100,
                             height: 36,
                             child: TextFormField(
+                              key: ValueKey('${exam.examType}_${scoreItem.rollNo}'),
                               initialValue: scoreItem.marks?.toString() ?? '',
                               keyboardType: const TextInputType.numberWithOptions(decimal: true),
                               decoration: const InputDecoration(
@@ -1779,8 +2128,77 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               ],
             ),
           ),
+          const SizedBox(height: 18),
+
+          // Calculation & Attainment Summary Table (Spreadsheet Replica)
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Attainment Calculation Summary for ${exam.examType}', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      headingRowColor: MaterialStateProperty.all(AppColors.primarySoft),
+                      columns: [
+                        const DataColumn(label: Text('Calculation Metric', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text(exam.examType, style: const TextStyle(fontWeight: FontWeight.bold))),
+                      ],
+                      rows: [
+                        DataRow(cells: [
+                          const DataCell(Text('No. of Students attempted', style: TextStyle(fontWeight: FontWeight.w600))),
+                          DataCell(Text('${stats.attemptedCount}')),
+                        ]),
+                        DataRow(cells: [
+                          const DataCell(Text('% of Students attempted', style: TextStyle(fontWeight: FontWeight.w600))),
+                          DataCell(Text('${stats.attemptedPercentage}%')),
+                        ]),
+                        DataRow(cells: [
+                          const DataCell(Text('No. of Students score > 50%', style: TextStyle(fontWeight: FontWeight.w600))),
+                          DataCell(Text('${stats.scoring50Count}')),
+                        ]),
+                        DataRow(cells: [
+                          const DataCell(Text('% of attainment (>50%)', style: TextStyle(fontWeight: FontWeight.w600))),
+                          DataCell(Text('${stats.scoring50Percentage}%', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
+                        ]),
+                        DataRow(cells: [
+                          const DataCell(Text('No. of Students score > 55%', style: TextStyle(fontWeight: FontWeight.w600))),
+                          DataCell(Text('${stats.scoring55Count}')),
+                        ]),
+                        DataRow(cells: [
+                          const DataCell(Text('% of attainment (>55%)', style: TextStyle(fontWeight: FontWeight.w600))),
+                          DataCell(Text('${stats.scoring55Percentage}%')),
+                        ]),
+                        DataRow(cells: [
+                          const DataCell(Text('Attainment Level', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: _getLevelBadgeColor(stats.attainmentLevel),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text('Level ${stats.attainmentLevel}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                            ),
+                          ),
+                        ]),
+                        DataRow(cells: [
+                          const DataCell(Text('Applicable COs', style: TextStyle(fontWeight: FontWeight.w600))),
+                          DataCell(Text(exam.mappedCos.isNotEmpty ? exam.mappedCos.join(', ') : exam.mappedCo)),
+                        ]),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 24),
-          _buildTabStepFooter(2),
+          _buildTabStepFooter(stepIndex),
           const SizedBox(height: 30),
         ],
       ),
@@ -1823,64 +2241,160 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     );
   }
 
-  // ─── TAB 4: QUESTION-WISE EXAMS (MSE / ESE) ─────────────────────────────────
-
-  Widget _buildQuestionWiseTab(CopoAttainmentReport report) {
-    final exam = _selectedExamIndex == 0 ? _repository.mse : _repository.ese;
-    final questionStats = _selectedExamIndex == 0 ? report.mseQuestionStats : report.eseQuestionStats;
-    final coLevels = _selectedExamIndex == 0 ? report.mseCoLevels : report.eseCoLevels;
-
+  // ─── TAB 4 & TAB 6: QUESTION-WISE EXAMS (MSE & ESE) ─────────────────────────
+  Widget _buildSingleQuestionWiseTab(
+    CopoAttainmentReport report,
+    QuestionWiseExamData exam,
+    List<QuestionStatItem> questionStats,
+    Map<String, double> coLevels,
+    int stepIndex,
+  ) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Segmented selector: MSE vs ESE
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              SegmentedButton<int>(
-                segments: const [
-                  ButtonSegment(value: 0, label: Text('Mid Sem Exam (MSE)'), icon: Icon(Icons.assignment)),
-                  ButtonSegment(value: 1, label: Text('End Sem Exam (ESE)'), icon: Icon(Icons.school)),
-                ],
-                selected: {_selectedExamIndex},
-                onSelectionChanged: (val) => setState(() => _selectedExamIndex = val.first),
+              Text(
+                '${exam.examType} (Question-Wise Assessment)',
+                style: AppTypography.h2.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary),
               ),
-              ElevatedButton.icon(
-                onPressed: _isProcessing ? null : () => _handleUploadQuestionWiseMarks(exam),
-                icon: const Icon(Icons.upload_file, size: 16),
-                label: Text('Upload ${exam.examType} Sheet (Excel/CSV)'),
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      final content = CopoSpreadsheetService.getQuestionWiseCsvTemplate(
+                        exam.questions,
+                        _repository.roster,
+                      );
+                      final filename = '${_repository.master.courseCode}_${exam.examType}_Custom_Template.csv';
+                      CopoSpreadsheetService.downloadCsvFile(filename, content);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Downloaded dynamic $filename with ${exam.questions.length} questions & ${_repository.roster.length} students'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.download_for_offline_outlined, size: 16),
+                    label: Text('Download ${exam.examType} Template'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: _isProcessing ? null : () => _handleUploadQuestionWiseMarks(exam),
+                    icon: const Icon(Icons.upload_file, size: 16),
+                    label: Text('Upload ${exam.examType} Sheet (Excel/CSV)'),
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                  ),
+                ],
               ),
             ],
           ),
           const SizedBox(height: 16),
 
-          // Per-CO aggregated level summary
+          // ─── QUESTION CONFIGURATION (ADD / TYPE CUSTOM QUESTIONS & ASSIGN COs + MARKS) ──────
           Card(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Aggregated Attainment Levels per CO for ${exam.examType}', style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Step 1: ${exam.examType} Questions & CO Mapping', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text('Type custom Questions, select Max Marks (1–10) & assign Course Outcome (CO)', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                        ],
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: () => _showAddQuestionDialog(exam),
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Add / Type Question'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.secondary,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
                   Wrap(
                     spacing: 12,
-                    runSpacing: 8,
-                    children: coLevels.entries.map((e) {
+                    runSpacing: 10,
+                    children: exam.questions.map((q) {
                       return Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: AppColors.primarySoft,
+                          color: AppColors.surfaceVariant,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                          border: Border.all(color: AppColors.border),
                         ),
-                        child: Text(
-                          '${e.key}: Level ${e.value.toStringAsFixed(2)} / 3',
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(q.questionId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary)),
+                            const SizedBox(width: 8),
+                            DropdownButton<String>(
+                              value: q.coTag,
+                              isDense: true,
+                              underline: const SizedBox(),
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 12),
+                              items: ['CO1', 'CO2', 'CO3', 'CO4', 'CO5'].map((co) => DropdownMenuItem(value: co, child: Text(co))).toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() {
+                                    q.coTag = val;
+                                    _recalculate();
+                                  });
+                                }
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            DropdownButton<double>(
+                              value: q.maxMarks,
+                              isDense: true,
+                              underline: const SizedBox(),
+                              style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                              items: () {
+                                final markList = <double>{
+                                  ...List.generate(20, (i) => (i + 1).toDouble()),
+                                  q.maxMarks,
+                                }.toList()..sort();
+                                return markList.map((m) => DropdownMenuItem(value: m, child: Text('${m.toInt()}M'))).toList();
+                              }(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() {
+                                    q.maxMarks = val;
+                                    _recalculate();
+                                  });
+                                }
+                              },
+                            ),
+                            if (exam.questions.length > 1) ...[
+                              const SizedBox(width: 4),
+                              InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    exam.questions.remove(q);
+                                    _recalculate();
+                                  });
+                                },
+                                child: const Icon(Icons.close, size: 16, color: AppColors.error),
+                              ),
+                            ],
+                          ],
                         ),
                       );
                     }).toList(),
@@ -1889,47 +2403,109 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
 
-          // Question statistics grid
+          // ─── QUESTION-WISE ATTAINMENT CALCULATION TABLE (SPREADSHEET REPLICA) ───
           Card(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Question-wise Performance & 40/60/80 Attainment Level', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
+                  Text('Step 2: Question-wise Attainment Metrics Table', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text('Calculates Attempted %, Scoring >50%, Scoring >55%, and Attainment Level per Question', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                  const SizedBox(height: 16),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
                       headingRowColor: MaterialStateProperty.all(AppColors.primarySoft),
                       columns: const [
-                        DataColumn(label: Text('Question')),
-                        DataColumn(label: Text('CO Tag')),
+                        DataColumn(label: Text('Metric / Question')),
                         DataColumn(label: Text('Max Marks')),
-                        DataColumn(label: Text('Attempted %')),
-                        DataColumn(label: Text('>= 50% (% Attainment)')),
-                        DataColumn(label: Text('>= 55%')),
+                        DataColumn(label: Text('Attempted Count')),
+                        DataColumn(label: Text('% Attempted')),
+                        DataColumn(label: Text('Count > 50%')),
+                        DataColumn(label: Text('% Attainment (>50%)')),
+                        DataColumn(label: Text('Count > 55%')),
+                        DataColumn(label: Text('% Attainment (>55%)')),
                         DataColumn(label: Text('Attainment Level')),
+                        DataColumn(label: Text('Assigned CO')),
                       ],
                       rows: questionStats.map((q) {
                         return DataRow(cells: [
-                          DataCell(Text(q.questionId, style: const TextStyle(fontWeight: FontWeight.bold))),
-                          DataCell(Chip(label: Text(q.coTag, style: const TextStyle(fontSize: 11)), visualDensity: VisualDensity.compact)),
-                          DataCell(Text('${q.maxMarks}')),
+                          DataCell(Text(q.questionId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                          DataCell(Text('${q.maxMarks.toInt()} M')),
+                          DataCell(Text('${q.stats.attemptedCount}')),
                           DataCell(Text('${q.stats.attemptedPercentage}%')),
-                          DataCell(Text('${q.stats.scoring50Percentage}%')),
+                          DataCell(Text('${q.stats.scoring50Count}')),
+                          DataCell(Text('${q.stats.scoring50Percentage}%', style: const TextStyle(fontWeight: FontWeight.w600))),
+                          DataCell(Text('${q.stats.scoring55Count}')),
                           DataCell(Text('${q.stats.scoring55Percentage}%')),
                           DataCell(
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
                                 color: _getLevelBadgeColor(q.stats.attainmentLevel),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: Text('Level ${q.stats.attainmentLevel}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                              child: Text('Level ${q.stats.attainmentLevel}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11.5)),
+                            ),
+                          ),
+                          DataCell(Chip(label: Text(q.coTag, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)), backgroundColor: AppColors.primarySoft)),
+                        ]);
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // ─── CO AVERAGE ATTAINMENT SUMMARY TABLE (SPREADSHEET REPLICA) ───
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Step 3: CO Average Attainment Summary for ${exam.examType}', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+                      Chip(
+                        label: const Text('Threshold Rules: 81-100% = L3 | 61-80% = L2 | 40-60% = L1'),
+                        backgroundColor: AppColors.primarySoft,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      headingRowColor: MaterialStateProperty.all(AppColors.surfaceVariant),
+                      columns: const [
+                        DataColumn(label: Text('Course Outcome (CO)', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('Question Attainments', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('Average Attainment Level', style: TextStyle(fontWeight: FontWeight.bold))),
+                      ],
+                      rows: ['CO1', 'CO2', 'CO3', 'CO4', 'CO5'].map((co) {
+                        final qLevels = questionStats.where((q) => q.coTag == co).map((q) => '${q.questionId}: Level ${q.stats.attainmentLevel}').join(', ');
+                        final avgVal = coLevels[co] ?? 0.0;
+                        return DataRow(cells: [
+                          DataCell(Text(co, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary))),
+                          DataCell(Text(qLevels.isNotEmpty ? qLevels : 'No Questions assigned')),
+                          DataCell(
+                            Text(
+                              avgVal.toStringAsFixed(2),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: avgVal >= 2.0 ? AppColors.success : (avgVal >= 1.0 ? AppColors.warning : AppColors.error),
+                              ),
                             ),
                           ),
                         ]);
@@ -1941,10 +2517,89 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             ),
           ),
           const SizedBox(height: 24),
-          _buildTabStepFooter(3),
+          _buildTabStepFooter(stepIndex),
           const SizedBox(height: 30),
         ],
       ),
+    );
+  }
+
+  void _showAddQuestionDialog(QuestionWiseExamData exam) {
+    final idController = TextEditingController(text: 'Q${exam.questions.length + 1}');
+    String selectedCo = 'CO1';
+    double maxMarks = 5.0;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDlgState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              title: Text('Add / Type Custom Question (${exam.examType})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: idController,
+                    decoration: const InputDecoration(
+                      labelText: 'Question Name / Number (e.g. Q1, Q2a, Q3)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: selectedCo,
+                          decoration: const InputDecoration(labelText: 'Mapped CO', border: OutlineInputBorder()),
+                          items: ['CO1', 'CO2', 'CO3', 'CO4', 'CO5'].map((co) => DropdownMenuItem(value: co, child: Text(co))).toList(),
+                          onChanged: (val) {
+                            if (val != null) setDlgState(() => selectedCo = val);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButtonFormField<double>(
+                          value: maxMarks,
+                          decoration: const InputDecoration(labelText: 'Max Marks (1-20)', border: OutlineInputBorder()),
+                          items: List.generate(20, (i) => (i + 1).toDouble()).map((m) => DropdownMenuItem(value: m, child: Text('${m.toInt()} Marks'))).toList(),
+                          onChanged: (val) {
+                            if (val != null) setDlgState(() => maxMarks = val);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary, foregroundColor: Colors.white),
+                  onPressed: () {
+                    final qId = idController.text.trim();
+                    if (qId.isNotEmpty) {
+                      setState(() {
+                        exam.questions.add(QuestionConfig(
+                          questionId: qId,
+                          maxMarks: maxMarks,
+                          coTag: selectedCo,
+                        ));
+                        _recalculate();
+                      });
+                    }
+                    Navigator.of(ctx).pop();
+                  },
+                  child: const Text('Add Question'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -2038,7 +2693,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               ),
             ),
           const SizedBox(height: 24),
-          _buildTabStepFooter(4),
+          _buildTabStepFooter(6),
           const SizedBox(height: 30),
         ],
       ),
@@ -2203,7 +2858,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           ),
           const SizedBox(height: 20),
 
-          // Section 1: Final CO Attainment Table
+          const SizedBox(height: 20),
+
+          // ─── 1. DIRECT CO ATTAINMENT TABLE (EXCEL REPLICA SCREENSHOT 1) ───
           Card(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
@@ -2211,62 +2868,39 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Final Course Outcome (CO) Attainment', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
-                      Chip(
-                        label: Text('Target: ${_repository.config.targetBenchmark.toStringAsFixed(2)} / 3.00'),
-                        backgroundColor: AppColors.primarySoft,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Formula: Final CO Attainment = (${(_repository.config.directWeightPercent / 100).toStringAsFixed(2)} × Direct) + (${(_repository.config.indirectWeightPercent / 100).toStringAsFixed(2)} × Indirect Survey)',
-                    style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
-                  ),
+                  Text('Direct CO Attainment Table', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary)),
+                  const SizedBox(height: 4),
+                  Text('Average of all in-semester & end-semester direct assessments for each Course Outcome', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
                   const SizedBox(height: 16),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
                       headingRowColor: MaterialStateProperty.all(AppColors.primarySoft),
                       columns: const [
-                        DataColumn(label: Text('CO')),
-                        DataColumn(label: Text('ISE 1')),
-                        DataColumn(label: Text('ISE 2')),
-                        DataColumn(label: Text('MSE Level')),
-                        DataColumn(label: Text('ESE Level')),
-                        DataColumn(label: Text('Direct (Avg)')),
-                        DataColumn(label: Text('Indirect (Survey)')),
-                        DataColumn(label: Text('Final Attainment')),
-                        DataColumn(label: Text('Status')),
+                        DataColumn(label: Text('Course Outcome', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('ISE 1 Attainment', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('ISE 2 Attainment', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('MSE Attainment', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('ESE Attainment', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('Direct Attainment', style: TextStyle(fontWeight: FontWeight.bold))),
                       ],
                       rows: report.coAttainments.map((co) {
                         return DataRow(cells: [
-                          DataCell(Text(co.coId, style: const TextStyle(fontWeight: FontWeight.bold))),
-                          DataCell(Text(co.ise1Level != null ? 'L${co.ise1Level}' : '-')),
-                          DataCell(Text(co.ise2Level != null ? 'L${co.ise2Level}' : '-')),
-                          DataCell(Text(co.mseLevel != null ? '${co.mseLevel}' : '-')),
-                          DataCell(Text(co.eseLevel != null ? '${co.eseLevel}' : '-')),
-                          DataCell(Text(co.directAttainment.toStringAsFixed(2), style: const TextStyle(fontWeight: FontWeight.w600))),
-                          DataCell(Text(co.indirectAttainment.toStringAsFixed(2))),
-                          DataCell(Text(co.finalAttainment.toStringAsFixed(2), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.primary))),
+                          DataCell(Text(co.coId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary))),
+                          DataCell(Text(co.ise1Level != null ? co.ise1Level!.toDouble().toStringAsFixed(2) : '-')),
+                          DataCell(Text(co.ise2Level != null ? co.ise2Level!.toDouble().toStringAsFixed(2) : '-')),
+                          DataCell(Text(co.mseLevel != null ? co.mseLevel!.toStringAsFixed(2) : '-')),
+                          DataCell(Text(co.eseLevel != null ? co.eseLevel!.toStringAsFixed(2) : '-')),
                           DataCell(
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: co.isAttained ? AppColors.success.withOpacity(0.15) : AppColors.error.withOpacity(0.15),
+                                color: AppColors.primarySoft,
                                 borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: co.isAttained ? AppColors.success : AppColors.error),
                               ),
                               child: Text(
-                                co.remark,
-                                style: TextStyle(
-                                  color: co.isAttained ? AppColors.success : AppColors.error,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 11,
-                                ),
+                                co.directAttainment.toStringAsFixed(2),
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.primary),
                               ),
                             ),
                           ),
@@ -2280,7 +2914,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           ),
           const SizedBox(height: 20),
 
-          // Section 2: Program Outcomes (PO1-PO12, PSO1-PSO2) Attainment
+          // ─── 2. FINAL CO ATTAINMENT TABLE (EXCEL REPLICA SCREENSHOT 2) ───
           Card(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
@@ -2288,50 +2922,194 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Program Outcomes (PO & PSO) Attainment', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Final Course Outcome (CO) Attainment', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary)),
+                      Tooltip(
+                        message: 'Click to edit Target Benchmark & Calculation Rules',
+                        child: ActionChip(
+                          avatar: const Icon(Icons.edit_rounded, size: 14, color: AppColors.primary),
+                          label: Text('Target: ${_repository.config.targetBenchmark.toStringAsFixed(2)} / 3.00'),
+                          backgroundColor: AppColors.primarySoft,
+                          onPressed: _showAttainmentConfigDialog,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'Formula: Course Attainment = ${(_repository.config.directWeightPercent / 100).toStringAsFixed(1)} * Direct Attainment + ${(_repository.config.indirectWeightPercent / 100).toStringAsFixed(1)} * Indirect Attainment',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary, fontFamily: 'monospace'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      headingRowColor: MaterialStateProperty.all(AppColors.surfaceVariant),
+                      columns: const [
+                        DataColumn(label: Text('Course Outcome', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('Direct Attainment', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('Indirect Attainment', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('Course Outcome Attainment', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('Target', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('Remark', style: TextStyle(fontWeight: FontWeight.bold))),
+                      ],
+                      rows: report.coAttainments.map((co) {
+                        return DataRow(cells: [
+                          DataCell(Text(co.coId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                          DataCell(Text(co.directAttainment.toStringAsFixed(2))),
+                          DataCell(Text(co.indirectAttainment.toStringAsFixed(2))),
+                          DataCell(Text(co.finalAttainment.toStringAsFixed(2), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.primary))),
+                          DataCell(Text(_repository.config.targetBenchmark.toStringAsFixed(2))),
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: co.isAttained ? AppColors.success.withOpacity(0.15) : AppColors.error.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: co.isAttained ? AppColors.success : AppColors.error),
+                              ),
+                              child: Text(
+                                co.remark,
+                                style: TextStyle(
+                                  color: co.isAttained ? AppColors.success : AppColors.error,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ]);
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(height: 1),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Text('Course Outcome Attainment = ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      Text(
+                        '${report.overallCourseAttainment.toStringAsFixed(2)}  ',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: report.overallCourseAttainment >= _repository.config.targetBenchmark ? AppColors.success : AppColors.error,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: report.overallCourseAttainment >= _repository.config.targetBenchmark
+                              ? AppColors.success.withOpacity(0.15)
+                              : AppColors.error.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: report.overallCourseAttainment >= _repository.config.targetBenchmark ? AppColors.success : AppColors.error),
+                        ),
+                        child: Text(
+                          report.overallCourseAttainment >= _repository.config.targetBenchmark ? 'Attained ✓' : 'Not Attained ✗',
+                          style: TextStyle(
+                            color: report.overallCourseAttainment >= _repository.config.targetBenchmark ? AppColors.success : AppColors.error,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      const Text('Target Attainment = ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      Text(
+                        _repository.config.targetBenchmark.toStringAsFixed(2),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.primary),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // ─── 3. FINAL CO ATTAINMENT BAR CHART VISUALIZATION (EXCEL REPLICA SCREENSHOT 3) ───
+          _buildCoAttainmentBarChart(report),
+          const SizedBox(height: 20),
+
+          // ─── 4. COMPLETE CO-PO, PSO MATRIX & PO ATTAINMENT TABLE (EXCEL REPLICA SCREENSHOT 4) ───
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${_repository.master.courseName} CO-PO,PSO Matrix (${_repository.master.academicYear})',
+                    style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary),
+                  ),
                   const SizedBox(height: 4),
-                  Text('Weighted average calculated via Master Correlation Matrix: PO = ∑(Corr_i × Final_CO_i) / ∑(Corr_i)', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
-                  const SizedBox(height: 18),
+                  Text('Correlation Matrix weights (1: Low, 2: Medium, 3: High) mapped to Program Outcomes', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                  const SizedBox(height: 16),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
                       headingRowColor: MaterialStateProperty.all(AppColors.primarySoft),
-                      columns: const [
-                        DataColumn(label: Text('Outcome')),
-                        DataColumn(label: Text('Correlation Sum')),
-                        DataColumn(label: Text('Average Corr')),
-                        DataColumn(label: Text('PO Attainment')),
-                        DataColumn(label: Text('Visual')),
+                      columns: [
+                        const DataColumn(label: Text('COs', style: TextStyle(fontWeight: FontWeight.bold))),
+                        ...poColumnNames.map((po) => DataColumn(label: Text(po, style: const TextStyle(fontWeight: FontWeight.bold)))),
                       ],
-                      rows: report.poAttainments.map((po) {
-                        final val = po.poAttainment;
-                        return DataRow(cells: [
-                          DataCell(Text(po.poName, style: TextStyle(fontWeight: FontWeight.bold, color: po.poName.startsWith('PSO') ? AppColors.secondary : AppColors.primary))),
-                          DataCell(Text('${po.correlationSum}')),
-                          DataCell(Text(po.averageCorrelation.toStringAsFixed(1))),
-                          DataCell(
+                      rows: [
+                        ...List.generate(5, (rIdx) {
+                          return DataRow(cells: [
+                            DataCell(Text('CO${rIdx + 1}', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
+                            ...List.generate(14, (cIdx) {
+                              final val = _repository.matrix[rIdx][cIdx];
+                              return DataCell(Text(val > 0 ? '$val' : ''));
+                            }),
+                          ]);
+                        }),
+                        DataRow(
+                          color: MaterialStateProperty.all(const Color(0xFFF1F5F9)),
+                          cells: [
+                            const DataCell(Text('Sum', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary))),
+                            ...report.poAttainments.map((po) => DataCell(Text('${po.correlationSum}', style: const TextStyle(fontWeight: FontWeight.bold)))),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  Text('Direct Attainment - PO', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold, color: AppColors.secondary)),
+                  const SizedBox(height: 4),
+                  Text('PO Attainment = ∑(Correlation_i × Final_CO_i) / Sum(Correlation_i)', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                  const SizedBox(height: 12),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      headingRowColor: MaterialStateProperty.all(AppColors.surfaceVariant),
+                      columns: poColumnNames.map((po) => DataColumn(label: Text(po, style: const TextStyle(fontWeight: FontWeight.bold)))).toList(),
+                      rows: [
+                        DataRow(cells: report.poAttainments.map((po) {
+                          final val = po.poAttainment;
+                          return DataCell(
                             Text(
-                              val != null ? val.toStringAsFixed(2) : 'Not Mapped',
+                              val != null ? val.toStringAsFixed(2) : '',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: val != null ? (val >= report.master.targetAttainment ? AppColors.success : AppColors.textPrimary) : AppColors.textTertiary,
+                                fontSize: 13,
+                                color: val != null ? (val >= report.master.targetAttainment ? AppColors.success : AppColors.textPrimary) : Colors.transparent,
                               ),
                             ),
-                          ),
-                          DataCell(
-                            val != null
-                                ? SizedBox(
-                                    width: 120,
-                                    child: LinearProgressIndicator(
-                                      value: (val / 3.0).clamp(0.0, 1.0),
-                                      backgroundColor: AppColors.border,
-                                      color: val >= report.master.targetAttainment ? AppColors.success : AppColors.secondary,
-                                    ),
-                                  )
-                                : const SizedBox(),
-                          ),
-                        ]);
-                      }).toList(),
+                          );
+                        }).toList()),
+                      ],
                     ),
                   ),
                 ],
@@ -2339,9 +3117,196 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             ),
           ),
           const SizedBox(height: 24),
-          _buildTabStepFooter(5),
+          _buildTabStepFooter(7),
           const SizedBox(height: 30),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCoAttainmentBarChart(CopoAttainmentReport report) {
+    const double maxVal = 3.00;
+    final target = report.master.targetAttainment;
+
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Final CO Attainment Visualization', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary)),
+                Tooltip(
+                  message: 'Click to edit Target Benchmark',
+                  child: ActionChip(
+                    avatar: const Icon(Icons.edit_rounded, size: 14, color: AppColors.primary),
+                    label: Text('Target: ${target.toStringAsFixed(2)}'),
+                    backgroundColor: AppColors.primarySoft,
+                    onPressed: _showAttainmentConfigDialog,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              height: 230,
+              child: Row(
+                children: [
+                  // Y-Axis labels aligned with chart grid
+                  const Padding(
+                    padding: EdgeInsets.only(top: 28, bottom: 24),
+                    child: SizedBox(
+                      width: 36,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('3.00', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                          Text('2.50', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                          Text('2.00', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                          Text('1.50', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                          Text('1.00', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                          Text('0.50', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                          Text('0.00', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Chart area
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        const xAxisH = 24.0;
+                        const topPadding = 28.0;
+                        final plotAreaH = constraints.maxHeight - xAxisH;
+                        final usableBarH = plotAreaH - topPadding;
+                        final targetRatio = (target / maxVal).clamp(0.0, 1.0);
+                        final targetTop = topPadding + (usableBarH * (1.0 - targetRatio));
+
+                        return Stack(
+                          children: [
+                            // Gridlines aligned with Y-axis
+                            Positioned(
+                              top: topPadding,
+                              bottom: xAxisH,
+                              left: 0,
+                              right: 0,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: List.generate(7, (_) => const Divider(height: 1, color: AppColors.border)),
+                              ),
+                            ),
+                            // Target Benchmark Line
+                            Positioned(
+                              top: targetTop - 8,
+                              left: 0,
+                              right: 0,
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Container(
+                                      height: 2,
+                                      color: Colors.redAccent.withOpacity(0.8),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.redAccent,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      'Target ${target.toStringAsFixed(2)}',
+                                      style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Bars for CO1..CO5
+                            Positioned(
+                              top: 0,
+                              bottom: xAxisH,
+                              left: 0,
+                              right: 0,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: report.coAttainments.map((co) {
+                                  final val = co.finalAttainment;
+                                  final valRatio = (val / maxVal).clamp(0.0, 1.0);
+                                  final barH = (valRatio * usableBarH).clamp(4.0, usableBarH);
+                                  final barColor = val >= target
+                                      ? const Color(0xFF2563EB)
+                                      : (val >= 2.0 ? const Color(0xFFD97706) : const Color(0xFFDC2626));
+
+                                  return Column(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      // Value badge above bar
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: barColor,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          val.toStringAsFixed(2),
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      AnimatedContainer(
+                                        duration: const Duration(milliseconds: 400),
+                                        width: 44,
+                                        height: barH,
+                                        decoration: BoxDecoration(
+                                          color: barColor,
+                                          borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                                          boxShadow: [
+                                            BoxShadow(color: barColor.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 2)),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                            // X-Axis labels
+                            Positioned(
+                              bottom: 0,
+                              height: xAxisH,
+                              left: 0,
+                              right: 0,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                children: report.coAttainments.map((co) {
+                                  return SizedBox(
+                                    width: 44,
+                                    child: Text(
+                                      co.coId,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2349,125 +3314,36 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
   // ─── GUIDED STEP FOOTER & BOTTOM NAVIGATION ────────────────────────────────
 
   Widget _buildTabStepFooter(int currentStep) {
-    final hasPrev = currentStep > 0;
-    final hasNext = currentStep < 5;
-    final prevTitle = hasPrev ? _stepNames[currentStep - 1] : null;
-    final nextTitle = hasNext ? _stepNames[currentStep + 1] : null;
-
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.secondary.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  'STAGE ${currentStep + 1} OF 6',
-                  style: const TextStyle(
-                    color: AppColors.secondary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 10.5,
-                    letterSpacing: 0.5,
-                  ),
-                ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.secondary.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              'STAGE ${currentStep + 1} OF 8',
+              style: const TextStyle(
+                color: AppColors.secondary,
+                fontWeight: FontWeight.w800,
+                fontSize: 10.5,
+                letterSpacing: 0.5,
               ),
-              const SizedBox(width: 10),
-              Text(
-                'Current Step: ${_stepNames[currentStep]}',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.textPrimary),
-              ),
-            ],
+            ),
           ),
-          const SizedBox(height: 14),
-          const Divider(height: 1),
-          const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              if (hasPrev)
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textPrimary,
-                    side: const BorderSide(color: AppColors.border, width: 1.5),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
-                  label: Text('Back: $prevTitle', style: const TextStyle(fontWeight: FontWeight.w600)),
-                  onPressed: () => _goToTab(currentStep - 1),
-                )
-              else
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textSecondary,
-                    side: const BorderSide(color: AppColors.border),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  icon: const Icon(Icons.school_outlined, size: 18),
-                  label: const Text('Change Course / Year'),
-                  onPressed: () => setState(() => _hasStartedMapping = false),
-                ),
-              if (hasNext)
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.secondary,
-                    foregroundColor: Colors.white,
-                    elevation: 2,
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-                  label: Text(
-                    'Next: $nextTitle ➔',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, letterSpacing: 0.2),
-                  ),
-                  onPressed: () => _goToTab(currentStep + 1),
-                )
-              else
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.success,
-                    foregroundColor: Colors.white,
-                    elevation: 2,
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  icon: const Icon(Icons.check_circle_outline, size: 18),
-                  label: const Text(
-                    'Attainment Finalized ✓',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
-                  ),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('All 6 Stages completed! Attainment report is verified.'),
-                        backgroundColor: AppColors.success,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
-                ),
-            ],
+          const SizedBox(width: 10),
+          Text(
+            'Current Step: ${_stepNames[currentStep]}',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.textPrimary),
           ),
         ],
       ),
@@ -2477,7 +3353,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
   Widget _buildWorkbenchBottomBar(CopoAttainmentReport report) {
     final currentIndex = _tabController.index;
     final hasPrev = currentIndex > 0;
-    final hasNext = currentIndex < 5;
+    final hasNext = currentIndex < 7;
     final prevTitle = hasPrev ? _stepNames[currentIndex - 1] : 'Course Selection';
     final nextTitle = hasNext ? _stepNames[currentIndex + 1] : 'Recalculate';
 
@@ -2518,7 +3394,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             // Progress dots
             Row(
               mainAxisSize: MainAxisSize.min,
-              children: List.generate(6, (i) {
+              children: List.generate(8, (i) {
                 final isCurrent = i == currentIndex;
                 final isPast = i < currentIndex;
                 return InkWell(
@@ -2541,7 +3417,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             ),
             const SizedBox(width: 8),
             Text(
-              '${currentIndex + 1}/6',
+              '${currentIndex + 1}/8',
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
@@ -2570,7 +3446,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   _recalculate();
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Attainment report is fully computed across all 6 stages.'),
+                      content: Text('Attainment report is fully computed across all 8 stages.'),
                       backgroundColor: AppColors.success,
                       behavior: SnackBarBehavior.floating,
                     ),
@@ -2884,25 +3760,41 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                             ),
                             const SizedBox(height: 16),
 
-                            // 2. Direct vs Indirect Split
-                            _buildConfigSectionTitle('2. Direct Assessment vs. Indirect Exit Survey Split', 'Standard Autonomous institutes use 90:10 or 80:20.'),
+                            // 2. Internal vs External Assessment Split
+                            _buildConfigSectionTitle('2. Direct Component Split (Internal vs. External Exam)', 'Weightage given to In-Sem (ISE/MSE) vs. External (ESE) University exams.'),
                             const SizedBox(height: 8),
                             Row(
                               children: [
                                 Expanded(
                                   child: OutlinedButton(
                                     style: OutlinedButton.styleFrom(
-                                      backgroundColor: directWeight == 90.0 ? AppColors.primarySoft : null,
-                                      side: BorderSide(color: directWeight == 90.0 ? AppColors.primary : AppColors.border),
+                                      backgroundColor: (_repository.config.internalWeightPercent == 20.0) ? AppColors.primarySoft : null,
+                                      side: BorderSide(color: (_repository.config.internalWeightPercent == 20.0) ? AppColors.primary : AppColors.border),
                                     ),
-                                    onPressed: () => setDialogState(() {
-                                      directWeight = 90.0;
-                                      indirectWeight = 10.0;
-                                    }),
-                                    child: const Text('90% Direct : 10% Survey', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                    onPressed: () => setDialogState(() {}),
+                                    child: const Text('20% Internal : 80% External', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      backgroundColor: (_repository.config.internalWeightPercent == 30.0) ? AppColors.primarySoft : null,
+                                      side: BorderSide(color: (_repository.config.internalWeightPercent == 30.0) ? AppColors.primary : AppColors.border),
+                                    ),
+                                    onPressed: () => setDialogState(() {}),
+                                    child: const Text('30% Internal : 70% External', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 3. Direct vs Indirect Split
+                            _buildConfigSectionTitle('3. Direct Assessment vs. Indirect Exit Survey Split', 'Standard Autonomous institutes use 80:20 or 90:10.'),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
                                 Expanded(
                                   child: OutlinedButton(
                                     style: OutlinedButton.styleFrom(
@@ -2914,6 +3806,20 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                                       indirectWeight = 20.0;
                                     }),
                                     child: const Text('80% Direct : 20% Survey', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      backgroundColor: directWeight == 90.0 ? AppColors.primarySoft : null,
+                                      side: BorderSide(color: directWeight == 90.0 ? AppColors.primary : AppColors.border),
+                                    ),
+                                    onPressed: () => setDialogState(() {
+                                      directWeight = 90.0;
+                                      indirectWeight = 10.0;
+                                    }),
+                                    child: const Text('90% Direct : 10% Survey', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                                   ),
                                 ),
                               ],
@@ -2934,8 +3840,30 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                             ),
                             const SizedBox(height: 16),
 
-                            // 3. Target Attainment Benchmark
-                            _buildConfigSectionTitle('3. NBA Target Attainment Benchmark', 'Target performance score on a 1.00 to 3.00 scale (e.g., 2.50).'),
+                            // 4. Target Attainment Benchmark
+                            _buildConfigSectionTitle('4. NBA Target Attainment Benchmark', 'Target performance score on a 1.00 to 3.00 scale (e.g., 2.25).'),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [1.80, 2.00, 2.25, 2.50, 2.75].map((val) {
+                                final isSelected = (target - val).abs() < 0.05;
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: ChoiceChip(
+                                    label: Text('Target ${val.toStringAsFixed(2)}'),
+                                    selected: isSelected,
+                                    selectedColor: AppColors.success.withOpacity(0.2),
+                                    labelStyle: TextStyle(
+                                      color: isSelected ? AppColors.success : AppColors.textPrimary,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                    onSelected: (sel) {
+                                      if (sel) setDialogState(() => target = val);
+                                    },
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 4),
                             Row(
                               children: [
                                 Expanded(
@@ -2943,7 +3871,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                                     value: target,
                                     min: 1.50,
                                     max: 3.00,
-                                    divisions: 15,
+                                    divisions: 30,
                                     label: target.toStringAsFixed(2),
                                     activeColor: AppColors.success,
                                     onChanged: (v) => setDialogState(() => target = double.parse(v.toStringAsFixed(2))),
@@ -2964,7 +3892,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                             ),
                             const SizedBox(height: 16),
 
-                            // 4. Live Formula Summary Preview
+                            // 5. Live Formula Summary Preview
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
@@ -3001,9 +3929,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                             onPressed: () {
                               setDialogState(() {
                                 passingCutoff = 50.0;
-                                directWeight = 90.0;
-                                indirectWeight = 10.0;
-                                target = 2.50;
+                                directWeight = 80.0;
+                                indirectWeight = 20.0;
+                                target = 2.25;
                               });
                             },
                             child: const Text('Reset Defaults'),

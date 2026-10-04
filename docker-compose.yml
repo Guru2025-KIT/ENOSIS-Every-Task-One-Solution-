@@ -37,5 +37,15 @@ services:
     volumes:
       - ./backend/app:/app/app
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5000:80"
+    depends_on:
+      - backend
+
 volumes:
   enosis_mysql_data:

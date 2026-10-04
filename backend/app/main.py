@@ -18,16 +18,23 @@ from app.models import (  # noqa: F401
     attendance as attendance_models,  # Lecture Attendance tables
 )
 
-# Creates tables if they don't already exist. Fine for this early stage of
-# development; once the schema stabilizes across a few modules, we'll
-# switch to Alembic migrations so schema changes are tracked and
-# reversible instead of just "drop and recreate the table."
-Base.metadata.create_all(bind=engine)
-
-from app.sync_and_seed import sync_database_schema, seed_admin_user, seed_all_faculty_profiles
-sync_database_schema()
-seed_admin_user()
-seed_all_faculty_profiles()
+# Creates tables if they don't already exist with retry logic so server doesn't crash
+# if database container is still warming up.
+import time
+for attempt in range(1, 6):
+    try:
+        Base.metadata.create_all(bind=engine)
+        from app.sync_and_seed import sync_database_schema, seed_admin_user, seed_all_faculty_profiles
+        sync_database_schema()
+        seed_admin_user()
+        seed_all_faculty_profiles()
+        print("Database schema synced & seeded successfully.")
+        break
+    except Exception as err:
+        print(f"Database init attempt {attempt}/5 failed: {err}. Retrying in 2 seconds...")
+        if attempt == 5:
+            print("Warning: Database initialization failed after 5 attempts. Continuing server startup...")
+        time.sleep(2)
 
 app = FastAPI(title=settings.APP_NAME)
 
@@ -61,6 +68,16 @@ app.include_router(attendance.router)
 app.include_router(dashboard.router)
 app.include_router(copo.router)
 app.include_router(admin.router)
+
+
+@app.get("/")
+def root():
+    return {
+        "app": settings.APP_NAME,
+        "status": "online",
+        "documentation": "/docs",
+        "health": "/health",
+    }
 
 
 @app.get("/health")
