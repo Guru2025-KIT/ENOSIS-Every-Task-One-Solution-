@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
@@ -69,7 +71,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     });
   }
 
-  void _sendMessage(String text) {
+  Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty) return;
 
     setState(() {
@@ -79,28 +81,27 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     _textController.clear();
     _scrollToBottom();
 
-    // Trigger mock response after delay
-    Future.delayed(const Duration(seconds: 1, milliseconds: 500), () {
-      if (!mounted) return;
-      String response = '';
-
-      final query = text.toLowerCase();
-      if (query.contains('schedule') || query.contains('timetable') || query.contains('class')) {
-        response = 'According to your timetable, your next lecture is "DAA Lecture" in Room 301 at 09:00 AM today.';
-      } else if (query.contains('task') || query.contains('todo') || query.contains('list')) {
-        response = 'Sure! I can help you with that. I have added "Review CO-PO attainment report" to your task list.';
-      } else if (query.contains('attendance') || query.contains('percent') || query.contains('mark')) {
-        response = 'Your average attendance rate is 96% (Present: 1708, Absent: 60, Leave: 20). You are fully compliant!';
+    String response = '';
+    try {
+      final res = await ApiClient.postJson('/ai/chat', {'message': text});
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        response = data['reply']?.toString() ?? 'I have processed your request.';
       } else {
-        response = 'I processed your query: "$text". Currently, I can help you fetch your timetable slots, add task reminders, or view attendance metrics.';
+        final err = jsonDecode(res.body);
+        response = err['detail']?.toString() ?? 'Unable to reach AI assistant service.';
       }
+    } catch (e) {
+      response = 'Could not connect to academic assistant server: $e';
+    }
 
+    if (mounted) {
       setState(() {
         _messages.add(ChatMessage(text: response, isUser: false, timestamp: DateTime.now()));
         _isTyping = false;
       });
       _scrollToBottom();
-    });
+    }
   }
 
   @override

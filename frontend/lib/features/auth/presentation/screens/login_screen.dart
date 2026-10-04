@@ -7,9 +7,11 @@ import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/enosis_wordmark.dart';
 import '../../../../core/widgets/loading_indicator.dart';
 import '../../../../core/widgets/primary_button.dart';
-import '../../../dashboard/presentation/screens/main_shell.dart';
+import '../../../../core/auth/auth_session.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../dashboard/presentation/screens/main_shell.dart';
 import '../../data/auth_repository.dart';
+import 'admin_login_screen.dart';
 import 'signup_screen.dart';
 
 /// Login screen — matching Screen 2 from the reference image.
@@ -37,6 +39,115 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _isSubmitting = false;
   bool _rememberMe = false;
+
+  void _showForgotPasswordDialog() {
+    final resetEmailController = TextEditingController(text: _emailController.text.trim());
+    bool isResetting = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.lock_reset_rounded, color: AppColors.primary, size: 22),
+              ),
+              const SizedBox(width: 12),
+              const Text('Reset Password', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Enter your registered faculty email address. A new temporary password will be sent directly to your inbox.',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: resetEmailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Registered Faculty Email',
+                  hintText: 'faculty@enosis.edu.in',
+                  prefixIcon: Icon(Icons.email_outlined),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isResetting ? null : () => Navigator.pop(dialogCtx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: isResetting
+                  ? null
+                  : () async {
+                      final email = resetEmailController.text.trim();
+                      if (email.isEmpty || !email.contains('@')) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter a valid email address.')),
+                        );
+                        return;
+                      }
+
+                      setDialogState(() => isResetting = true);
+                      try {
+                        await _authRepository.forgotPassword(email);
+                        if (!mounted) return;
+                        Navigator.pop(dialogCtx);
+                        _emailController.text = email;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                const Icon(Icons.check_circle_outline, color: Colors.white),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text('Temporary password sent to $email. Please check your inbox and log in.'),
+                                ),
+                              ],
+                            ),
+                            backgroundColor: const Color(0xFF10B981),
+                            behavior: SnackBarBehavior.floating,
+                            duration: const Duration(seconds: 6),
+                          ),
+                        );
+                      } catch (e) {
+                        setDialogState(() => isResetting = false);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(e.toString()),
+                            backgroundColor: AppColors.error,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              child: isResetting
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Send Reset Password'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   void _showServerConfigDialog() {
     final controller = TextEditingController(text: ApiClient.baseUrl);
@@ -115,6 +226,18 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (!mounted) return;
+      if ((AuthSession.role ?? '').toUpperCase() == 'ADMIN') {
+        AuthSession.clear();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Admin accounts must sign in using the dedicated Admin Portal.'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const MainShell()),
       );
@@ -149,8 +272,32 @@ class _LoginScreenState extends State<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+                        TextButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
+                            );
+                          },
+                          icon: const Icon(Icons.admin_panel_settings_rounded, size: 16, color: Color(0xFF0F172A)),
+                          label: const Text(
+                            'Admin Portal',
+                            style: TextStyle(
+                              color: Color(0xFF0F172A),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                          style: TextButton.styleFrom(
+                            backgroundColor: const Color(0xFFF1F5F9),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              side: const BorderSide(color: Color(0xFFCBD5E1)),
+                            ),
+                          ),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.settings_ethernet_rounded, color: AppColors.textSecondary),
                           tooltip: 'Configure Server URL (${ApiClient.baseUrl})',
@@ -254,12 +401,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ],
                         ),
                         TextButton(
-                          onPressed: () {
-                            // Placeholder
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Forgot Password is coming soon.')),
-                            );
-                          },
+                          onPressed: _showForgotPasswordDialog,
                           child: Text(
                             'Forgot Password?',
                             style: AppTypography.bodySecondary.copyWith(

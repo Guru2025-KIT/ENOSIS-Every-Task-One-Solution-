@@ -29,6 +29,9 @@ class User(Base):
     department = Column(String(100), nullable=True)
     designation = Column(String(100), nullable=True)
     phone = Column(String(30), nullable=True)
+    office_address = Column(String(255), nullable=True)
+    joining_date = Column(String(50), nullable=True)
+    experience = Column(String(50), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     role = Column(Enum(UserRole), default=UserRole.FACULTY, nullable=False)
 

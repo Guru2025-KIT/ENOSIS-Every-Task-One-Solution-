@@ -541,5 +541,50 @@ class AdminRepository {
     }
     return GovernanceRequestModel.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
+
+  // ─── Faculty Performance (Admin Overview) ─────────────────────────────────
+
+  Future<Map<String, dynamic>> getFacultyPerformance(String facultyId) async {
+    final res = await ApiClient.get('/admin/faculty/$facultyId/performance', token: _token);
+    if (res.statusCode != 200) {
+      throw Exception('Failed to fetch faculty performance: ${res.body}');
+    }
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  // ─── Admin Profile (Username, Email & Password Update) ───────────────────
+
+  Future<Map<String, dynamic>> updateAdminProfile({
+    String? fullName,
+    String? email,
+    String? currentPassword,
+    String? newPassword,
+  }) async {
+    final res = await ApiClient.putJson(
+      '/admin/profile',
+      {
+        if (fullName != null && fullName.isNotEmpty) 'full_name': fullName.trim(),
+        if (email != null && email.isNotEmpty) 'email': email.trim(),
+        if (currentPassword != null && currentPassword.isNotEmpty) 'current_password': currentPassword.trim(),
+        if (newPassword != null && newPassword.isNotEmpty) 'new_password': newPassword.trim(),
+      },
+      token: _token,
+    );
+    if (res.statusCode != 200) {
+      String msg = 'Failed to update admin profile: ${res.body}';
+      try {
+        final err = jsonDecode(res.body);
+        if (err is Map && err.containsKey('detail')) {
+          msg = err['detail'].toString();
+        }
+      } catch (_) {}
+      throw Exception(msg);
+    }
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    if (data['full_name'] != null) AuthSession.fullName = data['full_name'] as String;
+    if (data['email'] != null) AuthSession.email = data['email'] as String;
+    return data;
+  }
 }
+
 

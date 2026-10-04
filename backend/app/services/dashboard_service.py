@@ -112,40 +112,24 @@ def get_faculty_dashboard_summary(
         (faculty_user.role.value if hasattr(faculty_user.role, "value") else str(faculty_user.role)).lower() == "admin"
     )
 
-    # Resolve all matching user IDs for this faculty
-    target_clean = _normalize_name(faculty_user.full_name or "")
-    target_tokens = set(target_clean.split())
+    # Resolve strictly for this faculty
+    matched_user_ids = [faculty_user.id]
 
-    all_users = db.query(User).all()
-    matched_user_ids = {faculty_user.id}
-
-    if target_clean:
-        for u in all_users:
-            if not u.full_name:
-                continue
-            u_clean = _normalize_name(u.full_name)
-            u_tokens = set(u_clean.split())
-            if target_clean in u_clean or u_clean in target_clean or (target_tokens and target_tokens.issubset(u_tokens)) or (u_tokens and u_tokens.issubset(target_tokens)):
-                matched_user_ids.add(u.id)
-            elif u.email and faculty_user.email:
-                if u.email.split('@')[0].lower() == faculty_user.email.split('@')[0].lower():
-                    matched_user_ids.add(u.id)
-
-    # Query entries for matched users on TODAY's day_idx
+    # Query entries for faculty on TODAY's day_idx
     query = db.query(TimetableEntry).filter(
         TimetableEntry.day == day_idx,
     )
     if batch_id:
         query = query.filter(TimetableEntry.batch_id == batch_id)
 
-    entries = query.filter(TimetableEntry.faculty_id.in_(list(matched_user_ids))).order_by(TimetableEntry.slot.asc()).all()
+    entries = query.filter(TimetableEntry.faculty_id.in_(matched_user_ids)).order_by(TimetableEntry.slot.asc()).all()
 
     # Fallback 1: if no entries in latest batch, search across any batch for today
     if not entries:
         entries = (
             db.query(TimetableEntry)
             .filter(
-                TimetableEntry.faculty_id.in_(list(matched_user_ids)),
+                TimetableEntry.faculty_id.in_(matched_user_ids),
                 TimetableEntry.day == day_idx,
             )
             .order_by(TimetableEntry.slot.asc())
@@ -157,7 +141,7 @@ def get_faculty_dashboard_summary(
         ta_pairs = db.query(
             TeachingAssignment.subject_id,
             TeachingAssignment.division_id,
-        ).filter(TeachingAssignment.faculty_id.in_(list(matched_user_ids))).all()
+        ).filter(TeachingAssignment.faculty_id.in_(matched_user_ids)).all()
 
         for sub_id, div_id in ta_pairs:
             matched_entries = db.query(TimetableEntry).filter(
@@ -168,18 +152,28 @@ def get_faculty_dashboard_summary(
             for me in matched_entries:
                 if me not in entries:
                     entries.append(me)
-        entries.sort(key=lambda e: e.slot)
 
-    # Fallback 3: if admin user and no personal schedule, show today's departmental lecture overview
-    if not entries and is_admin:
-        admin_q = db.query(TimetableEntry).filter(TimetableEntry.day == day_idx)
-        if batch_id:
-            admin_q = admin_q.filter(TimetableEntry.batch_id == batch_id)
-        entries = admin_q.order_by(TimetableEntry.slot.asc()).all()
-        if not entries:
-            entries = db.query(TimetableEntry).filter(TimetableEntry.day == day_idx).order_by(TimetableEntry.slot.asc()).all()
-
+    # Fallback 3: If no classes today (e.g. weekend or off-day), find faculty's upcoming teaching day
     is_multi_day_view = False
+    if not entries:
+        # Search for any day with classes for this faculty
+        faculty_all_entries = (
+            db.query(TimetableEntry)
+            .filter(TimetableEntry.faculty_id.in_(matched_user_ids))
+            .order_by(TimetableEntry.day.asc(), TimetableEntry.slot.asc())
+            .all()
+        )
+        if faculty_all_entries:
+            # Pick the next closest day
+            future_days = [e for e in faculty_all_entries if e.day > day_idx]
+            if future_days:
+                target_day = future_days[0].day
+                entries = [e for e in faculty_all_entries if e.day == target_day]
+            else:
+                target_day = faculty_all_entries[0].day
+                entries = [e for e in faculty_all_entries if e.day == target_day]
+            is_multi_day_view = True
+
 
     # 4. Map Timetable Entries to TodayScheduleSlotOut
     today_schedule: list[TodayScheduleSlotOut] = []

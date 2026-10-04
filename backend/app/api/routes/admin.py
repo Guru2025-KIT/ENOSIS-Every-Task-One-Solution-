@@ -6,6 +6,7 @@ from app.db.base import get_db
 from app.models.user import User
 from app.schemas.admin import (
     AdminDashboardStatsOut,
+    AdminProfileUpdate,
     GovernanceActionRequest,
     GovernanceRequestOut,
     SubjectAllocationCreate,
@@ -21,6 +22,7 @@ from app.schemas.user import (
     FacultyOut,
     FacultyUpdate,
     FacultyValidationResult,
+    UserOut,
 )
 from app.services import admin_service
 
@@ -259,4 +261,43 @@ def update_email_settings(
     update — for persistence, update the .env file as well.
     """
     return admin_service.update_email_settings(payload)
+
+
+# ─── Faculty Performance & Profile (Admin View) ──────────────────────────────
+
+@router.get("/faculty/{faculty_id}/performance")
+def get_faculty_performance(
+    faculty_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """
+    Returns comprehensive profile and performance metrics for a specific faculty member:
+    - User details (designation, department, emp ID, contact)
+    - Course allocations & weekly lecture load
+    - Career advancement achievements & publications count
+    - Student Learning Intelligence (SLI) student counts & feedback
+    """
+    try:
+        return admin_service.get_faculty_performance(db, faculty_id)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+# ─── Admin Profile Management ────────────────────────────────────────────────
+
+@router.put("/profile", response_model=UserOut)
+def update_admin_profile(
+    payload: AdminProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """
+    Updates the Admin username (full_name) and Admin email.
+    """
+    try:
+        return admin_service.update_admin_profile(db, current_user, payload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 

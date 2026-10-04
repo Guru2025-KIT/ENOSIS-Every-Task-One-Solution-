@@ -1557,34 +1557,34 @@ def publish_timetable(
                 key = (ac.class_id, sub.id, sem.semester_id)
                 if key not in enrolled_class_subjects:
                     enrolled_class_subjects.add(key)
-                    enr_count = db.query(Enrollment).filter(
-                        Enrollment.class_id == ac.class_id,
-                        Enrollment.subject_id == sub.id,
-                        Enrollment.semester_id == sem.semester_id,
-                    ).count()
-                    if enr_count == 0:
-                        students = db.query(Student).filter(
+                    existing_student_ids = {
+                        row[0]
+                        for row in db.query(Enrollment.student_id)
+                        .filter(
+                            Enrollment.class_id == ac.class_id,
+                            Enrollment.subject_id == sub.id,
+                            Enrollment.semester_id == sem.semester_id,
+                        )
+                        .all()
+                    }
+                    students = (
+                        db.query(Student.student_id)
+                        .filter(
                             Student.current_year == div.year,
                             Student.division == div.division_code,
-                        ).all()
-
-                        for stu in students:
-                            existing_enr = db.query(Enrollment).filter(
-                                Enrollment.student_id == stu.student_id,
-                                Enrollment.class_id == ac.class_id,
-                                Enrollment.subject_id == sub.id,
-                                Enrollment.semester_id == sem.semester_id,
-                            ).first()
-                            if not existing_enr:
-                                enr = Enrollment(
-                                    student_id=stu.student_id,
-                                    class_id=ac.class_id,
-                                    subject_id=sub.id,
-                                    semester_id=sem.semester_id,
-                                )
-                                db.add(enr)
-                        if students:
-                            db.flush()
+                        )
+                        .all()
+                    )
+                    for (stu_id,) in students:
+                        if stu_id not in existing_student_ids:
+                            enr = Enrollment(
+                                student_id=stu_id,
+                                class_id=ac.class_id,
+                                subject_id=sub.id,
+                                semester_id=sem.semester_id,
+                            )
+                            db.add(enr)
+                            existing_student_ids.add(stu_id)
 
     db_run = GenerationRun(
         id=batch_id,

@@ -55,3 +55,12 @@ class GovernanceRequestOut(BaseModel):
 class GovernanceActionRequest(BaseModel):
     action: str  # "APPROVE" | "REJECT"
     remarks: str | None = None
+
+
+class AdminProfileUpdate(BaseModel):
+    full_name: str | None = None
+    email: str | None = None
+    current_password: str | None = None
+    new_password: str | None = None
+
+

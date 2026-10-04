@@ -29,30 +29,7 @@ def get_active_timetable_batch_id(db: Session) -> str | None:
 # ---------------------------------------------------------------------------
 
 def _get_matched_faculty_ids(db: Session, faculty_id: str) -> list[str]:
-    from app.models.user import User
-    faculty_ids = [faculty_id]
-    user = db.query(User).filter(User.id == faculty_id).first()
-    if user and user.full_name:
-        def _clean(n: str) -> str:
-            s = n.lower().strip()
-            for p in ["dr.", "dr ", "prof.", "prof ", "mr.", "mr ", "mrs.", "mrs ", "ms.", "ms ", "er.", "er "]:
-                if s.startswith(p):
-                    s = s[len(p):].strip()
-            return s
-
-        target_clean = _clean(user.full_name)
-        target_tokens = set(target_clean.replace(".", " ").split())
-        all_users = db.query(User).all()
-        for u in all_users:
-            if not u.full_name:
-                continue
-            u_clean = _clean(u.full_name)
-            u_tokens = set(u_clean.replace(".", " ").split())
-            if target_clean == u_clean or target_clean in u_clean or u_clean in target_clean or (target_tokens and target_tokens.issubset(u_tokens)) or (u_tokens and u_tokens.issubset(target_tokens)):
-                faculty_ids.append(u.id)
-            elif u.email and user.email and u.email.split('@')[0].lower() == user.email.split('@')[0].lower():
-                faculty_ids.append(u.id)
-    return list(set(faculty_ids))
+    return [faculty_id]
 
 
 def get_faculty_teaching_contexts(
@@ -67,7 +44,7 @@ def get_faculty_teaching_contexts(
     """
     active_batch_id = get_active_timetable_batch_id(db)
 
-    faculty_ids = _get_matched_faculty_ids(db, faculty_id) if not is_admin else []
+    faculty_ids = [faculty_id] if not is_admin else []
     assigned_pairs_set: set[tuple[str, str]] = set()
 
     # 1. Timetable entries for faculty
@@ -105,18 +82,19 @@ def get_faculty_teaching_contexts(
         if pair[0] and pair[1]:
             assigned_pairs_set.add((pair[0], pair[1]))
 
-    # Admin or Fallback (when no personal entries found or user is Admin):
-    if not assigned_pairs_set:
+    # If Admin, show all active timetable/teaching assignment pairs
+    if is_admin and not assigned_pairs_set:
         for ent in db.query(TimetableEntry).all():
             if ent.subject_id and ent.division_id:
                 assigned_pairs_set.add((ent.subject_id, ent.division_id))
 
-    if not assigned_pairs_set:
-        for ta in db.query(TeachingAssignment).all():
-            if ta.subject_id and ta.division_id:
-                assigned_pairs_set.add((ta.subject_id, ta.division_id))
+        if not assigned_pairs_set:
+            for ta in db.query(TeachingAssignment).all():
+                if ta.subject_id and ta.division_id:
+                    assigned_pairs_set.add((ta.subject_id, ta.division_id))
 
     assigned_pairs = list(assigned_pairs_set)
+
 
     contexts = []
 

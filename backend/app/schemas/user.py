@@ -14,6 +14,9 @@ class UserCreate(BaseModel):
     department: str | None = None
     designation: str | None = None
     phone: str | None = None
+    office_address: str | None = None
+    joining_date: str | None = None
+    experience: str | None = None
 
 
 class UserOut(BaseModel):
@@ -31,6 +34,9 @@ class UserOut(BaseModel):
     department: str | None = None
     designation: str | None = None
     phone: str | None = None
+    office_address: str | None = None
+    joining_date: str | None = None
+    experience: str | None = None
     is_active: bool = True
     role: UserRole
     can_manage_timetable: bool
@@ -44,6 +50,9 @@ class UserUpdate(BaseModel):
     employee_id: str | None = None
     designation: str | None = None
     phone: str | None = None
+    office_address: str | None = None
+    joining_date: str | None = None
+    experience: str | None = None
 
 
 class FacultyCreate(BaseModel):
@@ -53,6 +62,9 @@ class FacultyCreate(BaseModel):
     department: str
     designation: str | None = "Assistant Professor"
     phone: str | None = None
+    office_address: str | None = None
+    joining_date: str | None = None
+    experience: str | None = None
     password: str | None = None  # If omitted, a default secure temporary password is assigned
 
 
@@ -63,6 +75,9 @@ class FacultyUpdate(BaseModel):
     department: str | None = None
     designation: str | None = None
     phone: str | None = None
+    office_address: str | None = None
+    joining_date: str | None = None
+    experience: str | None = None
     is_active: bool | None = None
     can_manage_timetable: bool | None = None
 
@@ -77,6 +92,9 @@ class FacultyOut(BaseModel):
     department: str | None = None
     designation: str | None = None
     phone: str | None = None
+    office_address: str | None = None
+    joining_date: str | None = None
+    experience: str | None = None
     is_active: bool = True
     can_manage_timetable: bool = False
     assigned_subject_codes: list[str] = []

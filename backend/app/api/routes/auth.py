@@ -1,12 +1,23 @@
+import secrets
+import string
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.security import hash_password, verify_password, create_access_token
 from app.db.base import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserUpdate, UserOut, Token, ChangePasswordRequest
+from app.schemas.user import (
+    UserCreate,
+    UserUpdate,
+    UserOut,
+    Token,
+    ChangePasswordRequest,
+    ForgotPasswordRequest,
+)
+from app.services import email_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -38,15 +49,11 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
 @router.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """
-    Standard OAuth2 "password flow" login — this exact shape is what lets
-    FastAPI's auto-generated /docs page log you in directly for testing.
-
-    Note: form_data.username is actually the user's EMAIL here.
-    OAuth2PasswordRequestForm always calls the field "username" regardless
-    of what your app actually logs in with — that's just the OAuth2 spec's
-    naming, not a bug.
+    Standard OAuth2 password flow login.
+    Note: form_data.username is the user's EMAIL.
     """
-    user = db.query(User).filter(User.email == form_data.username).first()
+    clean_username = form_data.username.strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == clean_username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -58,15 +65,17 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     return Token(access_token=access_token)
 
 
+
 @router.get("/me", response_model=UserOut)
 def read_current_user(current_user: User = Depends(get_current_user)):
     """
-    Protected route — returns whoever the token belongs to. This is the
+    Protected route - returns whoever the token belongs to. This is the
     endpoint the Flutter app will call right after login (and on app
     startup, if a token is already saved) to know who's logged in.
     Proves the whole JWT flow works end-to-end.
     """
     return current_user
+
 
 
 @router.patch("/me", response_model=UserOut)
@@ -103,3 +112,37 @@ def change_password(
     current_user.hashed_password = hash_password(payload.new_password)
     db.commit()
     return {"status": "password updated"}
+
+
+@router.post("/forgot-password")
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Public self-service password reset for faculty members.
+    Finds the user by registered email, assigns a secure temporary password,
+    and sends the exact Password Reset email to the faculty's inbox.
+    """
+    email_clean = payload.email.strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == email_clean).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account registered with this email address. Please contact your administrator.",
+        )
+
+    alphabet = string.ascii_letters + string.digits + "!@#$%"
+    temp_password = "".join(secrets.choice(alphabet) for _ in range(12))
+
+    user.hashed_password = hash_password(temp_password)
+    db.commit()
+
+    email_sent = email_service.send_password_reset_email(user.email, temp_password)
+
+    return {
+        "status": "success",
+        "message": "A temporary password has been sent to your registered email address.",
+        "email_sent": email_sent,
+    }
+
