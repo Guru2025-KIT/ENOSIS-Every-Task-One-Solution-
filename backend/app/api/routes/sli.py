@@ -373,6 +373,46 @@ def update_assessment_questions(
     )
 
 
+@router.delete(
+    "/faculty/assessments/{assessment_id}",
+    status_code=status.HTTP_200_OK,
+)
+def delete_assessment(
+    assessment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Deletes an assessment created by the faculty member.
+    """
+    is_admin = current_user.role == UserRole.ADMIN
+    return sli_assessment_service.delete_assessment(
+        db=db,
+        faculty_id=current_user.id,
+        assessment_id=assessment_id,
+        is_admin=is_admin,
+    )
+
+
+@router.delete(
+    "/faculty/assessments-all/purge",
+    status_code=status.HTTP_200_OK,
+)
+@router.post(
+    "/faculty/assessments-all/purge",
+    status_code=status.HTTP_200_OK,
+)
+def purge_all_assessments(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Purges all assessments, student responses (PRE, MID, END), and manual teaching assignments.
+    """
+    return sli_assessment_service.purge_all_assessments(db=db)
+
+
+
 # ---------------------------------------------------------------------------
 # Question Bank Endpoints (Faculty)
 # ---------------------------------------------------------------------------

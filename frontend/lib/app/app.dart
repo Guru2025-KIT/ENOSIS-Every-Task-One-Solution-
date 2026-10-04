@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_theme.dart';
 import '../features/auth/presentation/screens/login_screen.dart';
+import '../features/auth/presentation/screens/signup_screen.dart';
 import '../features/auth/presentation/screens/splash_screen.dart';
 import '../features/dashboard/presentation/screens/main_shell.dart';
 import '../features/faculty_insights/presentation/screens/student_assessment_portal_screen.dart';
@@ -32,6 +33,12 @@ class EnosisApp extends StatelessWidget {
           return MaterialPageRoute(
             settings: settings,
             builder: (_) => const LoginScreen(),
+          );
+        }
+        if (settings.name == '/signup') {
+          return MaterialPageRoute(
+            settings: settings,
+            builder: (_) => const SignUpScreen(),
           );
         }
         if (settings.name == '/dashboard') {

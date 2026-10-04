@@ -9,11 +9,16 @@ import '../../../copo/presentation/screens/copo_attainment_screen.dart';
 import '../../../copo/presentation/screens/copo_mapping_screen.dart';
 import '../../../faculty_insights/presentation/screens/faculty_insights_screen.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
-import '../../../profile/presentation/screens/admin_dashboard_screen.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
 import '../../../timetable/presentation/screens/generate_timetable_screen.dart';
 import '../../../timetable/presentation/screens/timetable_hub_screen.dart';
 import '../../../todo/presentation/screens/my_day_screen.dart';
+import 'package:provider/provider.dart';
+import '../providers/dashboard_provider.dart';
+import '../../../faculty_insights/presentation/providers/sli_pre_provider.dart';
+import '../../../faculty_insights/presentation/providers/sli_mid_provider.dart';
+import '../../../faculty_insights/presentation/providers/sli_end_provider.dart';
+import '../../../timetable/providers/timetable_provider.dart';
 import 'dashboard_screen.dart';
 
 /// The main navigation shell for ENOSIS.
@@ -48,6 +53,21 @@ class _MainShellState extends State<MainShell> {
   void _setTabIndex(int index) {
     if (index >= 0 && index < _tabs.length) {
       setState(() => _currentIndex = index);
+      if (index == 0) {
+        try {
+          context.read<DashboardProvider>().loadDashboard();
+        } catch (_) {}
+      } else if (index == 1) {
+        try {
+          context.read<TimetableProvider>().fetchPublishedTimetable();
+        } catch (_) {}
+      } else if (index == 5) {
+        try {
+          context.read<SliPreProvider>().fetchTeachingContexts();
+          context.read<SliMidProvider>().fetchTeachingContexts();
+          context.read<SliEndProvider>().fetchTeachingContexts();
+        } catch (_) {}
+      }
     }
   }
 
@@ -232,19 +252,6 @@ class _MainShellState extends State<MainShell> {
                         ),
                         Row(
                           children: [
-                            if (AuthSession.isAdmin)
-                              IconButton(
-                                icon: const Icon(Icons.admin_panel_settings_outlined, color: AppColors.secondary, size: 20),
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                tooltip: 'Admin Console & Faculty Management',
-                                onPressed: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
-                                  );
-                                },
-                              ),
                             IconButton(
                               icon: const Icon(Icons.smart_toy_outlined, color: Colors.white, size: 20),
                               visualDensity: VisualDensity.compact,
@@ -590,45 +597,6 @@ class _MainShellState extends State<MainShell> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Admin Console Button (Visible only to System Admins)
-                      if (AuthSession.isAdmin) ...[
-                        Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(20),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: AppColors.secondary.withOpacity(0.18),
-                                border: Border.all(color: AppColors.secondary),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.admin_panel_settings_outlined, size: 16, color: AppColors.secondary),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Admin Console',
-                                    style: AppTypography.bodyMedium.copyWith(
-                                      color: Colors.white,
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                      ],
-
                       // AI Assistant Button
                       Material(
                         color: Colors.transparent,

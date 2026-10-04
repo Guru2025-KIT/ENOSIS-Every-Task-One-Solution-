@@ -4,7 +4,6 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../auth/presentation/screens/login_screen.dart';
-import 'admin_dashboard_screen.dart';
 import 'help_support_screen.dart';
 
 /// Screen 21 — Settings screen.
@@ -26,9 +25,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _pushNotifications = true;
   bool _emailAlerts = false;
 
-  Future<void> _handleLogout() async {
-    await AuthSession.clear();
-    if (!mounted) return;
+  void _handleLogout() {
+    AuthSession.clear();
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (route) => false,
@@ -141,19 +139,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           );
                         },
                       ),
-                      if (AuthSession.isAdmin) ...[
-                        const Divider(height: 1),
-                        ListTile(
-                          leading: const Icon(Icons.admin_panel_settings_outlined, color: AppColors.primary),
-                          title: const Text('Admin Console'),
-                          trailing: const Icon(Icons.chevron_right, size: 20),
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
-                            );
-                          },
-                        ),
-                      ],
                     ],
                   ),
                 ),

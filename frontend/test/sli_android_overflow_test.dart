@@ -91,7 +91,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('TeachingContextsScreen renders on 360px mobile width with Add Assignment button', (tester) async {
+    testWidgets('TeachingContextsScreen renders on 360px mobile width with Refresh button', (tester) async {
       tester.view.physicalSize = const Size(360, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -111,7 +111,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('Teaching Contexts • MID Assessment'), findsOneWidget);
-      expect(find.byTooltip('Add / Select Assignment'), findsOneWidget);
+      expect(find.byTooltip('Refresh Contexts'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

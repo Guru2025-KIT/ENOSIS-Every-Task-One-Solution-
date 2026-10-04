@@ -146,6 +146,9 @@ def create_single_faculty(db: Session, payload: FacultyCreate) -> FacultyOut:
         department=payload.department.strip() if payload.department else None,
         designation=payload.designation.strip() if payload.designation else "Assistant Professor",
         phone=payload.phone.strip() if payload.phone else None,
+        office_address=payload.office_address.strip() if payload.office_address else None,
+        joining_date=payload.joining_date.strip() if payload.joining_date else None,
+        experience=payload.experience.strip() if payload.experience else None,
         role=UserRole.FACULTY,
         is_active=True,
     )
@@ -161,6 +164,9 @@ def create_single_faculty(db: Session, payload: FacultyCreate) -> FacultyOut:
         department=user.department,
         designation=user.designation,
         phone=user.phone,
+        office_address=user.office_address,
+        joining_date=user.joining_date,
+        experience=user.experience,
         is_active=user.is_active,
         can_manage_timetable=user.can_manage_timetable,
         assigned_subject_codes=[],
@@ -193,6 +199,12 @@ def update_single_faculty(db: Session, user_id: str, payload: FacultyUpdate) -> 
         user.designation = payload.designation.strip()
     if payload.phone is not None:
         user.phone = payload.phone.strip()
+    if payload.office_address is not None:
+        user.office_address = payload.office_address.strip()
+    if payload.joining_date is not None:
+        user.joining_date = payload.joining_date.strip()
+    if payload.experience is not None:
+        user.experience = payload.experience.strip()
     if payload.is_active is not None:
         user.is_active = payload.is_active
     if payload.can_manage_timetable is not None:
@@ -217,6 +229,9 @@ def update_single_faculty(db: Session, user_id: str, payload: FacultyUpdate) -> 
         department=user.department,
         designation=user.designation,
         phone=user.phone,
+        office_address=user.office_address,
+        joining_date=user.joining_date,
+        experience=user.experience,
         is_active=user.is_active,
         can_manage_timetable=user.can_manage_timetable,
         assigned_subject_codes=assigned_codes,
@@ -225,14 +240,85 @@ def update_single_faculty(db: Session, user_id: str, payload: FacultyUpdate) -> 
 
 
 def delete_single_faculty(db: Session, user_id: str) -> dict[str, str]:
-    user = db.query(User).filter(User.id == user_id, User.role == UserRole.FACULTY).first()
+    user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise KeyError("Faculty member not found.")
     
-    # Soft delete
-    user.is_active = False
+    role_str = (user.role.value if hasattr(user.role, "value") else str(user.role)).upper()
+    if role_str == "ADMIN":
+        raise ValueError("Cannot delete the system administrator account.")
+
+    faculty_name = user.full_name or user.email
+
+    # Clean up all referencing tables
+    try:
+        from app.models.academic import TeachingAssignment, FacultyUnavailability, InstitutionalCourse, SharedCourse
+        db.query(TeachingAssignment).filter(TeachingAssignment.faculty_id == user_id).delete(synchronize_session=False)
+        db.query(FacultyUnavailability).filter(FacultyUnavailability.faculty_id == user_id).delete(synchronize_session=False)
+        db.query(InstitutionalCourse).filter(InstitutionalCourse.faculty_id == user_id).delete(synchronize_session=False)
+        db.query(SharedCourse).filter(SharedCourse.faculty_id == user_id).delete(synchronize_session=False)
+    except Exception as e:
+        print("[Delete Faculty Academic Cleanup Notice]:", e)
+
+    try:
+        from app.models.timetable import TimetableEntry
+        db.query(TimetableEntry).filter(TimetableEntry.faculty_id == user_id).delete(synchronize_session=False)
+    except Exception as e:
+        print("[Delete Faculty Timetable Cleanup Notice]:", e)
+
+    try:
+        from app.models.attendance import LectureAttendanceSession, LectureAttendanceRecord
+        session_ids = [s[0] for s in db.query(LectureAttendanceSession.session_id).filter(LectureAttendanceSession.faculty_id == user_id).all()]
+        if session_ids:
+            db.query(LectureAttendanceRecord).filter(LectureAttendanceRecord.session_id.in_(session_ids)).delete(synchronize_session=False)
+        db.query(LectureAttendanceSession).filter(LectureAttendanceSession.faculty_id == user_id).delete(synchronize_session=False)
+    except Exception as e:
+        print("[Delete Faculty Attendance Cleanup Notice]:", e)
+
+
+    try:
+        from app.models.sli import Assessment, Intervention, PreSemesterResponse, MidSemesterResponse, EndSemesterResponse, StudentTopicFeedback
+        assessment_ids = [a[0] for a in db.query(Assessment.assessment_id).filter(Assessment.faculty_id == user_id).all()]
+        if assessment_ids:
+            db.query(PreSemesterResponse).filter(PreSemesterResponse.assessment_id.in_(assessment_ids)).delete(synchronize_session=False)
+            db.query(MidSemesterResponse).filter(MidSemesterResponse.assessment_id.in_(assessment_ids)).delete(synchronize_session=False)
+            db.query(EndSemesterResponse).filter(EndSemesterResponse.assessment_id.in_(assessment_ids)).delete(synchronize_session=False)
+            db.query(StudentTopicFeedback).filter(StudentTopicFeedback.assessment_id.in_(assessment_ids)).delete(synchronize_session=False)
+        db.query(Assessment).filter(Assessment.faculty_id == user_id).delete(synchronize_session=False)
+        db.query(Intervention).filter(Intervention.faculty_id == user_id).delete(synchronize_session=False)
+    except Exception as e:
+        print("[Delete Faculty SLI Cleanup Notice]:", e)
+
+    try:
+        from app.models.achievement import Achievement
+        db.query(Achievement).filter(Achievement.owner_id == user_id).delete(synchronize_session=False)
+    except Exception as e:
+        print("[Delete Faculty Achievement Cleanup Notice]:", e)
+
+    try:
+        from app.models.todo import Task
+        db.query(Task).filter(Task.owner_id == user_id).delete(synchronize_session=False)
+    except Exception as e:
+        print("[Delete Faculty Task Cleanup Notice]:", e)
+
+    try:
+        from app.models.notification import Notification
+        db.query(Notification).filter(Notification.recipient_id == user_id).delete(synchronize_session=False)
+    except Exception as e:
+        print("[Delete Faculty Notification Cleanup Notice]:", e)
+
+    try:
+        from app.models.document import Document
+        db.query(Document).filter(Document.owner_id == user_id).delete(synchronize_session=False)
+    except Exception as e:
+        print("[Delete Faculty Document Cleanup Notice]:", e)
+
+    db.delete(user)
     db.commit()
-    return {"status": "deactivated", "message": f"Faculty member '{user.full_name}' was deactivated."}
+
+    return {"status": "deleted", "message": f"Faculty member '{faculty_name}' was removed successfully."}
+
+
 
 
 # ─── 3. SPREADSHEET DRY-RUN VALIDATION & BULK IMPORT ─────────────────────────
@@ -597,3 +683,336 @@ def process_governance_action(db: Session, request_id: str, payload: GovernanceA
             status="APPROVED",
             submitted_at=achievement.created_at or datetime.now(timezone.utc),
         )
+
+
+# ─── 6. PASSWORD RESET & CREDENTIAL DISPATCH ────────────────────────────────
+
+def _generate_temp_password(length: int = 12) -> str:
+    """Generate a secure random password for faculty onboarding / reset."""
+    import secrets
+    import string
+    alphabet = string.ascii_letters + string.digits + "!@#$%"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+def reset_faculty_password(db: Session, user_id: str, send_email_flag: bool = True) -> dict:
+    """Admin-triggered password reset: generates a new temp password and
+    optionally sends it to the faculty member's email."""
+    from app.services.email_service import send_password_reset_email
+
+    user = db.query(User).filter(User.id == user_id, User.role == UserRole.FACULTY).first()
+    if not user:
+        raise KeyError("Faculty member not found.")
+
+    temp_password = _generate_temp_password()
+    user.hashed_password = hash_password(temp_password)
+    db.commit()
+
+    email_sent = False
+    if send_email_flag:
+        email_sent = send_password_reset_email(user.email, temp_password)
+
+    return {
+        "status": "password_reset",
+        "faculty_name": user.full_name,
+        "faculty_email": user.email,
+        "temp_password": temp_password,  # returned so admin can see it in the UI
+        "email_sent": email_sent,
+    }
+
+
+def send_onboarding_credentials(db: Session, user_id: str, password: str) -> dict:
+    """Send (or re-send) the onboarding welcome email with credentials."""
+    from app.services.email_service import send_onboarding_email
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise KeyError("User not found.")
+
+    email_sent = send_onboarding_email(user.full_name, user.email, password)
+    return {
+        "status": "onboarding_sent",
+        "faculty_name": user.full_name,
+        "email_sent": email_sent,
+    }
+
+
+def create_single_faculty_with_email(db: Session, payload) -> tuple:
+    """Create a faculty member AND send onboarding credentials.
+    Returns (FacultyOut, temp_password, email_sent)."""
+    from app.services.email_service import send_onboarding_email
+
+    temp_password = payload.password or _generate_temp_password()
+    # Override the payload password with the generated one
+    payload_dict = payload.model_dump()
+    payload_dict["password"] = temp_password
+
+    from app.schemas.user import FacultyCreate
+    updated_payload = FacultyCreate(**payload_dict)
+
+    faculty_out = create_single_faculty(db, updated_payload)
+    email_sent = send_onboarding_email(faculty_out.full_name, faculty_out.email, temp_password)
+
+    return faculty_out, temp_password, email_sent
+
+
+# ─── 7. ADMIN EMAIL SETTINGS (runtime-editable) ─────────────────────────────
+
+def get_email_settings() -> dict:
+    """Return current SMTP / admin email configuration (passwords masked)."""
+    from app.core.config import settings as s
+    return {
+        "admin_email": s.ADMIN_EMAIL,
+        "smtp_host": s.SMTP_HOST,
+        "smtp_port": s.SMTP_PORT,
+        "smtp_user": s.SMTP_USER,
+        "smtp_configured": bool(s.SMTP_HOST and s.SMTP_USER and s.SMTP_PASSWORD),
+    }
+
+
+def update_email_settings(payload) -> dict:
+    """Update SMTP / admin email settings at runtime (in-memory) and persist to .env file."""
+    import os
+    from app.core.config import settings as s
+
+    updates = {}
+    if payload.admin_email is not None:
+        s.ADMIN_EMAIL = payload.admin_email
+        updates["ADMIN_EMAIL"] = payload.admin_email
+    if payload.smtp_host is not None:
+        s.SMTP_HOST = payload.smtp_host
+        updates["SMTP_HOST"] = payload.smtp_host
+    if payload.smtp_port is not None:
+        s.SMTP_PORT = payload.smtp_port
+        updates["SMTP_PORT"] = str(payload.smtp_port)
+    if payload.smtp_user is not None:
+        s.SMTP_USER = payload.smtp_user
+        updates["SMTP_USER"] = payload.smtp_user
+    if payload.smtp_password is not None:
+        s.SMTP_PASSWORD = payload.smtp_password
+        updates["SMTP_PASSWORD"] = payload.smtp_password
+    if payload.smtp_use_tls is not None:
+        s.SMTP_USE_TLS = payload.smtp_use_tls
+        updates["SMTP_USE_TLS"] = "true" if payload.smtp_use_tls else "false"
+
+    # Persist to .env file
+    if updates:
+        for candidate in [
+            os.path.join(os.getcwd(), ".env"),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"),
+        ]:
+            if os.path.exists(candidate):
+                try:
+                    with open(candidate, "r", encoding="utf-8") as f:
+                        lines = f.readlines()
+                    new_lines = []
+                    found = set()
+                    for line in lines:
+                        trimmed = line.strip()
+                        if trimmed and not trimmed.startswith("#") and "=" in trimmed:
+                            k = trimmed.split("=", 1)[0].strip()
+                            if k in updates:
+                                new_lines.append(f"{k}={updates[k]}\n")
+                                found.add(k)
+                                continue
+                        new_lines.append(line)
+                    for k, v in updates.items():
+                        if k not in found:
+                            new_lines.append(f"{k}={v}\n")
+                    with open(candidate, "w", encoding="utf-8") as f:
+                        f.writelines(new_lines)
+                    break
+                except Exception as e:
+                    print("[Notice: Could not write SMTP config to .env]:", e)
+
+    return get_email_settings()
+
+
+
+# ─── 8. FACULTY PERFORMANCE & PROFILE ────────────────────────────────────────
+
+def get_faculty_performance(db: Session, faculty_id: str) -> dict:
+    """Return comprehensive performance, allocations, achievements, timetable schedule, and teaching metrics for a faculty member."""
+    from app.models.timetable import TimetableEntry
+    from app.models.academic import Room, Division
+
+    user = db.query(User).filter(User.id == faculty_id).first()
+    if not user:
+        raise KeyError(f"Faculty with ID '{faculty_id}' not found.")
+
+    # 1. Course Allocations & Workload
+    assignments = (
+        db.query(TeachingAssignment, Subject, Division)
+        .join(Subject, TeachingAssignment.subject_id == Subject.id)
+        .outerjoin(Division, TeachingAssignment.division_id == Division.id)
+        .filter(TeachingAssignment.faculty_id == faculty_id)
+        .all()
+    )
+    allocations = []
+    total_lecture_hours = 0
+    total_lab_hours = 0
+
+    for ta, subj, div in assignments:
+        is_lab = subj.is_lab or (ta.session_type and ta.session_type.lower() == "lab")
+        weekly_count = ta.weekly_count or subj.weekly_lectures or 3
+        if is_lab:
+            total_lab_hours += weekly_count
+        else:
+            total_lecture_hours += weekly_count
+
+        allocations.append({
+            "assignment_id": ta.id,
+            "subject_code": subj.code or "N/A",
+            "subject_name": subj.name,
+            "division": div.name if div else "All",
+            "weekly_lectures": weekly_count,
+            "is_lab": is_lab,
+            "credits": float(subj.credits) if subj.credits else 3.0,
+            "session_type": "Lab" if is_lab else "Theory",
+        })
+
+    # 2. Timetable Schedule & Load
+    timetable_entries = (
+        db.query(TimetableEntry, Subject, Room, Division)
+        .join(Subject, TimetableEntry.subject_id == Subject.id)
+        .outerjoin(Room, TimetableEntry.room_id == Room.id)
+        .outerjoin(Division, TimetableEntry.division_id == Division.id)
+        .filter(TimetableEntry.faculty_id == faculty_id)
+        .all()
+    )
+
+    day_labels = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    schedule_list = []
+    for entry, subj, room, div in timetable_entries:
+        day_str = day_labels[entry.day] if 0 <= entry.day < len(day_labels) else f"Day {entry.day + 1}"
+        schedule_list.append({
+            "day": day_str,
+            "day_index": entry.day,
+            "slot": entry.slot + 1,
+            "subject_code": subj.code,
+            "subject_name": subj.name,
+            "division": div.name if div else "Class",
+            "room": room.name if room else "Room N/A",
+            "type": "Lab" if entry.is_lab_block else "Theory",
+            "batch": entry.batch_name or "All",
+        })
+
+    schedule_list.sort(key=lambda s: (s["day_index"], s["slot"]))
+
+    # 3. Achievements (Publications, Certifications, FDPs, Awards)
+    achievements = (
+        db.query(Achievement)
+        .filter(Achievement.owner_id == faculty_id)
+        .order_by(Achievement.created_at.desc())
+        .all()
+    )
+    achievements_list = []
+    achievements_by_category = {}
+    for a in achievements:
+        cat = a.category.value if hasattr(a.category, "value") else str(a.category)
+        achievements_by_category[cat] = achievements_by_category.get(cat, 0) + 1
+        achievements_list.append({
+            "id": a.id,
+            "title": a.title,
+            "category": cat.upper(),
+            "date": a.date_achieved.strftime("%d %b %Y") if a.date_achieved else None,
+            "organization": a.organization or "Institution / Body",
+            "description": a.description or "",
+            "has_proof": bool(a.document_id),
+        })
+
+    # 4. SLI Student metrics
+    from app.models.sli import Enrollment, PreSemesterResponse, MidSemesterResponse
+    subject_ids = [ta.subject_id for ta, _, _ in assignments]
+    if subject_ids:
+        pre_responses_count = (
+            db.query(PreSemesterResponse)
+            .join(Enrollment, PreSemesterResponse.enrollment_id == Enrollment.enrollment_id)
+            .filter(Enrollment.subject_id.in_(subject_ids))
+            .count()
+        )
+        mid_responses_count = (
+            db.query(MidSemesterResponse)
+            .join(Enrollment, MidSemesterResponse.enrollment_id == Enrollment.enrollment_id)
+            .filter(Enrollment.subject_id.in_(subject_ids))
+            .count()
+        )
+    else:
+        pre_responses_count = 0
+        mid_responses_count = 0
+
+    # 5. Attendance Sessions conducted
+    from app.models.attendance import LectureAttendanceSession
+    attendance_count = db.query(LectureAttendanceSession).filter(LectureAttendanceSession.faculty_id == faculty_id).count()
+
+    total_workload_hours = total_lecture_hours + total_lab_hours
+
+    return {
+        "faculty": {
+            "id": user.id,
+            "full_name": user.full_name,
+            "email": user.email,
+            "employee_id": user.employee_id or "N/A",
+            "department": user.department or "General",
+            "designation": user.designation or "Assistant Professor",
+            "phone": user.phone or "Not provided",
+            "office_address": user.office_address or "Not provided",
+            "joining_date": user.joining_date or "Not provided",
+            "experience": user.experience or "Not provided",
+            "is_active": user.is_active,
+            "can_manage_timetable": user.can_manage_timetable,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+        },
+        "metrics": {
+            "allocated_courses_count": len(allocations),
+            "weekly_timetable_slots": len(timetable_entries),
+            "total_lecture_hours": total_lecture_hours,
+            "total_lab_hours": total_lab_hours,
+            "total_workload_hours": total_workload_hours,
+            "total_achievements": len(achievements),
+            "achievements_by_category": achievements_by_category,
+            "sli_pre_responses": pre_responses_count,
+            "sli_mid_responses": mid_responses_count,
+            "attendance_sessions_logged": attendance_count,
+        },
+        "allocations": allocations,
+        "schedule": schedule_list,
+        "achievements": achievements_list,
+    }
+
+
+# ─── 9. ADMIN PROFILE (Username, Email & Password update) ─────────────────────
+def update_admin_profile(db: Session, admin_user: User, payload) -> User:
+    """Updates admin username (full_name), email, and password."""
+    from app.core.config import settings as s
+    from app.core.security import hash_password, verify_password
+
+    if payload.email is not None:
+        clean_email = payload.email.strip().lower()
+        if clean_email != admin_user.email.lower():
+            existing = db.query(User).filter(func.lower(User.email) == clean_email, User.id != admin_user.id).first()
+            if existing:
+                raise ValueError(f"An account with email '{payload.email}' already exists.")
+            admin_user.email = clean_email
+            s.ADMIN_EMAIL = clean_email
+
+    if payload.full_name is not None and payload.full_name.strip():
+        admin_user.full_name = payload.full_name.strip()
+
+    if payload.new_password is not None and payload.new_password.strip():
+        new_pw = payload.new_password.strip()
+        if len(new_pw) < 6:
+            raise ValueError("New password must be at least 6 characters long.")
+        if not payload.current_password or not payload.current_password.strip():
+            raise ValueError("Current password is required to change password.")
+        if not verify_password(payload.current_password.strip(), admin_user.hashed_password):
+            raise ValueError("Current password is incorrect.")
+        admin_user.hashed_password = hash_password(new_pw)
+
+    db.commit()
+    db.refresh(admin_user)
+    return admin_user
+
+
+
+

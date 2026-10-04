@@ -21,6 +21,11 @@ class AuthSession {
   static String? role; // "faculty" | "admin", from backend's UserRole
   static String? department;
   static String? employeeId;
+  static String? designation;
+  static String? phone;
+  static String? officeAddress;
+  static String? joiningDate;
+  static String? experience;
   static bool canManageTimetable = false;
 
   static bool get isLoggedIn => token != null && token!.isNotEmpty;
@@ -92,6 +97,11 @@ class AuthSession {
     role = null;
     department = null;
     employeeId = null;
+    designation = null;
+    phone = null;
+    officeAddress = null;
+    joiningDate = null;
+    experience = null;
     canManageTimetable = false;
 
     try {

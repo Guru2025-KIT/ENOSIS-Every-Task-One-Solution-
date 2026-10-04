@@ -70,6 +70,10 @@ class Room(Base):
     name = Column(String(100), nullable=False)
     type = Column(Enum(RoomType), nullable=False, default=RoomType.LECTURE)
     capacity = Column(Integer, nullable=False, default=60)
+    building = Column(String(100), nullable=True)
+    equipment = Column(JSON, nullable=True, default=list)  # List of equipment/features
+    is_active = Column(Boolean, nullable=False, default=True)
+    department = Column(String(100), nullable=True)
 
 
 class TeachingAssignment(Base):
@@ -85,9 +89,18 @@ class TeachingAssignment(Base):
     subject_id = Column(String(36), ForeignKey("subjects.id"), nullable=False)
     division_id = Column(String(36), ForeignKey("divisions.id"), nullable=False)
 
+    session_type = Column(String(50), nullable=False, default="theory")
+    weekly_count = Column(Integer, nullable=False, default=1)
+    duration_slots = Column(Integer, nullable=False, default=1)
+    batch_name = Column(String(50), nullable=True)
+    is_shared = Column(Boolean, nullable=False, default=False)
+    joint_group_id = Column(String(100), nullable=True)
+    requires_room_type = Column(String(50), nullable=True)
+
     faculty = relationship("User")
     subject = relationship("Subject")
     division = relationship("Division")
+
 
 
 class FacultyUnavailability(Base):

@@ -34,61 +34,43 @@ class AuthRepository {
       AuthSession.token = data['access_token'] as String;
 
       await _loadCurrentUser();
-      await AuthSession.saveToPreferences();
     } on AuthException {
       rethrow;
     } catch (e) {
       debugPrint('[AuthRepository] Login error: $e (resolved baseUrl=${ApiClient.baseUrl})');
       throw AuthException(
-        'Could not reach the ENOSIS server. Make sure the backend is running '
-        'and ApiClient.baseUrl is set correctly for how you\'re running the app.',
+        'Could not reach the ENOSIS server at ${ApiClient.baseUrl}. ($e)',
       );
     }
   }
 
-  /// Restores session on app startup/refresh:
-  /// Reads persisted token -> calls /auth/me -> updates AuthSession -> returns true if authenticated.
-  Future<bool> restoreSession() async {
-    try {
-      final token = await AuthSession.getPersistedToken();
-      if (token == null || token.isEmpty) {
-        await AuthSession.clear();
-        return false;
-      }
-
-      AuthSession.token = token;
-      final response = await ApiClient.get('/auth/me', token: token);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        AuthSession.userId = data['id'] as String;
-        AuthSession.fullName = data['full_name'] as String;
-        AuthSession.email = data['email'] as String;
-        AuthSession.role = data['role'] as String?;
-        AuthSession.department = data['department'] as String?;
-        AuthSession.employeeId = data['employee_id'] as String?;
-        AuthSession.canManageTimetable = data['can_manage_timetable'] as bool? ?? false;
-        await AuthSession.saveToPreferences();
-        debugPrint('[AuthRepository] Restored session for ${AuthSession.email} (${AuthSession.role})');
-        return true;
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        debugPrint('[AuthRepository] Persisted token expired or invalid (HTTP ${response.statusCode}). Clearing session.');
-        await AuthSession.clear();
-        return false;
-      } else {
-        // Temporary server error, fall back to cached preferences so user isn't kicked out
-        final loaded = await AuthSession.loadFromPreferences();
-        return loaded && AuthSession.isLoggedIn;
-      }
-    } catch (e) {
-      debugPrint('[AuthRepository] Session restore network error: $e. Falling back to cached session.');
-      final loaded = await AuthSession.loadFromPreferences();
-      return loaded && AuthSession.isLoggedIn;
+  /// Dedicated Admin login — validates user is strictly an ADMIN
+  Future<void> adminLogin({required String email, required String password}) async {
+    await login(email: email, password: password);
+    final role = (AuthSession.role ?? '').toUpperCase();
+    if (role != 'ADMIN') {
+      AuthSession.clear();
+      throw AuthException(
+        'Access Restricted: This login is strictly for System Administrators. Please use the Faculty Portal.',
+      );
     }
   }
 
-  Future<void> logout() async {
-    await AuthSession.clear();
+  /// Self-service password reset for faculty
+  Future<Map<String, dynamic>> forgotPassword(String email) async {
+    try {
+      final response = await ApiClient.postJson('/auth/forgot-password', {
+        'email': email.trim(),
+      });
+      if (response.statusCode != 200) {
+        throw AuthException(_extractErrorMessage(response.body, fallback: 'Password reset request failed.'));
+      }
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } on AuthException {
+      rethrow;
+    } catch (e) {
+      throw AuthException('Could not reach the ENOSIS server. ($e)');
+    }
   }
 
   Future<void> signup({
@@ -113,7 +95,8 @@ class AuthRepository {
     } on AuthException {
       rethrow;
     } catch (e) {
-      throw AuthException('Could not reach the ENOSIS server.');
+      debugPrint('[AuthRepository] Signup error: $e (resolved baseUrl=${ApiClient.baseUrl})');
+      throw AuthException('Could not reach the ENOSIS server at ${ApiClient.baseUrl}. ($e)');
     }
   }
 
@@ -121,20 +104,36 @@ class AuthRepository {
     final response = await ApiClient.get('/auth/me', token: AuthSession.token);
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      AuthSession.userId = data['id'] as String;
-      AuthSession.fullName = data['full_name'] as String;
-      AuthSession.email = data['email'] as String;
-      AuthSession.role = data['role'] as String?;
-      AuthSession.department = data['department'] as String?;
-      AuthSession.employeeId = data['employee_id'] as String?;
+      AuthSession.userId = data['id']?.toString() ?? '';
+      AuthSession.fullName = data['full_name']?.toString() ?? '';
+      AuthSession.email = data['email']?.toString() ?? '';
+      AuthSession.role = data['role']?.toString();
+      AuthSession.department = data['department']?.toString();
+      AuthSession.employeeId = data['employee_id']?.toString();
+      AuthSession.designation = data['designation']?.toString() ?? 'Assistant Professor';
+      AuthSession.phone = data['phone']?.toString();
+      AuthSession.officeAddress = data['office_address']?.toString();
+      AuthSession.joiningDate = data['joining_date']?.toString();
+      AuthSession.experience = data['experience']?.toString();
       AuthSession.canManageTimetable = data['can_manage_timetable'] as bool? ?? false;
+    } else {
+      throw AuthException(_extractErrorMessage(response.body, fallback: 'Failed to retrieve profile.'));
     }
   }
 
   /// Self-service profile editing (PATCH /auth/me). Updates AuthSession
   /// in place afterward so the Dashboard greeting/Profile screen reflect
   /// the change immediately, without needing to log out and back in.
-  Future<void> updateProfile({String? fullName, String? department, String? employeeId}) async {
+  Future<void> updateProfile({
+    String? fullName,
+    String? department,
+    String? employeeId,
+    String? designation,
+    String? phone,
+    String? officeAddress,
+    String? joiningDate,
+    String? experience,
+  }) async {
     try {
       final response = await ApiClient.patchJson(
         '/auth/me',
@@ -142,6 +141,11 @@ class AuthRepository {
           if (fullName != null && fullName.isNotEmpty) 'full_name': fullName,
           if (department != null) 'department': department,
           if (employeeId != null) 'employee_id': employeeId,
+          if (designation != null) 'designation': designation,
+          if (phone != null) 'phone': phone,
+          if (officeAddress != null) 'office_address': officeAddress,
+          if (joiningDate != null) 'joining_date': joiningDate,
+          if (experience != null) 'experience': experience,
         },
         token: AuthSession.token,
       );
@@ -152,7 +156,11 @@ class AuthRepository {
       AuthSession.fullName = data['full_name'] as String;
       AuthSession.department = data['department'] as String?;
       AuthSession.employeeId = data['employee_id'] as String?;
-      await AuthSession.saveToPreferences();
+      AuthSession.designation = data['designation'] as String? ?? 'Assistant Professor';
+      AuthSession.phone = data['phone'] as String?;
+      AuthSession.officeAddress = data['office_address'] as String?;
+      AuthSession.joiningDate = data['joining_date'] as String?;
+      AuthSession.experience = data['experience'] as String?;
     } on AuthException {
       rethrow;
     } catch (e) {

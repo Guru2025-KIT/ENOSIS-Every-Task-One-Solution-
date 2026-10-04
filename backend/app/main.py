@@ -24,9 +24,10 @@ from app.models import (  # noqa: F401
 # reversible instead of just "drop and recreate the table."
 Base.metadata.create_all(bind=engine)
 
-from app.sync_and_seed import sync_database_schema, seed_admin_user
+from app.sync_and_seed import sync_database_schema, seed_admin_user, seed_all_faculty_profiles
 sync_database_schema()
 seed_admin_user()
+seed_all_faculty_profiles()
 
 app = FastAPI(title=settings.APP_NAME)
 
@@ -41,6 +42,9 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+# Alias /login and /signup at root for API compatibility
+app.post("/login", response_model=auth.Token, tags=["auth"], include_in_schema=False)(auth.login)
+app.post("/signup", response_model=auth.UserOut, status_code=201, tags=["auth"], include_in_schema=False)(auth.signup)
 app.include_router(timetable.router)
 app.include_router(users.router)
 app.include_router(todo.router)

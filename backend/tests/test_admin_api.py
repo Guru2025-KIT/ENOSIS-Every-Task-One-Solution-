@@ -39,11 +39,13 @@ def test_faculty_manual_crud(admin_token):
     create_res = client.post("/admin/faculty", json=payload, headers=_auth_headers(admin_token))
     assert create_res.status_code == 201
     created_data = create_res.json()
-    faculty_id = created_data["id"]
-    assert created_data["full_name"] == payload["full_name"]
-    assert created_data["email"] == payload["email"]
-    assert created_data["employee_id"] == payload["employee_id"]
-    assert created_data["department"] == payload["department"]
+    fac_obj = created_data.get("faculty", created_data)
+    faculty_id = fac_obj["id"]
+    assert fac_obj["full_name"] == payload["full_name"]
+    assert fac_obj["email"] == payload["email"]
+    assert fac_obj["employee_id"] == payload["employee_id"]
+    assert fac_obj["department"] == payload["department"]
+
 
     # 2. List
     list_res = client.get("/admin/faculty", headers=_auth_headers(admin_token))
@@ -107,7 +109,10 @@ def test_subject_allocations_and_reassignment(admin_token):
         "department": "Computer Engineering",
     }
     fac_res = client.post("/admin/faculty", json=fac_payload, headers=_auth_headers(admin_token))
-    fac_id = fac_res.json()["id"]
+    assert fac_res.status_code == 201
+    fac_json = fac_res.json()
+    fac_id = fac_json.get("faculty", fac_json)["id"]
+
 
     # 1. Create Allocation
     alloc_payload = {
@@ -140,7 +145,10 @@ def test_subject_allocations_and_reassignment(admin_token):
         "department": "Computer Engineering",
     }
     fac2_res = client.post("/admin/faculty", json=fac2_payload, headers=_auth_headers(admin_token))
-    fac2_id = fac2_res.json()["id"]
+    assert fac2_res.status_code == 201
+    fac2_json = fac2_res.json()
+    fac2_id = fac2_json.get("faculty", fac2_json)["id"]
+
 
     # 3. Reassign
     reassign_payload = {

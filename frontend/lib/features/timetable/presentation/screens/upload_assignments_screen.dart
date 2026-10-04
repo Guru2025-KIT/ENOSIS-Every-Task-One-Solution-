@@ -9,7 +9,6 @@ import '../../../../core/theme/app_typography.dart';
 import '../../models/teaching_assignment.dart';
 import '../../providers/timetable_provider.dart';
 
-// Helper class for Pass 1 parsing
 class _RawRowData {
   final String faculty, rawCode, rawName;
   final int theoryHours, pracHours;
@@ -85,7 +84,6 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
     }
   }
 
-  // ✅ 100% DYNAMIC PARSER (No Hardcoded AIML or Divisions)
   List<String> _extractClasses(String rawClass) {
     if (rawClass.isEmpty) return [];
     String c = rawClass.toUpperCase();
@@ -148,7 +146,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
             results.add('$baseName-$d');
           }
         } else {
-          results.add(baseName); // e.g., "TY-IT". Will be expanded in Pass 2.
+          results.add(baseName);
         }
       }
     }
@@ -230,7 +228,6 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
 
         String lastFaculty = '';
 
-        // PASS 1: Read raw data and extract base classes
         for (int i = headerRowIdx + 1; i < rows.length; i++) {
           final row = rows[i];
           
@@ -259,7 +256,6 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
         break;
       }
 
-      // PASS 2: Build dynamic division map and expand combined classes
       Map<String, Set<String>> deptDivisions = {};
       for (var row in rawRows) {
         for (var cName in row.classNames) {
@@ -271,23 +267,25 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
         }
       }
 
-      final List<TeachingAssignment> parsedAssignments = [];
+            final List<TeachingAssignment> parsedAssignments = [];
       for (var row in rawRows) {
         List<String> finalClassNames = [];
         
         for (var cName in row.classNames) {
           if (cName.split('-').length == 3) {
-            finalClassNames.add(cName); // Already has division
+            finalClassNames.add(cName);
           } else if (deptDivisions.containsKey(cName)) {
-            // Expand combined class (e.g., "TY-IT" -> "TY-IT-A", "TY-IT-B")
             for (var div in deptDivisions[cName]!) {
               finalClassNames.add('$cName-$div');
             }
           } else {
-            // Standalone class with no divisions in the whole sheet (e.g., "TY-DS")
             finalClassNames.add(cName);
           }
         }
+
+        // ✅ DETECT JOINT CLASSES: If there are multiple classes for the same row, they are joint!
+        bool isJoint = finalClassNames.length > 1 && row.theoryHours > 0;
+        String jointId = isJoint ? 'joint_${DateTime.now().millisecondsSinceEpoch}_${row.faculty.hashCode}' : '';
 
         for (String className in finalClassNames) {
           if (row.pracHours > 0) {
@@ -315,6 +313,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
             parsedAssignments.add(TeachingAssignment(
               facultyName: row.faculty, subjectName: row.rawName, subjectCode: row.rawCode,
               className: className, batch: '-', weeklyHours: row.theoryHours, type: 'Theory',
+              jointGroupId: jointId, // ✅ PASS JOINT ID HERE
             ));
           }
         }
@@ -339,7 +338,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Loaded ${parsedAssignments.length} assignments dynamically!'),
+          content: Text('Loaded ${parsedAssignments.length} assignments! Joint classes linked.'),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
         ),
@@ -352,6 +351,166 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
         });
       }
     }
+  }
+
+  void _showManualAddAssignmentDialog() {
+    final facCtrl = TextEditingController();
+    final subCtrl = TextEditingController();
+    final codeCtrl = TextEditingController();
+    final classCtrl = TextEditingController();
+    final hoursCtrl = TextEditingController(text: '3');
+    final batchCtrl = TextEditingController(text: 'All');
+    String selectedType = 'Theory';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.add_task, color: AppColors.primary),
+              SizedBox(width: 8),
+              Text('Add Class / Lab Assignment', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: facCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Faculty Name',
+                    hintText: 'e.g. Dr. John Doe',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: subCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Course / Subject Name',
+                    hintText: 'e.g. Machine Learning',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: codeCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Course Code (Optional)',
+                    hintText: 'e.g. IT501',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: classCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Class / Division',
+                    hintText: 'e.g. TY-IT-A or SY-AIML-B',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: selectedType,
+                  decoration: const InputDecoration(
+                    labelText: 'Session Type',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: ['Theory', 'Lab', 'Tutorial'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setDialogState(() {
+                        selectedType = val;
+                        if (selectedType == 'Lab') {
+                          hoursCtrl.text = '4';
+                          batchCtrl.text = 'Batch 1';
+                        } else {
+                          hoursCtrl.text = '3';
+                          batchCtrl.text = 'All';
+                        }
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: hoursCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Weekly Hours',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: batchCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Batch Info',
+                          hintText: 'All / Batch 1',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () {
+                if (facCtrl.text.trim().isEmpty || subCtrl.text.trim().isEmpty || classCtrl.text.trim().isEmpty) {
+                  return;
+                }
+                final hrs = int.tryParse(hoursCtrl.text.trim()) ?? (selectedType == 'Lab' ? 4 : 3);
+                final assignment = TeachingAssignment(
+                  facultyName: facCtrl.text.trim(),
+                  subjectCode: codeCtrl.text.trim().isNotEmpty ? codeCtrl.text.trim() : subCtrl.text.trim().substring(0, subCtrl.text.trim().length.clamp(0, 6)).toUpperCase(),
+                  subjectName: subCtrl.text.trim(),
+                  className: classCtrl.text.trim().toUpperCase(),
+                  type: selectedType,
+                  weeklyHours: hrs,
+                  batch: batchCtrl.text.trim().isNotEmpty ? batchCtrl.text.trim() : (selectedType == 'Lab' ? 'Batch 1' : 'All'),
+                );
+
+                context.read<TimetableProvider>().addAssignment(assignment);
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Assignment added successfully!'),
+                    backgroundColor: AppColors.success,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+              child: const Text('Save Assignment'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -368,24 +527,90 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
       }).toList();
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Upload Master Data'),
-        backgroundColor: AppColors.primary,
+        title: const Text('Faculty & Class Workload', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.white)),
+        backgroundColor: const Color(0xFF0F172A),
+        foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          IconButton(
+            tooltip: 'Add Assignment Manually',
+            icon: const Icon(Icons.add_task),
+            onPressed: _showManualAddAssignmentDialog,
+          ),
           if (assignments.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.refresh),
+              tooltip: 'Re-upload Excel',
+              icon: const Icon(Icons.upload_file),
               onPressed: _pickAndReadExcel,
             ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : assignments.isEmpty
-              ? _buildEmptyState()
-              : _buildLoadedState(filteredAssignments),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showManualAddAssignmentDialog,
+        backgroundColor: const Color(0xFFF97316),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('Add Assignment', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
+      body: Column(
+        children: [
+          // ── STEP 2 GUIDANCE BANNER ───────────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF),
+              border: Border(
+                bottom: BorderSide(
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFDBEAFE),
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF97316),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'Step 2',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Upload your master department workload Excel or manually configure faculty teaching assignments and weekly hours.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF1E3A8A),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.download, size: 16, color: Color(0xFFF97316)),
+                  label: const Text('Template', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFF97316))),
+                  onPressed: _downloadTemplate,
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFFF97316)))
+                : assignments.isEmpty
+                    ? _buildEmptyState()
+                    : _buildLoadedState(filteredAssignments),
+          ),
+        ],
+      ),
     );
   }
 

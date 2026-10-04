@@ -1,6 +1,4 @@
-# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, HTTPException, status
-# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -89,20 +87,23 @@ def create_achievement(
     return _to_out(achievement, db)
 
 
+from sqlalchemy import case
+
+
 @router.get("/mine", response_model=list[AchievementOut])
 def list_my_achievements(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    try:
-        achievements = (
-            db.query(Achievement)
-            .filter(Achievement.owner_id == current_user.id)
-            .order_by(Achievement.date_achieved.desc(), Achievement.created_at.desc())
-            .all()
+    achievements = (
+        db.query(Achievement)
+        .filter(Achievement.owner_id == current_user.id)
+        .order_by(
+            case((Achievement.date_achieved.is_(None), 1), else_=0),
+            Achievement.date_achieved.desc(),
+            Achievement.created_at.desc(),
         )
-        return [_to_out(a, db) for a in achievements]
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to fetch achievements: {str(e)}")
+        .all()
+    )
+    return [_to_out(a, db) for a in achievements]
+
 
 
 @router.delete("/{achievement_id}", status_code=status.HTTP_204_NO_CONTENT)

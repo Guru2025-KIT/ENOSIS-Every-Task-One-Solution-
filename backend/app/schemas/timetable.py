@@ -52,6 +52,10 @@ class RoomCreate(BaseModel):
     name: str
     type: RoomType = RoomType.LECTURE
     capacity: int = 60
+    building: str | None = None
+    equipment: list[str] = Field(default_factory=list)
+    is_active: bool = True
+    department: str | None = None
 
 
 class RoomOut(BaseModel):
@@ -60,12 +64,23 @@ class RoomOut(BaseModel):
     name: str
     type: RoomType
     capacity: int
+    building: str | None = None
+    equipment: list[str] | None = None
+    is_active: bool = True
+    department: str | None = None
 
 
 class TeachingAssignmentCreate(BaseModel):
     faculty_id: str
     subject_id: str
     division_id: str
+    session_type: str = "theory"
+    weekly_count: int = 1
+    duration_slots: int = 1
+    batch_name: str | None = None
+    is_shared: bool = False
+    joint_group_id: str | None = None
+    requires_room_type: str | None = None
 
 
 class TeachingAssignmentOut(BaseModel):
@@ -74,6 +89,14 @@ class TeachingAssignmentOut(BaseModel):
     faculty_id: str
     subject_id: str
     division_id: str
+    session_type: str = "theory"
+    weekly_count: int = 1
+    duration_slots: int = 1
+    batch_name: str | None = None
+    is_shared: bool = False
+    joint_group_id: str | None = None
+    requires_room_type: str | None = None
+
 
 
 class FacultyUnavailabilityCreate(BaseModel):
@@ -87,7 +110,7 @@ class FacultyUnavailabilityCreate(BaseModel):
 # ---------------------------------------------------------------------------
 
 class ScheduleConfigCreate(BaseModel):
-    working_days: int = Field(ge=1, le=6, default=6)
+    working_days: int = Field(ge=1, le=7, default=6)
     day_names: list[str] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     periods_per_day: int = Field(ge=1, le=20, default=8)
     period_duration_minutes: int = Field(ge=15, le=180, default=60)
@@ -95,6 +118,13 @@ class ScheduleConfigCreate(BaseModel):
     lab_duration_minutes: int = Field(ge=15, le=240, default=120)
     tutorial_duration_minutes: int = Field(ge=15, le=180, default=60)
     start_time: str = "09:00"
+    end_time: str = "17:00"
+    break1_enabled: bool = True
+    break1_after_lectures: int = Field(ge=1, le=12, default=2)
+    break1_duration_minutes: int = Field(ge=5, le=120, default=15)
+    break2_enabled: bool = True
+    break2_after_lectures: int = Field(ge=1, le=12, default=5)
+    break2_duration_minutes: int = Field(ge=5, le=120, default=30)
     break_slots: list[int] = []
     break_labels: dict[str, str] = {}
     max_lectures_per_day_per_faculty: int | None = None
@@ -117,6 +147,13 @@ class ScheduleConfigOut(BaseModel):
     lab_duration_minutes: int
     tutorial_duration_minutes: int
     start_time: str
+    end_time: str = "17:00"
+    break1_enabled: bool = True
+    break1_after_lectures: int = 2
+    break1_duration_minutes: int = 15
+    break2_enabled: bool = True
+    break2_after_lectures: int = 5
+    break2_duration_minutes: int = 30
     break_slots: list[int]
     break_labels: dict[str, str]
     max_lectures_per_day_per_faculty: int | None
@@ -132,30 +169,38 @@ class ScheduleConfigOut(BaseModel):
 # Dynamic constraint schemas
 # ---------------------------------------------------------------------------
 
+class ConstraintScope(BaseModel):
+    divisions: list[str] = Field(default_factory=list)
+    subjects: list[str] = Field(default_factory=list)
+    faculty: list[str] = Field(default_factory=list)
+    session_types: list[str] = Field(default_factory=list)
+
+
+class GenericConstraintPayload(BaseModel):
+    rule_type: str = Field(
+        ...,
+        description="Generic rule type: fixed_slot, faculty_unavailable, placement_window, max_per_day, spread, lab_daily, no_gap, preferred_slot"
+    )
+    scope: ConstraintScope = Field(default_factory=ConstraintScope)
+    params: dict[str, Any] = Field(default_factory=dict)
+    priority: str = Field(pattern="^(hard|soft)$", default="hard")
+    weight: int = Field(default=10, ge=1, le=100)
+
+
 class ConstraintCreate(BaseModel):
     """
-    Generic constraint envelope.  `constraint_type` tells the solver what to
-    build; `payload` carries the type-specific data.  `priority` decides
-    whether this is a hard constraint (solver must satisfy) or soft
-    (objective penalty if violated).
-
-    Examples
-    --------
-    Hard faculty unavailability:
-        {"constraint_type": "faculty_unavailability", "priority": "hard",
-         "payload": {"faculty_id": "...", "day": 0, "slot": 2}}
-
-    Soft avoid-first-period:
-        {"constraint_type": "avoid_first_period", "priority": "soft",
-         "payload": {"faculty_id": "..."}}
-
-    Soft preferred room:
-        {"constraint_type": "preferred_room", "priority": "soft",
-         "payload": {"subject_id": "...", "room_id": "..."}}
+    Generic constraint envelope. Supports both the new generic schema:
+    { rule_type, scope: {divisions, subjects, faculty, session_types}, params: {...}, priority, weight }
+    and the legacy envelope:
+    { constraint_type, payload, priority }
     """
-    constraint_type: str
+    constraint_type: str | None = None
+    rule_type: str | None = None
+    scope: ConstraintScope = Field(default_factory=ConstraintScope)
+    params: dict[str, Any] = Field(default_factory=dict)
     priority: str = Field(pattern="^(hard|soft)$", default="hard")
-    payload: dict[str, Any] = {}
+    weight: int = Field(default=10, ge=1, le=100)
+    payload: dict[str, Any] = Field(default_factory=dict)
     description: str = ""
     is_active: bool = True
 
@@ -165,10 +210,12 @@ class ConstraintOut(BaseModel):
     id: str
     constraint_type: str
     priority: str
-    payload: dict[str, Any]
-    description: str
-    is_active: bool
+    weight: int = 10
+    payload: dict[str, Any] = Field(default_factory=dict)
+    description: str = ""
+    is_active: bool = True
     created_at: datetime | None = None
+
 
 
 # ---------------------------------------------------------------------------
@@ -320,11 +367,22 @@ class GenerationRunOut(BaseModel):
 # Pre-validation response
 # ---------------------------------------------------------------------------
 
+class PreflightIssue(BaseModel):
+    division: str | None = None
+    faculty: str | None = None
+    subject: str | None = None
+    reason: str
+    numbers: dict[str, Any] = Field(default_factory=dict)
+    suggested_fix: str
+
+
 class ValidationResponse(BaseModel):
     valid: bool
     conflicts: list[ConflictDetail] = []
     suggestions: list[str] = []
     summary: str = ""
+    issues: list[PreflightIssue] = []
+
 
 
 # ---------------------------------------------------------------------------
@@ -425,3 +483,28 @@ class ParseConstraintResponse(BaseModel):
     confirmation_message: str
     raw_text: str
     parsed_successfully: bool
+
+
+# ---------------------------------------------------------------------------
+# Stage 2 Dynamic CP-SAT Generator API schemas
+# ---------------------------------------------------------------------------
+
+class TimetableGenerateRequestBody(BaseModel):
+    assignments: list[dict[str, Any]] = Field(default_factory=list)
+    time_slots: list[dict[str, Any]] | None = None
+    constraints: list[dict[str, Any]] = Field(default_factory=list)
+    combined_groups: list[list[str]] | None = None
+    working_days: list[str] | None = None
+    schedule_config: dict[str, Any] | None = None
+    lecture_duration_minutes: int = 60
+    lab_duration_minutes: int = 120
+    time_limit_seconds: int = 30
+
+
+class TimetableGenerateResponseBody(BaseModel):
+    status: str
+    timetable: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
+    conflictingConstraints: list[str] = Field(default_factory=list)
+    message: str | None = None
+    solve_time_seconds: float | None = None
+

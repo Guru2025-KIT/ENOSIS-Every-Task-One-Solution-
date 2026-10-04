@@ -28,6 +28,8 @@ class TimetableEntry(Base):
     day = Column(Integer, nullable=False)
     slot = Column(Integer, nullable=False)
     is_lab_block = Column(Boolean, nullable=False, default=False)
+    batch_name = Column(String(50), nullable=True)  # e.g. "Batch 1", "A1", "All"
+    session_type = Column(String(50), nullable=False, default="lecture")  # "lecture", "lab", "combined"
 
     generated_at = Column(DateTime, nullable=True)
 

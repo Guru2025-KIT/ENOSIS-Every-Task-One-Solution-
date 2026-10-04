@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
 import '../../../../core/auth/auth_session.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/app_card.dart';
-import '../../../../core/widgets/section_header.dart';
-import '../../../copo/presentation/screens/copo_workbench_screen.dart';
-import '../../../timetable/presentation/screens/timetable_hub_screen.dart';
+import '../../../auth/presentation/screens/admin_login_screen.dart';
+import '../../../timetable/presentation/screens/timetable_display_screen.dart';
 import '../../data/admin_repository.dart';
 import '../widgets/faculty_upload_dialog.dart';
 
-// ─── ADMIN DASHBOARD SCREEN ──────────────────────────────────────────────────
-
+/// Dedicated Administrator Console for ENOSIS.
+///
+/// Features (Admin Only):
+/// 1. Manage Faculty (Add, Edit, Delete, Search, Onboarding Credentials)
+/// 2. Faculty Performance & Profiles (Comprehensive Teaching, Achievements, SLI & Attendance)
+/// 3. Master Timetable Viewer (Class, Faculty, Room, Lab master schedules)
+/// 4. Admin Profile Settings (Update Username / Email) & SMTP Email Settings
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
 
@@ -30,14 +36,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   AdminDashboardStats? _stats;
   List<FacultyModel> _facultyList = [];
-  List<SubjectAllocationModel> _subjectAllocations = [];
-  List<GovernanceRequestModel> _requests = [];
 
   // Filters
   String _facultySearchQuery = '';
   String _selectedDeptFilter = 'All';
-  String _allocYearFilter = 'S.Y. B.Tech';
-  String _allocSemFilter = 'Semester IV';
+
+  // Performance Tab State
+  String _perfSearchQuery = '';
+  String _perfDeptFilter = 'All';
+  Map<String, dynamic>? _selectedFacultyPerformance;
+  bool _isLoadingPerformance = false;
 
   @override
   void initState() {
@@ -53,15 +61,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   Future<void> _loadDashboardData() async {
-    if (!AuthSession.isAdmin) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-      return;
-    }
-
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -70,22 +69,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     try {
       final statsFuture = _repository.getDashboardStats();
       final facultyFuture = _repository.getFacultyList();
-      final allocationsFuture = _repository.getSubjectAllocations();
-      final requestsFuture = _repository.getGovernanceRequests();
 
-      final results = await Future.wait([
-        statsFuture,
-        facultyFuture,
-        allocationsFuture,
-        requestsFuture,
-      ]);
+      final results = await Future.wait([statsFuture, facultyFuture]);
 
       if (mounted) {
         setState(() {
           _stats = results[0] as AdminDashboardStats;
           _facultyList = results[1] as List<FacultyModel>;
-          _subjectAllocations = results[2] as List<SubjectAllocationModel>;
-          _requests = results[3] as List<GovernanceRequestModel>;
           _isLoading = false;
         });
       }
@@ -99,54 +89,527 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     }
   }
 
-  Future<void> _handleRequestAction(String id, bool approve) async {
-    try {
-      await _repository.processGovernanceAction(
-        requestId: id,
-        action: approve ? 'APPROVE' : 'REJECT',
-      );
-      await _loadDashboardData();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(approve ? 'Request approved successfully.' : 'Request rejected.'),
-            backgroundColor: approve ? AppColors.success : AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Action failed: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    }
+  void _handleLogout() {
+    AuthSession.clear();
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
+      (route) => false,
+    );
   }
 
-  // ─── FACULTY UPLOAD DIALOG ─────────────────────────────────────────────────
+  // ─── ADMIN PROFILE SETTINGS (USERNAME, EMAIL & PASSWORD UPDATE) ───────────
 
-  void _openUploadFacultyDialog() {
+  void _showAdminProfileDialog() {
+    final nameController = TextEditingController(text: AuthSession.fullName ?? 'System Admin');
+    final emailController = TextEditingController(text: AuthSession.email ?? 'admin@enosis.edu.in');
+    final currentPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    bool obscureCurrent = true;
+    bool obscureNew = true;
+    bool obscureConfirm = true;
+    bool isSaving = false;
+
     showDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (ctx) => FacultyUploadDialog(
-        onImportSuccess: _loadDashboardData,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.manage_accounts_rounded, color: AppColors.primary),
+              SizedBox(width: 10),
+              Text('Admin Profile & Security', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: SizedBox(
+            width: 460,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Update your Administrator display username, official email address, and login password.',
+                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Admin Username / Full Name',
+                      prefixIcon: Icon(Icons.person_outline),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Admin Email ID',
+                      prefixIcon: Icon(Icons.email_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  const Divider(height: 1),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      const Icon(Icons.lock_reset_rounded, size: 18, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Change Password (Optional)',
+                        style: AppTypography.bodyMedium.copyWith(fontSize: 13.5, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: currentPasswordController,
+                    obscureText: obscureCurrent,
+                    decoration: InputDecoration(
+                      labelText: 'Current Password',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: Icon(obscureCurrent ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 18),
+                        onPressed: () => setDialogState(() => obscureCurrent = !obscureCurrent),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: newPasswordController,
+                    obscureText: obscureNew,
+                    decoration: InputDecoration(
+                      labelText: 'New Password',
+                      prefixIcon: const Icon(Icons.key_outlined),
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: Icon(obscureNew ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 18),
+                        onPressed: () => setDialogState(() => obscureNew = !obscureNew),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: confirmPasswordController,
+                    obscureText: obscureConfirm,
+                    decoration: InputDecoration(
+                      labelText: 'Confirm New Password',
+                      prefixIcon: const Icon(Icons.check_circle_outline),
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: Icon(obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 18),
+                        onPressed: () => setDialogState(() => obscureConfirm = !obscureConfirm),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSaving ? null : () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      final name = nameController.text.trim();
+                      final email = emailController.text.trim();
+                      final curPw = currentPasswordController.text.trim();
+                      final newPw = newPasswordController.text.trim();
+                      final confirmPw = confirmPasswordController.text.trim();
+
+                      if (name.isEmpty || email.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Username and email cannot be empty.')),
+                        );
+                        return;
+                      }
+
+                      if (newPw.isNotEmpty) {
+                        if (newPw.length < 6) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('New password must be at least 6 characters long.')),
+                          );
+                          return;
+                        }
+                        if (newPw != confirmPw) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('New passwords do not match.')),
+                          );
+                          return;
+                        }
+                        if (curPw.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Please enter your current password to change it.')),
+                          );
+                          return;
+                        }
+                      }
+
+                      setDialogState(() => isSaving = true);
+                      try {
+                        await _repository.updateAdminProfile(
+                          fullName: name,
+                          email: email,
+                          currentPassword: curPw.isNotEmpty ? curPw : null,
+                          newPassword: newPw.isNotEmpty ? newPw : null,
+                        );
+                        if (!mounted) return;
+                        Navigator.pop(ctx);
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                const Icon(Icons.check_circle_outline, color: Colors.white),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    newPw.isNotEmpty
+                                        ? 'Admin credentials & password updated successfully!'
+                                        : 'Admin profile updated to "$name" ($email)',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            backgroundColor: const Color(0xFF10B981),
+                          ),
+                        );
+                      } catch (e) {
+                        setDialogState(() => isSaving = false);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(e.toString().replaceAll('Exception: ', '')),
+                            backgroundColor: AppColors.error,
+                          ),
+                        );
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              child: isSaving
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Save Changes'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // ─── FACULTY CRUD ACTIONS ──────────────────────────────────────────────────
+
+  // ─── EMAIL & SMTP SETTINGS DIALOG ─────────────────────────────────────────
+
+  void _openEmailSettingsDialog() async {
+    Map<String, dynamic>? initialSettings;
+    try {
+      initialSettings = await _repository.getEmailSettings();
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    final adminEmailCtrl = TextEditingController(text: initialSettings?['admin_email'] ?? '');
+    final hostCtrl = TextEditingController(text: initialSettings?['smtp_host'] ?? '');
+    final portCtrl = TextEditingController(text: (initialSettings?['smtp_port'] ?? 587).toString());
+    final userCtrl = TextEditingController(text: initialSettings?['smtp_user'] ?? '');
+    final passCtrl = TextEditingController();
+    bool useTls = true;
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.mail_outline, color: AppColors.primary),
+                  SizedBox(width: 10),
+                  Text('Email & SMTP Settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: SizedBox(
+                width: 480,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Configure the outgoing email relay for sending onboarding credentials and password reset emails to faculty.',
+                        style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: adminEmailCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Admin Sender Email (From)',
+                          hintText: 'admin@yourinstitution.edu',
+                          prefixIcon: Icon(Icons.alternate_email),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: TextField(
+                              controller: hostCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'SMTP Host',
+                                hintText: 'smtp.gmail.com',
+                                prefixIcon: Icon(Icons.dns_outlined),
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 1,
+                            child: TextField(
+                              controller: portCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Port',
+                                hintText: '587',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: userCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'SMTP Username / Email',
+                          hintText: 'your-email@gmail.com',
+                          prefixIcon: Icon(Icons.person_outline),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: passCtrl,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          labelText: 'SMTP Password / App Password',
+                          hintText: '••••••••',
+                          prefixIcon: Icon(Icons.lock_outline),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Use TLS', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                        subtitle: const Text('Enable encryption (recommended for port 587)', style: TextStyle(fontSize: 12)),
+                        value: useTls,
+                        onChanged: (val) => setDialogState(() => useTls = val),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving ? null : () => Navigator.of(ctx).pop(),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          setDialogState(() => isSaving = true);
+                          try {
+                            final settingsMap = {
+                              'admin_email': adminEmailCtrl.text.trim(),
+                              'smtp_host': hostCtrl.text.trim(),
+                              'smtp_port': int.tryParse(portCtrl.text.trim()) ?? 587,
+                              'smtp_user': userCtrl.text.trim(),
+                              if (passCtrl.text.isNotEmpty) 'smtp_password': passCtrl.text,
+                              'smtp_use_tls': useTls,
+                            };
+                            await _repository.updateEmailSettings(settingsMap);
+                            if (ctx.mounted) Navigator.of(ctx).pop();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Email settings saved successfully!'),
+                                  backgroundColor: Color(0xFF10B981),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() => isSaving = false);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Failed to save settings: $e'), backgroundColor: AppColors.error),
+                              );
+                            }
+                          }
+                        },
+                  child: isSaving
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Save Settings'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ─── CREDENTIAL DISPLAY MODAL ─────────────────────────────────────────────
+
+  void _showCredentialDialog(
+    String title,
+    String facultyName,
+    String email,
+    String tempPassword,
+    bool emailSent,
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: (emailSent ? const Color(0xFF10B981) : AppColors.warning).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                emailSent ? Icons.mark_email_read_outlined : Icons.vpn_key_outlined,
+                color: emailSent ? const Color(0xFF10B981) : AppColors.warning,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 440,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Faculty: $facultyName', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+              const SizedBox(height: 4),
+              Text('Email: $email', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Temporary Password:', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                          const SizedBox(height: 4),
+                          SelectableText(
+                            tempPassword,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.copy, size: 20),
+                      tooltip: 'Copy Password',
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: tempPassword));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Password copied to clipboard!')),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Icon(
+                    emailSent ? Icons.check_circle : Icons.info_outline,
+                    size: 16,
+                    color: emailSent ? const Color(0xFF10B981) : AppColors.warning,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      emailSent
+                          ? 'Credentials have been emailed to $email.'
+                          : 'SMTP email not sent (running in console log fallback). Share password manually.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: emailSent ? const Color(0xFF10B981) : AppColors.warning,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── FACULTY CREATION MODAL ───────────────────────────────────────────────
 
   void _openAddFacultyDialog() {
     final nameCtrl = TextEditingController();
-    final empCtrl = TextEditingController(text: 'KIT-AIML-1${_facultyList.length + 1}');
     final emailCtrl = TextEditingController();
-    final phoneCtrl = TextEditingController(text: '+91 98220 99001');
-    String dept = 'CSE (AI & ML)';
+    final empCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    String dept = 'Computer Science';
     String desig = 'Assistant Professor';
 
     showDialog(
@@ -155,16 +618,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              title: Row(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(8)),
-                    child: const Icon(Icons.person_add_alt_1, color: AppColors.primary, size: 22),
-                  ),
-                  const SizedBox(width: 10),
-                  const Text('Add New Faculty Member', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Icon(Icons.person_add_alt_1, color: AppColors.primary),
+                  SizedBox(width: 10),
+                  Text('Add New Faculty Member', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ],
               ),
               content: SingleChildScrollView(
@@ -175,7 +634,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     children: [
                       TextField(
                         controller: nameCtrl,
-                        decoration: const InputDecoration(labelText: 'Full Name (e.g., Dr. Ramesh Kulkarni)', prefixIcon: Icon(Icons.badge_outlined)),
+                        decoration: const InputDecoration(labelText: 'Full Name *', prefixIcon: Icon(Icons.person_outline), border: OutlineInputBorder()),
+                        onChanged: (v) {
+                          if (emailCtrl.text.isEmpty && v.isNotEmpty) {
+                            final slug = v.trim().toLowerCase().replaceAll(' ', '.').replaceAll(RegExp(r'[^a-z0-9.]'), '');
+                            emailCtrl.text = '$slug@enosis.edu';
+                          }
+                        },
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -183,14 +648,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           Expanded(
                             child: TextField(
                               controller: empCtrl,
-                              decoration: const InputDecoration(labelText: 'Employee ID', prefixIcon: Icon(Icons.numbers)),
+                              decoration: const InputDecoration(labelText: 'Employee ID *', hintText: 'EMP-01', prefixIcon: Icon(Icons.badge_outlined), border: OutlineInputBorder()),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: TextField(
                               controller: phoneCtrl,
-                              decoration: const InputDecoration(labelText: 'Contact Phone', prefixIcon: Icon(Icons.phone_outlined)),
+                              decoration: const InputDecoration(labelText: 'Phone', prefixIcon: Icon(Icons.phone_outlined), border: OutlineInputBorder()),
                             ),
                           ),
                         ],
@@ -198,13 +663,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       const SizedBox(height: 12),
                       TextField(
                         controller: emailCtrl,
-                        decoration: const InputDecoration(labelText: 'Official Email', prefixIcon: Icon(Icons.email_outlined)),
+                        decoration: const InputDecoration(labelText: 'Official Email *', prefixIcon: Icon(Icons.email_outlined), border: OutlineInputBorder()),
                       ),
                       const SizedBox(height: 14),
                       DropdownButtonFormField<String>(
                         value: dept,
-                        decoration: const InputDecoration(labelText: 'Department', prefixIcon: Icon(Icons.apartment)),
-                        items: ['CSE (AI & ML)', 'Computer Science', 'Electronics & Telecom', 'Basic Sciences', 'Mechanical Engineering']
+                        decoration: const InputDecoration(labelText: 'Department', prefixIcon: Icon(Icons.apartment), border: OutlineInputBorder()),
+                        items: ['Computer Science', 'CSE (AI & ML)', 'Electronics & Telecom', 'Basic Sciences', 'Mechanical Engineering', 'Information Technology']
                             .map((d) => DropdownMenuItem(value: d, child: Text(d, style: const TextStyle(fontSize: 13))))
                             .toList(),
                         onChanged: (v) => setDialogState(() => dept = v!),
@@ -212,7 +677,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       const SizedBox(height: 14),
                       DropdownButtonFormField<String>(
                         value: desig,
-                        decoration: const InputDecoration(labelText: 'Designation', prefixIcon: Icon(Icons.workspace_premium_outlined)),
+                        decoration: const InputDecoration(labelText: 'Designation', prefixIcon: Icon(Icons.workspace_premium_outlined), border: OutlineInputBorder()),
                         items: ['Professor & HOD', 'Professor', 'Associate Professor', 'Assistant Professor', 'Adjunct Faculty']
                             .map((d) => DropdownMenuItem(value: d, child: Text(d, style: const TextStyle(fontSize: 13))))
                             .toList(),
@@ -227,15 +692,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
                   onPressed: () async {
-                    if (nameCtrl.text.trim().isEmpty) return;
-                    final email = emailCtrl.text.trim().isNotEmpty
-                        ? emailCtrl.text.trim()
-                        : '${nameCtrl.text.trim().toLowerCase().replaceAll(' ', '.')}@enosis.edu.in';
+                    if (nameCtrl.text.trim().isEmpty || emailCtrl.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please fill all required fields.')),
+                      );
+                      return;
+                    }
                     try {
-                      await _repository.createFaculty(
+                      final result = await _repository.createFaculty(
                         name: nameCtrl.text.trim(),
-                        email: email,
-                        employeeId: empCtrl.text.trim(),
+                        email: emailCtrl.text.trim(),
+                        employeeId: empCtrl.text.trim().isNotEmpty ? empCtrl.text.trim() : 'FAC-${DateTime.now().millisecondsSinceEpoch % 10000}',
                         department: dept,
                         designation: desig,
                         phone: phoneCtrl.text.trim(),
@@ -243,8 +710,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       if (ctx.mounted) Navigator.of(ctx).pop();
                       await _loadDashboardData();
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Faculty ${nameCtrl.text.trim()} added successfully!'), backgroundColor: AppColors.success),
+                        final tempPass = result['temp_password'] as String? ?? '';
+                        final emailSent = result['email_sent'] as bool? ?? false;
+                        _showCredentialDialog(
+                          'Faculty Account Created',
+                          nameCtrl.text.trim(),
+                          emailCtrl.text.trim(),
+                          tempPass,
+                          emailSent,
                         );
                       }
                     } catch (e) {
@@ -255,7 +728,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       }
                     }
                   },
-                  child: const Text('Add Faculty'),
+                  child: const Text('Create Faculty'),
                 ),
               ],
             );
@@ -265,344 +738,417 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  void _openEditFacultyDialog(FacultyModel faculty) {
-    final nameCtrl = TextEditingController(text: faculty.name);
-    final emailCtrl = TextEditingController(text: faculty.email);
-    final phoneCtrl = TextEditingController(text: faculty.phone);
-    String dept = faculty.department.isNotEmpty ? faculty.department : 'CSE (AI & ML)';
-    String desig = faculty.designation.isNotEmpty ? faculty.designation : 'Assistant Professor';
-    bool canManage = faculty.canManageTimetable;
-
-    final depts = ['CSE (AI & ML)', 'Computer Science', 'Electronics & Telecom', 'Basic Sciences', 'Mechanical Engineering'];
-    if (!depts.contains(dept)) depts.add(dept);
-
-    final desigs = ['Professor & HOD', 'Professor', 'Associate Professor', 'Assistant Professor', 'Adjunct Faculty'];
-    if (!desigs.contains(desig)) desigs.add(desig);
-
+  void _openUploadFacultyDialog() {
     showDialog(
       context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              title: Text('Edit Faculty: ${faculty.employeeId}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              content: SingleChildScrollView(
-                child: SizedBox(
-                  width: 450,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Full Name')),
-                      const SizedBox(height: 12),
-                      TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email')),
-                      const SizedBox(height: 12),
-                      TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Phone')),
-                      const SizedBox(height: 14),
-                      DropdownButtonFormField<String>(
-                        value: dept,
-                        decoration: const InputDecoration(labelText: 'Department'),
-                        items: depts.map((d) => DropdownMenuItem(value: d, child: Text(d, style: const TextStyle(fontSize: 13)))).toList(),
-                        onChanged: (v) => setDialogState(() => dept = v!),
-                      ),
-                      const SizedBox(height: 14),
-                      DropdownButtonFormField<String>(
-                        value: desig,
-                        decoration: const InputDecoration(labelText: 'Designation'),
-                        items: desigs.map((d) => DropdownMenuItem(value: d, child: Text(d, style: const TextStyle(fontSize: 13)))).toList(),
-                        onChanged: (v) => setDialogState(() => desig = v!),
-                      ),
-                      const SizedBox(height: 14),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Timetable Manager Role', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                        subtitle: const Text('Allow this faculty member to build and solve timetables', style: TextStyle(fontSize: 11)),
-                        value: canManage,
-                        onChanged: (val) => setDialogState(() => canManage = val),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary, foregroundColor: Colors.white),
-                  onPressed: () async {
-                    try {
-                      await _repository.updateFaculty(
-                        id: faculty.id,
-                        name: nameCtrl.text.trim(),
-                        email: emailCtrl.text.trim(),
-                        phone: phoneCtrl.text.trim(),
-                        department: dept,
-                        designation: desig,
-                        canManageTimetable: canManage,
-                      );
-                      if (ctx.mounted) Navigator.of(ctx).pop();
-                      await _loadDashboardData();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Updated ${nameCtrl.text.trim()}!'), backgroundColor: AppColors.success),
-                        );
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Failed to update: $e'), backgroundColor: AppColors.error),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text('Save Changes'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      builder: (ctx) => FacultyUploadDialog(
+        onImportSuccess: _loadDashboardData,
+      ),
     );
   }
 
-  // ─── SUBJECT ALLOCATION REASSIGNMENT ────────────────────────────────────────
+  // ─── RESEND ONBOARDING CREDENTIALS ────────────────────────────────────────
 
-  void _openReassignSubjectDialog(SubjectAllocationModel allocation) {
-    if (_facultyList.isEmpty) return;
-    String selectedFacId = allocation.facultyId.isNotEmpty ? allocation.facultyId : _facultyList.first.id;
-    String coFacName = allocation.coFacultyName;
+  Future<void> _handleSendOnboarding(FacultyModel faculty) async {
+    try {
+      final res = await _repository.sendOnboardingEmail(faculty.id);
+      final tempPass = res['temp_password'] as String? ?? '';
+      final emailSent = res['email_sent'] as bool? ?? false;
+      if (mounted) {
+        _showCredentialDialog(
+          'Onboarding Credentials Dispatched',
+          faculty.name,
+          faculty.email,
+          tempPass,
+          emailSent,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send onboarding email: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
 
+  // ─── DELETE FACULTY ───────────────────────────────────────────────────────
+
+  void _confirmDeleteFaculty(FacultyModel faculty) {
     showDialog(
       context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              title: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(color: AppColors.secondary.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-                    child: const Icon(Icons.assignment_ind, color: AppColors.secondary, size: 22),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Reallocate Subject Faculty', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                        Text('${allocation.courseCode}: ${allocation.courseName}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              content: SizedBox(
-                width: 480,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 24),
+            const SizedBox(width: 8),
+            Text('Delete Faculty: ${faculty.name}'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete ${faculty.name} (${faculty.employeeId})? This will deactivate their portal access and remove assignments.',
+          style: const TextStyle(fontSize: 13.5, height: 1.4),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await _repository.deleteFaculty(faculty.id);
+                await _loadDashboardData();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Faculty ${faculty.name} deleted successfully.'), backgroundColor: AppColors.error),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Delete failed: $e'), backgroundColor: AppColors.error),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── FACULTY PERFORMANCE DETAILS MODAL ────────────────────────────────────
+
+  void _showFacultyPerformanceDetails(FacultyModel faculty) async {
+    setState(() {
+      _isLoadingPerformance = true;
+      _selectedFacultyPerformance = null;
+    });
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          return DraggableScrollableSheet(
+            initialChildSize: 0.85,
+            maxChildSize: 0.95,
+            minChildSize: 0.5,
+            builder: (_, scrollController) {
+              return Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Assign Primary Faculty In-Charge:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: _facultyList.any((f) => f.id == selectedFacId) ? selectedFacId : _facultyList.first.id,
-                      decoration: const InputDecoration(prefixIcon: Icon(Icons.school_outlined)),
-                      items: _facultyList.map((f) {
-                        return DropdownMenuItem(
-                          value: f.id,
-                          child: Text('${f.name} (${f.designation}, ${f.department})', style: const TextStyle(fontSize: 12.5)),
-                        );
-                      }).toList(),
-                      onChanged: (v) => setDialogState(() => selectedFacId = v!),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Co-Faculty / Lab Assistant:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: coFacName,
-                      decoration: const InputDecoration(prefixIcon: Icon(Icons.group_outlined)),
-                      items: ['None', ..._facultyList.map((f) => f.name)].map((name) {
-                        return DropdownMenuItem(
-                          value: name,
-                          child: Text(name, style: const TextStyle(fontSize: 12.5)),
-                        );
-                      }).toList(),
-                      onChanged: (v) => setDialogState(() => coFacName = v!),
-                    ),
-                    const SizedBox(height: 16),
+                    // Handle
                     Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(8)),
-                      child: const Row(
+                      width: 44,
+                      height: 4,
+                      margin: const EdgeInsets.only(top: 12, bottom: 8),
+                      decoration: BoxDecoration(color: const Color(0xFFCBD5E1), borderRadius: BorderRadius.circular(2)),
+                    ),
+
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      child: Row(
                         children: [
-                          Icon(Icons.info_outline, size: 18, color: AppColors.primary),
-                          SizedBox(width: 8),
-                          Expanded(
+                          CircleAvatar(
+                            radius: 26,
+                            backgroundColor: const Color(0xFF0F172A),
                             child: Text(
-                              'Reassigning updates the teacher in the CO-PO Attainment Workbench and Timetable automatically.',
-                              style: TextStyle(fontSize: 11.5, color: AppColors.primary),
+                              faculty.name.isNotEmpty ? faculty.name[0].toUpperCase() : 'F',
+                              style: const TextStyle(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold),
                             ),
                           ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(faculty.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                                Text('${faculty.designation} · ${faculty.department}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                                Text('ID: ${faculty.employeeId} · ${faculty.email}', style: const TextStyle(fontSize: 12, color: Color(0xFF2563EB))),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(sheetCtx),
+                          ),
                         ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+
+                    // Body
+                    Expanded(
+                      child: FutureBuilder<Map<String, dynamic>>(
+                        future: _repository.getFacultyPerformance(faculty.id),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Text('Failed to load performance metrics: ${snapshot.error}', style: const TextStyle(color: AppColors.error)),
+                            );
+                          }
+
+                          final data = snapshot.data ?? {};
+                          final facInfo = data['faculty'] as Map<String, dynamic>? ?? {};
+                          final metrics = data['metrics'] as Map<String, dynamic>? ?? {};
+                          final allocations = data['allocations'] as List? ?? [];
+                          final schedule = data['schedule'] as List? ?? [];
+                          final achievements = data['achievements'] as List? ?? [];
+
+                          return ListView(
+                            controller: scrollController,
+                            padding: const EdgeInsets.all(20),
+                            children: [
+                              // KPI Cards Grid
+                              Row(
+                                children: [
+                                  _buildPerfKpiCard('Workload', '${metrics['total_workload_hours'] ?? metrics['weekly_timetable_slots'] ?? allocations.length * 3}h/wk', Icons.schedule_rounded, const Color(0xFF2563EB)),
+                                  const SizedBox(width: 12),
+                                  _buildPerfKpiCard('Courses', '${metrics['allocated_courses_count'] ?? allocations.length}', Icons.menu_book, const Color(0xFFF97316)),
+                                  const SizedBox(width: 12),
+                                  _buildPerfKpiCard('Achievements', '${metrics['total_achievements'] ?? achievements.length}', Icons.emoji_events, const Color(0xFF10B981)),
+                                  const SizedBox(width: 12),
+                                  _buildPerfKpiCard('SLI Responses', '${(metrics['sli_pre_responses'] ?? 0) + (metrics['sli_mid_responses'] ?? 0)}', Icons.psychology, const Color(0xFF8B5CF6)),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+
+                              // Faculty Profile Summary Card
+                              Card(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Row(
+                                        children: [
+                                          Icon(Icons.person_pin_outlined, size: 18, color: AppColors.primary),
+                                          SizedBox(width: 8),
+                                          Text('Faculty Profile & Contact Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                        ],
+                                      ),
+                                      const Divider(height: 18),
+                                      Row(
+                                        children: [
+                                          Expanded(child: _buildInfoItem('Phone / Mobile', facInfo['phone']?.toString() ?? 'Not specified')),
+                                          Expanded(child: _buildInfoItem('Office / Cabin', facInfo['office_address']?.toString() ?? 'Not specified')),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Row(
+                                        children: [
+                                          Expanded(child: _buildInfoItem('Joining Date', facInfo['joining_date']?.toString() ?? 'Not specified')),
+                                          Expanded(child: _buildInfoItem('Experience', facInfo['experience']?.toString() ?? 'Not specified')),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+
+                              // Teaching Allocations & Workload
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('📚 Course Allocations & Workload', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      '${metrics['total_lecture_hours'] ?? 0}h Theory · ${metrics['total_lab_hours'] ?? 0}h Lab',
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              if (allocations.isEmpty)
+                                const Card(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(16),
+                                    child: Text('No courses allocated yet in Master Timetable.', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                                  ),
+                                )
+                              else
+                                ...allocations.map((a) {
+                                  final isLab = a['is_lab'] == true;
+                                  return Card(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    child: ListTile(
+                                      leading: Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: isLab ? const Color(0xFFFEF3C7) : const Color(0xFFEFF6FF),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Icon(
+                                          isLab ? Icons.biotech_outlined : Icons.class_outlined,
+                                          color: isLab ? const Color(0xFFD97706) : const Color(0xFF2563EB),
+                                          size: 20,
+                                        ),
+                                      ),
+                                      title: Text('${a['subject_code']}: ${a['subject_name']}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                                      subtitle: Text('${a['division']} · Credits: ${a['credits']} · ${a['weekly_lectures']} hrs/week (${a['session_type']})'),
+                                    ),
+                                  );
+                                }),
+
+                              if (schedule.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                const Text('🗓️ Weekly Timetable Schedule', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: schedule.map((s) {
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.grey.shade300),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Container(
+                                            width: 8,
+                                            height: 8,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: s['type'] == 'Lab' ? const Color(0xFFF59E0B) : const Color(0xFF2563EB),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            '${s['day']} Slot ${s['slot']}: ${s['subject_code']} (${s['division']}, ${s['room']})',
+                                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
+
+                              const SizedBox(height: 24),
+
+                              // Research & Achievements
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('🏆 Research, Publications & CAS Achievements', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                                  Text(
+                                    '${achievements.length} Total',
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              if (achievements.isEmpty)
+                                const Card(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(16),
+                                    child: Text('No research papers, patents, or awards submitted yet.', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                                  ),
+                                )
+                              else
+                                ...achievements.map((ach) {
+                                  return Card(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    child: ListTile(
+                                      leading: const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 24),
+                                      title: Text(ach['title'] ?? 'Untitled Achievement', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                                      subtitle: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '${ach['category']} · ${ach['organization']} ${ach['date'] != null ? '· ${ach['date']}' : ''}',
+                                            style: const TextStyle(fontSize: 12, color: Color(0xFF2563EB), fontWeight: FontWeight.w500),
+                                          ),
+                                          if ((ach['description'] as String?)?.isNotEmpty == true) ...[
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              ach['description'],
+                                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }),
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ],
                 ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary, foregroundColor: Colors.white),
-                  onPressed: () async {
-                    try {
-                      await _repository.reassignSubjectAllocation(
-                        allocationId: allocation.id,
-                        facultyId: selectedFacId,
-                        coFacultyName: coFacName,
-                      );
-                      if (ctx.mounted) Navigator.of(ctx).pop();
-                      await _loadDashboardData();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Reallocated ${allocation.courseCode} successfully!'),
-                            backgroundColor: AppColors.success,
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Reallocation failed: $e'), backgroundColor: AppColors.error),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text('Confirm Allocation'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
-  void _openAddNewSubjectDialog() {
-    if (_facultyList.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add at least one faculty member first.')),
-      );
-      return;
-    }
+  Widget _buildPerfKpiCard(String label, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 6),
+            Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: color)),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+          ],
+        ),
+      ),
+    );
+  }
 
-    final codeCtrl = TextEditingController();
-    final nameCtrl = TextEditingController();
-    int credits = 3;
-    String year = _allocYearFilter;
-    String sem = _allocSemFilter;
-    String dept = 'CSE (AI & ML)';
-    String facId = _facultyList.first.id;
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              title: const Text('Add New Course / Subject', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              content: SingleChildScrollView(
-                child: SizedBox(
-                  width: 460,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: codeCtrl,
-                        decoration: const InputDecoration(labelText: 'Course Code (e.g., UAMPC0405)', prefixIcon: Icon(Icons.code)),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: nameCtrl,
-                        decoration: const InputDecoration(labelText: 'Course Title (e.g., Cloud Computing)', prefixIcon: Icon(Icons.menu_book)),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: year,
-                              decoration: const InputDecoration(labelText: 'Year'),
-                              items: ['F.Y. B.Tech', 'S.Y. B.Tech', 'T.Y. B.Tech', 'Final Year B.Tech']
-                                  .map((y) => DropdownMenuItem(value: y, child: Text(y, style: const TextStyle(fontSize: 12))))
-                                  .toList(),
-                              onChanged: (v) => setDialogState(() => year = v!),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: sem,
-                              decoration: const InputDecoration(labelText: 'Semester'),
-                              items: ['Semester I', 'Semester II', 'Semester III', 'Semester IV', 'Semester V', 'Semester VI', 'Semester VII', 'Semester VIII']
-                                  .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 12))))
-                                  .toList(),
-                              onChanged: (v) => setDialogState(() => sem = v!),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        value: facId,
-                        decoration: const InputDecoration(labelText: 'Assign Faculty In-Charge'),
-                        items: _facultyList.map((f) => DropdownMenuItem(value: f.id, child: Text('${f.name} (${f.department})', style: const TextStyle(fontSize: 12.5)))).toList(),
-                        onChanged: (v) => setDialogState(() => facId = v!),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-                  onPressed: () async {
-                    if (codeCtrl.text.trim().isEmpty || nameCtrl.text.trim().isEmpty) return;
-                    try {
-                      await _repository.createSubjectAllocation(
-                        courseCode: codeCtrl.text.trim().toUpperCase(),
-                        courseName: nameCtrl.text.trim(),
-                        department: dept,
-                        year: year,
-                        semester: sem,
-                        credits: credits,
-                        facultyId: facId,
-                      );
-                      if (ctx.mounted) Navigator.of(ctx).pop();
-                      await _loadDashboardData();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Course ${codeCtrl.text.trim()} created!'), backgroundColor: AppColors.success),
-                        );
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Failed to create course: $e'), backgroundColor: AppColors.error),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text('Add Course'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+  Widget _buildInfoItem(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value.isNotEmpty ? value : 'Not specified',
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+        ),
+      ],
     );
   }
 
@@ -610,105 +1156,52 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (!AuthSession.isAdmin) {
-      return Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.primary,
-          elevation: 1,
-          title: const Text(
-            'Institutional Admin Portal',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: AppCard(
-              padding: const EdgeInsets.all(32),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.primarySoft,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.admin_panel_settings_outlined,
-                        size: 48,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Administrator Access Required',
-                      style: AppTypography.h2.copyWith(fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'The KIT Central Master Data & Governance Console is restricted to institutional administrators (e.g. admin@enosis.edu.in).\n\nYou are currently signed in as a Faculty member (${AuthSession.email ?? "Faculty"}). Faculty workflows including Timetable, CO-PO Workbench, and Career Advancement are available in your main menu.',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textSecondary,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      icon: const Icon(Icons.arrow_back, size: 18),
-                      label: const Text('Back to Dashboard', style: TextStyle(fontWeight: FontWeight.w600)),
-                      onPressed: () {
-                        if (Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop();
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
     final isMobile = Responsive.isMobile(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        elevation: 1,
+        backgroundColor: const Color(0xFF0F172A), // Deep Navy for Admin Console
+        elevation: 2,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'KIT Admin Portal & Governance Console',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+            const Row(
+              children: [
+                Icon(Icons.shield_outlined, color: Color(0xFFF97316), size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'ENOSIS Admin Portal',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17),
+                ),
+              ],
             ),
             Text(
-              "KIT's College of Engineering (Autonomous), Kolhapur · Central Master Data",
-              style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 11.5),
+              "Central Faculty & Academic Governance Console · ${AuthSession.fullName ?? 'Admin'}",
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 11.5),
             ),
           ],
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.manage_accounts_rounded, color: Colors.white),
+            tooltip: 'Admin Profile Settings (Username & Email)',
+            onPressed: _showAdminProfileDialog,
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined, color: Colors.white),
+            tooltip: 'Email & SMTP Settings',
+            onPressed: _openEmailSettingsDialog,
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
-            tooltip: 'Refresh Records from Database',
+            tooltip: 'Refresh Records',
             onPressed: _loadDashboardData,
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, color: Color(0xFFF87171)),
+            tooltip: 'Log Out',
+            onPressed: _handleLogout,
           ),
           const SizedBox(width: 8),
         ],
@@ -716,12 +1209,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           controller: _tabController,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white60,
-          indicatorColor: AppColors.secondary,
+          indicatorColor: const Color(0xFFF97316),
           indicatorWeight: 3.5,
           tabs: [
-            Tab(icon: const Icon(Icons.people_alt_outlined, size: 18), text: '1. Faculty Directory (${_facultyList.length})'),
-            Tab(icon: const Icon(Icons.menu_book_outlined, size: 18), text: '2. Manage Subjects & Teaching Load (${_subjectAllocations.length})'),
-            Tab(icon: const Icon(Icons.verified_user_outlined, size: 18), text: '3. Approvals & System Audit (${_requests.length})'),
+            Tab(icon: const Icon(Icons.people_alt_outlined, size: 18), text: '1. Manage Faculty (${_facultyList.length})'),
+            Tab(icon: const Icon(Icons.insights_rounded, size: 18), text: '2. Faculty Performance'),
+            const Tab(icon: Icon(Icons.calendar_month_outlined, size: 18), text: '3. Timetable'),
           ],
         ),
       ),
@@ -732,7 +1225,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 children: [
                   CircularProgressIndicator(),
                   SizedBox(height: 16),
-                  Text('Loading Live Central Master Data from Database...', style: TextStyle(fontWeight: FontWeight.w600)),
+                  Text('Loading Live Central Master Data...', style: TextStyle(fontWeight: FontWeight.w600)),
                 ],
               ),
             )
@@ -762,14 +1255,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   controller: _tabController,
                   children: [
                     _buildFacultyManagementTab(isMobile),
-                    _buildSubjectManagementTab(isMobile),
-                    _buildApprovalsTab(isMobile),
+                    _buildFacultyPerformanceTab(isMobile),
+                    const TimetableDisplayScreen(),
                   ],
                 ),
     );
   }
 
-  // ─── TAB 1: FACULTY DIRECTORY & MANAGEMENT ─────────────────────────────────
+  // ─── TAB 1: MANAGE FACULTY (ADD / DELETE / LIST) ───────────────────────────
 
   Widget _buildFacultyManagementTab(bool isMobile) {
     final filtered = _facultyList.where((f) {
@@ -800,9 +1293,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   Expanded(
                     child: TextField(
                       decoration: const InputDecoration(
-                        hintText: 'Search faculty by name, employee code, or designation...',
+                        hintText: 'Search faculty by name, employee ID, or designation...',
                         prefixIcon: Icon(Icons.search),
                         isDense: true,
+                        border: OutlineInputBorder(),
                       ),
                       onChanged: (val) => setState(() => _facultySearchQuery = val),
                     ),
@@ -811,7 +1305,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   DropdownButton<String>(
                     value: _selectedDeptFilter,
                     underline: const SizedBox(),
-                    items: ['All', 'CSE (AI & ML)', 'Computer Science', 'Electronics & Telecom', 'Basic Sciences', 'Mechanical Engineering']
+                    items: ['All', 'Computer Science', 'CSE (AI & ML)', 'Electronics & Telecom', 'Basic Sciences', 'Mechanical Engineering', 'Information Technology']
                         .map((dept) => DropdownMenuItem(value: dept, child: Text(dept, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))))
                         .toList(),
                     onChanged: (val) => setState(() => _selectedDeptFilter = val!),
@@ -819,22 +1313,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   const SizedBox(width: 16),
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      side: const BorderSide(color: AppColors.primary),
+                      foregroundColor: const Color(0xFF0F172A),
+                      side: const BorderSide(color: Color(0xFF0F172A)),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
                     icon: const Icon(Icons.file_upload_outlined, size: 18),
-                    label: const Text('Import Faculty (Excel/CSV)', style: TextStyle(fontWeight: FontWeight.bold)),
+                    label: const Text('Import Excel/CSV', style: TextStyle(fontWeight: FontWeight.bold)),
                     onPressed: _openUploadFacultyDialog,
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.secondary,
+                      backgroundColor: const Color(0xFFF97316),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                     ),
-                    icon: const Icon(Icons.add, size: 18),
+                    icon: const Icon(Icons.person_add_alt_1, size: 18),
                     label: const Text('Add Faculty', style: TextStyle(fontWeight: FontWeight.bold)),
                     onPressed: _openAddFacultyDialog,
                   ),
@@ -845,14 +1339,162 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           const SizedBox(height: 16),
 
           // Faculty List
-          Text('Registered Faculty Members (${filtered.length} shown)', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+          Text('Registered Faculty Members (${filtered.length})', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           if (filtered.isEmpty)
             const AppCard(
               child: Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 32),
-                  child: Text('No faculty records found matching your filters.'),
+                  child: Text('No faculty records found matching your search.'),
+                ),
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: filtered.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, idx) {
+                final faculty = filtered[idx];
+                return Card(
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 22,
+                          backgroundColor: const Color(0xFF0F172A),
+                          child: Text(
+                            faculty.name.isNotEmpty ? faculty.name[0].toUpperCase() : 'F',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(faculty.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: faculty.isActive ? const Color(0xFF10B981).withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      faculty.isActive ? 'ACTIVE' : 'INACTIVE',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: faculty.isActive ? const Color(0xFF10B981) : Colors.grey,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '${faculty.designation} · ${faculty.department} · ID: ${faculty.employeeId}',
+                                style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                              ),
+                              Text(
+                                '${faculty.email} · Phone: ${faculty.phone}',
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF2563EB)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Actions
+                        IconButton(
+                          icon: const Icon(Icons.insights_rounded, color: Color(0xFF2563EB)),
+                          tooltip: 'View Performance & Profile',
+                          onPressed: () => _showFacultyPerformanceDetails(faculty),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.forward_to_inbox_rounded, color: Color(0xFFF97316)),
+                          tooltip: 'Resend Onboarding Credentials',
+                          onPressed: () => _handleSendOnboarding(faculty),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                          tooltip: 'Delete Faculty',
+                          onPressed: () => _confirmDeleteFaculty(faculty),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ─── TAB 2: FACULTY PERFORMANCE & PROFILES ────────────────────────────────
+
+  Widget _buildFacultyPerformanceTab(bool isMobile) {
+    final filtered = _facultyList.where((f) {
+      final matchesSearch = f.name.toLowerCase().contains(_perfSearchQuery.toLowerCase()) ||
+          f.department.toLowerCase().contains(_perfSearchQuery.toLowerCase()) ||
+          f.designation.toLowerCase().contains(_perfSearchQuery.toLowerCase());
+      final matchesDept = _perfDeptFilter == 'All' || f.department == _perfDeptFilter;
+      return matchesSearch && matchesDept;
+    }).toList();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      decoration: const InputDecoration(
+                        hintText: 'Search faculty performance profiles...',
+                        prefixIcon: Icon(Icons.search),
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (val) => setState(() => _perfSearchQuery = val),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  DropdownButton<String>(
+                    value: _perfDeptFilter,
+                    underline: const SizedBox(),
+                    items: ['All', 'Computer Science', 'CSE (AI & ML)', 'Electronics & Telecom', 'Basic Sciences', 'Mechanical Engineering', 'Information Technology']
+                        .map((dept) => DropdownMenuItem(value: dept, child: Text(dept, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))))
+                        .toList(),
+                    onChanged: (val) => setState(() => _perfDeptFilter = val!),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          Text('Faculty Performance Overview (${filtered.length})', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+
+          if (filtered.isEmpty)
+            const AppCard(
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 32),
+                  child: Text('No faculty found matching the performance filter.'),
                 ),
               ),
             )
@@ -865,107 +1507,48 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               itemBuilder: (context, idx) {
                 final faculty = filtered[idx];
                 return Card(
+                  elevation: 2,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 24,
-                          backgroundColor: AppColors.primary,
-                          child: Text(
-                            faculty.name.split(' ').map((n) => n.isNotEmpty ? n[0] : '').take(2).join(),
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => _showFacultyPerformanceDetails(faculty),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundColor: const Color(0xFF0F172A),
+                            child: Text(
+                              faculty.name.isNotEmpty ? faculty.name[0].toUpperCase() : 'F',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(faculty.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary)),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(6)),
-                                    child: Text(faculty.employeeId, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                                  ),
-                                  if (faculty.canManageTimetable) ...[
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(color: AppColors.secondary.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
-                                      child: const Text('Timetable Coordinator', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.secondary)),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                              const SizedBox(height: 3),
-                              Text('${faculty.designation} · ${faculty.department}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12.5)),
-                              const SizedBox(height: 4),
-                              Text('✉ ${faculty.email}   |   ☎ ${faculty.phone.isNotEmpty ? faculty.phone : "N/A"}', style: const TextStyle(color: AppColors.textTertiary, fontSize: 11.5)),
-                              if (faculty.assignedSubjectCodes.isNotEmpty) ...[
-                                const SizedBox(height: 8),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(faculty.name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(0xFF0F172A))),
+                                const SizedBox(height: 2),
+                                Text('${faculty.designation} · ${faculty.department}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                                const SizedBox(height: 6),
                                 Wrap(
-                                  spacing: 6,
+                                  spacing: 8,
                                   runSpacing: 4,
-                                  children: faculty.assignedSubjectCodes.map((code) {
-                                    return Chip(
-                                      visualDensity: VisualDensity.compact,
-                                      backgroundColor: const Color(0xFFF1F5F9),
-                                      label: Text('$code In-Charge', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary)),
-                                    );
-                                  }).toList(),
+                                  children: [
+                                    _buildBadge('ID: ${faculty.employeeId}', const Color(0xFF0F172A)),
+                                    if (faculty.assignedSubjectCodes.isNotEmpty)
+                                      _buildBadge('Courses: ${faculty.assignedSubjectCodes.join(", ")}', const Color(0xFF2563EB)),
+                                    _buildBadge(faculty.isActive ? 'Active' : 'Inactive', faculty.isActive ? const Color(0xFF10B981) : Colors.grey),
+                                  ],
                                 ),
                               ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Row(
-                          children: [
-                            OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
-                              icon: const Icon(Icons.edit_outlined, size: 16),
-                              label: const Text('Edit'),
-                              onPressed: () => _openEditFacultyDialog(faculty),
                             ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, color: AppColors.error),
-                              tooltip: 'Deactivate Faculty',
-                              onPressed: () async {
-                                final confirm = await showDialog<bool>(
-                                  context: context,
-                                  builder: (c) => AlertDialog(
-                                    title: const Text('Deactivate Faculty Member?'),
-                                    content: Text('Are you sure you want to deactivate ${faculty.name}?'),
-                                    actions: [
-                                      TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Cancel')),
-                                      ElevatedButton(
-                                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
-                                        onPressed: () => Navigator.of(c).pop(true),
-                                        child: const Text('Deactivate'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                                if (confirm == true) {
-                                  await _repository.deleteFaculty(faculty.id);
-                                  await _loadDashboardData();
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Deactivated ${faculty.name}')),
-                                    );
-                                  }
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                      ],
+                          ),
+                          const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppColors.textSecondary),
+                        ],
+                      ),
                     ),
                   ),
                 );
@@ -976,278 +1559,75 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  // ─── TAB 2: SUBJECT ALLOCATION & TEACHING LOAD ─────────────────────────────
-
-  Widget _buildSubjectManagementTab(bool isMobile) {
-    final filteredSubjects = _subjectAllocations.where((s) {
-      return s.year == _allocYearFilter && s.semester == _allocSemFilter;
-    }).toList();
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Filter Toolbar
-          Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: _allocYearFilter,
-                      decoration: const InputDecoration(labelText: 'Academic Year', isDense: true),
-                      items: ['F.Y. B.Tech', 'S.Y. B.Tech', 'T.Y. B.Tech', 'Final Year B.Tech']
-                          .map((y) => DropdownMenuItem(value: y, child: Text(y, style: const TextStyle(fontSize: 13))))
-                          .toList(),
-                      onChanged: (v) => setState(() => _allocYearFilter = v!),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: _allocSemFilter,
-                      decoration: const InputDecoration(labelText: 'Semester', isDense: true),
-                      items: ['Semester I', 'Semester II', 'Semester III', 'Semester IV', 'Semester V', 'Semester VI', 'Semester VII', 'Semester VIII']
-                          .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 13))))
-                          .toList(),
-                      onChanged: (v) => setState(() => _allocSemFilter = v!),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.secondary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                    ),
-                    icon: const Icon(Icons.add_box_outlined, size: 18),
-                    label: const Text('Add Course', style: TextStyle(fontWeight: FontWeight.bold)),
-                    onPressed: _openAddNewSubjectDialog,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          Text(
-            'Active Teaching Allocations (${filteredSubjects.length} courses in $_allocYearFilter - $_allocSemFilter)',
-            style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-
-          if (filteredSubjects.isEmpty)
-            const AppCard(
-              child: Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 32),
-                  child: Text('No courses allocated for this semester yet.'),
-                ),
-              ),
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: filteredSubjects.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, idx) {
-                final alloc = filteredSubjects[idx];
-                return Card(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: AppColors.primarySoft,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            alloc.courseCode,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(alloc.courseName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: AppColors.textPrimary)),
-                              const SizedBox(height: 3),
-                              Text('Assigned Teacher: ${alloc.facultyName}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5, color: AppColors.secondary)),
-                              if (alloc.coFacultyName != 'None' && alloc.coFacultyName.isNotEmpty)
-                                Text('Co-Faculty: ${alloc.coFacultyName}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11.5)),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.secondary,
-                            side: const BorderSide(color: AppColors.secondary),
-                          ),
-                          icon: const Icon(Icons.swap_horiz, size: 16),
-                          label: const Text('Reassign Faculty'),
-                          onPressed: () => _openReassignSubjectDialog(alloc),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-        ],
+  Widget _buildBadge(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color),
       ),
     );
   }
 
-  // ─── TAB 3: APPROVALS & SYSTEM AUDIT ───────────────────────────────────────
-
-  Widget _buildApprovalsTab(bool isMobile) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SectionHeader(title: 'Pending Faculty Governance & CAS Requests'),
-          const SizedBox(height: 12),
-          if (_requests.isEmpty)
-            const AppCard(
-              child: Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 32),
-                  child: Text('All pending requests have been approved and verified!'),
-                ),
-              ),
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _requests.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, idx) {
-                final req = _requests[idx];
-                return AppCard(
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(8)),
-                        child: Text(req.type, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(req.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
-                            const SizedBox(height: 2),
-                            Text('Submitted by ${req.facultyName}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.success, foregroundColor: Colors.white),
-                        onPressed: () => _handleRequestAction(req.id, true),
-                        child: const Text('Approve'),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton(
-                        style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
-                        onPressed: () => _handleRequestAction(req.id, false),
-                        child: const Text('Reject'),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          const SizedBox(height: 28),
-
-          const SectionHeader(title: 'Administrative Quick Shortcuts'),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: AppCard(
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TimetableHubScreen())),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Generate / Modify Department Timetable', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Icon(Icons.arrow_forward_ios, size: 15, color: AppColors.textSecondary),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: AppCard(
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CopoWorkbenchScreen(initialMappingStarted: true))),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('CO-PO Attainment Workbench & Matrix', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Icon(Icons.arrow_forward_ios, size: 15, color: AppColors.textSecondary),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  // ─── STAT COUNTERS ROW ────────────────────────────────────────────────────
 
   Widget _buildStatRow(bool isMobile) {
-    final totalFaculty = _stats?.totalFaculty ?? _facultyList.length;
-    final allocatedCourses = _stats?.allocatedCoursesCount ?? _subjectAllocations.length;
-    final attainmentPercent = _stats?.attainmentCompletedPercent ?? 0;
-    final pendingGov = _stats?.pendingGovernanceCount ?? _requests.length;
+    final total = _stats?.totalFaculty ?? _facultyList.length;
+    final active = _stats?.activeFaculty ?? _facultyList.where((f) => f.isActive).length;
+    final courses = _stats?.allocatedCoursesCount ?? 0;
 
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: isMobile ? 2 : 4,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
-      childAspectRatio: isMobile ? 1.4 : 1.7,
+    return Row(
       children: [
-        _buildStatCard('Total Faculty', '$totalFaculty', Icons.people_alt_outlined, AppColors.primary),
-        _buildStatCard('Allocated Courses', '$allocatedCourses', Icons.menu_book, AppColors.secondary),
-        _buildStatCard('Attainment Completed', '$attainmentPercent%', Icons.check_circle_outline, AppColors.success),
-        _buildStatCard('Pending Governance', '$pendingGov', Icons.pending_actions, AppColors.warning),
+        _buildStatCard('Total Faculty', '$total', Icons.groups, const Color(0xFF0F172A)),
+        const SizedBox(width: 14),
+        _buildStatCard('Active Faculty', '$active', Icons.person_pin, const Color(0xFF10B981)),
+        const SizedBox(width: 14),
+        _buildStatCard('Allocated Courses', '$courses', Icons.book_outlined, const Color(0xFF2563EB)),
       ],
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
+  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(value, style: AppTypography.statNumber.copyWith(color: color, fontSize: 26)),
-                Icon(icon, color: color, size: 22),
-              ],
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
-            const SizedBox(height: 6),
-            Text(title, style: const TextStyle(color: AppColors.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w600)),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: color)),
+                  Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
           ],
         ),
       ),

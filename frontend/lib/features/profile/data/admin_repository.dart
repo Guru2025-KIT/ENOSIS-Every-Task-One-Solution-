@@ -297,7 +297,7 @@ class AdminRepository {
     return list.map((e) => FacultyModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<FacultyModel> createFaculty({
+  Future<Map<String, dynamic>> createFaculty({
     required String name,
     required String email,
     required String employeeId,
@@ -305,9 +305,10 @@ class AdminRepository {
     String? designation,
     String? phone,
     String? password,
+    bool sendEmail = true,
   }) async {
     final res = await ApiClient.postJson(
-      '/admin/faculty',
+      '/admin/faculty?send_email=$sendEmail',
       {
         'full_name': name,
         'email': email,
@@ -322,7 +323,8 @@ class AdminRepository {
     if (res.statusCode != 201) {
       throw Exception('Failed to create faculty: ${res.body}');
     }
-    return FacultyModel.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    return data;  // { faculty: {...}, temp_password: "...", email_sent: true/false }
   }
 
   Future<FacultyModel> updateFaculty({
@@ -363,6 +365,56 @@ class AdminRepository {
     }
   }
 
+  // ─── Password Reset & Onboarding ──────────────────────────────────────────
+
+  Future<Map<String, dynamic>> resetFacultyPassword(String facultyId, {bool sendEmail = true}) async {
+    final res = await ApiClient.postJson(
+      '/admin/faculty/$facultyId/reset-password',
+      {'send_email': sendEmail},
+      token: _token,
+    );
+    if (res.statusCode != 200) {
+      throw Exception('Failed to reset password: ${res.body}');
+    }
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> sendOnboardingEmail(String facultyId) async {
+    final res = await ApiClient.postJson(
+      '/admin/faculty/$facultyId/send-onboarding',
+      {},
+      token: _token,
+    );
+    if (res.statusCode != 200) {
+      throw Exception('Failed to send onboarding email: ${res.body}');
+    }
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  // ─── Email Settings ───────────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> getEmailSettings() async {
+    final res = await ApiClient.get('/admin/settings/email', token: _token);
+    if (res.statusCode != 200) {
+      throw Exception('Failed to fetch email settings: ${res.body}');
+    }
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateEmailSettings(Map<String, dynamic> settings) async {
+    final res = await ApiClient.putJson(
+      '/admin/settings/email',
+      settings,
+      token: _token,
+    );
+    if (res.statusCode != 200) {
+      throw Exception('Failed to update email settings: ${res.body}');
+    }
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  // ─── Spreadsheet Upload & Import ──────────────────────────────────────────
+
   Future<FacultyValidationResultModel> validateFacultyUpload({
     List<int>? bytes,
     String? filePath,
@@ -397,6 +449,8 @@ class AdminRepository {
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     return data['imported_count'] as int? ?? 0;
   }
+
+  // ─── Subject Allocations ──────────────────────────────────────────────────
 
   Future<List<SubjectAllocationModel>> getSubjectAllocations({String? department}) async {
     final query = department != null && department != 'All' ? '?department=${Uri.encodeComponent(department)}' : '';
@@ -457,6 +511,8 @@ class AdminRepository {
     return SubjectAllocationModel.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
 
+  // ─── Governance ───────────────────────────────────────────────────────────
+
   Future<List<GovernanceRequestModel>> getGovernanceRequests({String? statusFilter}) async {
     final query = statusFilter != null ? '?status_filter=${Uri.encodeComponent(statusFilter)}' : '';
     final res = await ApiClient.get('/admin/governance-requests$query', token: _token);
@@ -485,4 +541,50 @@ class AdminRepository {
     }
     return GovernanceRequestModel.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
+
+  // ─── Faculty Performance (Admin Overview) ─────────────────────────────────
+
+  Future<Map<String, dynamic>> getFacultyPerformance(String facultyId) async {
+    final res = await ApiClient.get('/admin/faculty/$facultyId/performance', token: _token);
+    if (res.statusCode != 200) {
+      throw Exception('Failed to fetch faculty performance: ${res.body}');
+    }
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  // ─── Admin Profile (Username, Email & Password Update) ───────────────────
+
+  Future<Map<String, dynamic>> updateAdminProfile({
+    String? fullName,
+    String? email,
+    String? currentPassword,
+    String? newPassword,
+  }) async {
+    final res = await ApiClient.putJson(
+      '/admin/profile',
+      {
+        if (fullName != null && fullName.isNotEmpty) 'full_name': fullName.trim(),
+        if (email != null && email.isNotEmpty) 'email': email.trim(),
+        if (currentPassword != null && currentPassword.isNotEmpty) 'current_password': currentPassword.trim(),
+        if (newPassword != null && newPassword.isNotEmpty) 'new_password': newPassword.trim(),
+      },
+      token: _token,
+    );
+    if (res.statusCode != 200) {
+      String msg = 'Failed to update admin profile: ${res.body}';
+      try {
+        final err = jsonDecode(res.body);
+        if (err is Map && err.containsKey('detail')) {
+          msg = err['detail'].toString();
+        }
+      } catch (_) {}
+      throw Exception(msg);
+    }
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    if (data['full_name'] != null) AuthSession.fullName = data['full_name'] as String;
+    if (data['email'] != null) AuthSession.email = data['email'] as String;
+    return data;
+  }
 }
+
+

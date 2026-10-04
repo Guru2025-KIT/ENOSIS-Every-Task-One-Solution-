@@ -46,4 +46,33 @@ class DashboardService {
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return DashboardSummaryModel.fromJson(data);
   }
+
+  Future<bool> notifyFacultyForCourseSlot({
+    required String subjectName,
+    required String timeRange,
+    required String roomName,
+    required String divisionName,
+    String? timetableEntryId,
+    String? customMessage,
+  }) async {
+    try {
+      final payload = {
+        'subject_name': subjectName,
+        'time_range': timeRange,
+        'room_name': roomName,
+        'division_name': divisionName,
+        if (timetableEntryId != null) 'timetable_entry_id': timetableEntryId,
+        if (customMessage != null) 'custom_message': customMessage,
+      };
+
+      final response = await ApiClient.postJson(
+        '/notifications/notify-course-slot',
+        payload,
+        token: _token,
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (_) {
+      return false;
+    }
+  }
 }

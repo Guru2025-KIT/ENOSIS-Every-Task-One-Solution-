@@ -11,9 +11,18 @@ import '../../../faculty_insights/presentation/screens/faculty_insights_screen.d
 import '../../../timetable/presentation/screens/generate_timetable_screen.dart';
 import '../../../timetable/presentation/screens/timetable_hub_screen.dart';
 import '../../../todo/presentation/screens/my_day_screen.dart';
-import '../../data/mock_dashboard_data.dart';
 
-/// Screen 7 — Modules Hub view.
+class ModuleItem {
+  final IconData icon;
+  final String label;
+  final String? subtitle;
+  const ModuleItem({
+    required this.icon,
+    required this.label,
+    this.subtitle,
+  });
+}
+
 class ModulesScreen extends StatelessWidget {
   const ModulesScreen({super.key});
 
@@ -61,9 +70,47 @@ class ModulesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final quickAccessItems = [
-      ...MockDashboardData.quickAccessItems,
+      const ModuleItem(
+        icon: Icons.track_changes_outlined,
+        label: 'CO-PO Mapping',
+        subtitle: 'Attainment & matrices',
+      ),
+      const ModuleItem(
+        icon: Icons.tune_outlined,
+        label: 'My Constraints',
+        subtitle: 'Preferences & leaves',
+      ),
+      const ModuleItem(
+        icon: Icons.calendar_month_outlined,
+        label: 'Timetable',
+        subtitle: 'Weekly faculty schedule',
+      ),
+      const ModuleItem(
+        icon: Icons.checklist_outlined,
+        label: 'To-Do List',
+        subtitle: 'Tasks & reminders',
+      ),
+      const ModuleItem(
+        icon: Icons.assessment_outlined,
+        label: 'Reports',
+        subtitle: 'Analytics & summaries',
+      ),
+      const ModuleItem(
+        icon: Icons.psychology_outlined,
+        label: 'Faculty Insights',
+        subtitle: 'Student Learning Intelligence',
+      ),
+      const ModuleItem(
+        icon: Icons.workspace_premium_outlined,
+        label: 'Career Advancement',
+        subtitle: 'Track your professional growth',
+      ),
       if (AuthSession.canAccessTimetableGeneration)
-        const QuickAccessItem(icon: Icons.edit_calendar_outlined, label: 'Generate Timetable'),
+        const ModuleItem(
+          icon: Icons.auto_awesome_outlined,
+          label: 'Generate Timetable',
+          subtitle: 'Automated schedule engine',
+        ),
     ];
 
     final isMobile = Responsive.isMobile(context);

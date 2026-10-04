@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../auth/auth_session.dart';
 
 /// Centralized HTTP client for every call to the ENOSIS FastAPI backend.
 class ApiClient {
@@ -31,19 +32,19 @@ class ApiClient {
       if (host.isNotEmpty && host != 'localhost' && host != '127.0.0.1') {
         list.add('http://$host:8000');
       }
-      list.add('http://localhost:8000');
       list.add('http://127.0.0.1:8000');
-      list.add('http://172.16.54.114:8000');
+      list.add('http://localhost:8000');
     } else if (defaultTargetPlatform == TargetPlatform.android) {
-      // 10.0.2.2 is Android Emulator loopback to host; 172.16.54.114 is LAN IP for physical devices
+      // Physical device Wi-Fi IP (Current PC IP), followed by emulator loopback
+      list.add('http://10.199.8.143:8000');
+      list.add('http://10.78.141.143:8000');
       list.add('http://10.0.2.2:8000');
-      list.add('http://172.16.54.114:8000');
+      list.add('http://10.0.3.2:8000');
       list.add('http://localhost:8000');
       list.add('http://127.0.0.1:8000');
     } else {
-      list.add('http://localhost:8000');
       list.add('http://127.0.0.1:8000');
-      list.add('http://172.16.54.114:8000');
+      list.add('http://localhost:8000');
     }
 
     // Return deduplicated list preserving order
@@ -75,18 +76,31 @@ class ApiClient {
     return '$appBaseUrl/#/assessment/$accessToken';
   }
 
-  static Uri _uri(String base, String path) => Uri.parse('$base$path');
+  static Uri _uri(String base, String path) {
+    var cleanBase = base.trim();
+    while (cleanBase.endsWith('/')) {
+      cleanBase = cleanBase.substring(0, cleanBase.length - 1);
+    }
+    var cleanPath = path.trim();
+    if (!cleanPath.startsWith('/')) {
+      cleanPath = '/$cleanPath';
+    }
+    return Uri.parse('$cleanBase$cleanPath');
+  }
 
   /// Helper to send an HTTP request trying candidate base URLs if connection fails.
+  /// [timeoutSeconds] defaults to 7 (original behavior). Callers may pass a
+  /// higher value for long-running operations like timetable generation.
   static Future<http.Response> _sendWithFallback(
-    Future<http.Response> Function(String base) requestFn,
-  ) async {
+    Future<http.Response> Function(String base) requestFn, {
+    int timeoutSeconds = 7,
+  }) async {
     final candidates = candidateBaseUrls;
     Object? lastError;
 
     for (final base in candidates) {
       try {
-        final response = await requestFn(base).timeout(const Duration(seconds: 7));
+        final response = await requestFn(base).timeout(Duration(seconds: timeoutSeconds));
         _activeBaseUrl = base;
         return response;
       } catch (e) {
@@ -101,22 +115,30 @@ class ApiClient {
     throw Exception('Failed to connect to any backend server candidates.');
   }
 
+  /// Resolves the effective auth token: explicit token wins, otherwise
+  /// falls back to AuthSession.token (auto-attached for convenience).
+  static String? _resolveToken(String? explicitToken) {
+    return explicitToken ?? AuthSession.token;
+  }
+
   /// POST with a JSON body — used by most endpoints (e.g. signup).
   static Future<http.Response> postJson(
     String path,
     Map<String, dynamic> body, {
     String? token,
+    int timeoutSeconds = 7,
   }) {
+    final effectiveToken = _resolveToken(token);
     return _sendWithFallback((base) {
       return http.post(
         _uri(base, path),
         headers: {
           'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
+          if (effectiveToken != null) 'Authorization': 'Bearer $effectiveToken',
         },
         body: jsonEncode(body),
       );
-    });
+    }, timeoutSeconds: timeoutSeconds);
   }
 
   /// POST with form-encoded fields — used specifically by /auth/login,
@@ -127,12 +149,13 @@ class ApiClient {
     Map<String, String> fields, {
     String? token,
   }) {
+    final effectiveToken = _resolveToken(token);
     return _sendWithFallback((base) {
       return http.post(
         _uri(base, path),
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          if (token != null) 'Authorization': 'Bearer $token',
+          if (effectiveToken != null) 'Authorization': 'Bearer $effectiveToken',
         },
         body: fields,
       );
@@ -140,11 +163,12 @@ class ApiClient {
   }
 
   static Future<http.Response> get(String path, {String? token}) {
+    final effectiveToken = _resolveToken(token);
     return _sendWithFallback((base) {
       return http.get(
         _uri(base, path),
         headers: {
-          if (token != null) 'Authorization': 'Bearer $token',
+          if (effectiveToken != null) 'Authorization': 'Bearer $effectiveToken',
         },
       );
     });
@@ -156,12 +180,13 @@ class ApiClient {
     Map<String, dynamic> body, {
     String? token,
   }) {
+    final effectiveToken = _resolveToken(token);
     return _sendWithFallback((base) {
       return http.put(
         _uri(base, path),
         headers: {
           'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
+          if (effectiveToken != null) 'Authorization': 'Bearer $effectiveToken',
         },
         body: jsonEncode(body),
       );
@@ -175,12 +200,13 @@ class ApiClient {
     Map<String, dynamic> body, {
     String? token,
   }) {
+    final effectiveToken = _resolveToken(token);
     return _sendWithFallback((base) {
       return http.patch(
         _uri(base, path),
         headers: {
           'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
+          if (effectiveToken != null) 'Authorization': 'Bearer $effectiveToken',
         },
         body: jsonEncode(body),
       );
@@ -188,11 +214,12 @@ class ApiClient {
   }
 
   static Future<http.Response> delete(String path, {String? token}) {
+    final effectiveToken = _resolveToken(token);
     return _sendWithFallback((base) {
       return http.delete(
         _uri(base, path),
         headers: {
-          if (token != null) 'Authorization': 'Bearer $token',
+          if (effectiveToken != null) 'Authorization': 'Bearer $effectiveToken',
         },
       );
     });
@@ -205,25 +232,48 @@ class ApiClient {
     List<int>? fileBytes,
     required String fileName,
     required String fieldName,
+    Map<String, String>? fields,
     String? token,
+    int timeoutSeconds = 20,
   }) async {
-    final request = http.MultipartRequest('POST', _uri(baseUrl, path));
-    if (token != null) {
-      request.headers['Authorization'] = 'Bearer $token';
+    final effectiveToken = _resolveToken(token);
+    final candidates = candidateBaseUrls;
+    Object? lastError;
+
+    for (final base in candidates) {
+      try {
+        final request = http.MultipartRequest('POST', _uri(base, path));
+        if (effectiveToken != null) {
+          request.headers['Authorization'] = 'Bearer $effectiveToken';
+        }
+        if (fields != null) {
+          request.fields.addAll(fields);
+        }
+
+        if (fileBytes != null) {
+          request.files.add(http.MultipartFile.fromBytes(
+            fieldName,
+            fileBytes,
+            filename: fileName,
+          ));
+        } else if (filePath != null) {
+          request.files.add(await http.MultipartFile.fromPath(fieldName, filePath));
+        } else {
+          throw ArgumentError('Either filePath or fileBytes must be provided');
+        }
+
+        final streamed = await request.send().timeout(Duration(seconds: timeoutSeconds));
+        _activeBaseUrl = base;
+        return streamed;
+      } catch (e) {
+        lastError = e;
+        debugPrint('[ApiClient] uploadFile failed for $base: $e. Trying next candidate...');
+      }
     }
-    
-    if (fileBytes != null) {
-      request.files.add(http.MultipartFile.fromBytes(
-        fieldName,
-        fileBytes,
-        filename: fileName,
-      ));
-    } else if (filePath != null) {
-      request.files.add(await http.MultipartFile.fromPath(fieldName, filePath));
-    } else {
-      throw ArgumentError('Either filePath or fileBytes must be provided');
+
+    if (lastError != null) {
+      throw lastError;
     }
-    
-    return request.send();
+    throw Exception('Failed to connect to any backend server candidates for upload.');
   }
 }

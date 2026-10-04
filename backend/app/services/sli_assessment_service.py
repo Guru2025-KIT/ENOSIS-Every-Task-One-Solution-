@@ -729,6 +729,49 @@ def update_assessment_status(
     return _format_assessment_out(db, assessment, subject, academic_class)
 
 
+def delete_assessment(
+    db: Session,
+    faculty_id: str,
+    assessment_id: int,
+    is_admin: bool = False,
+) -> dict[str, Any]:
+    """Deletes an assessment and its non-frozen draft records if required."""
+    assessment = db.query(Assessment).filter(Assessment.assessment_id == assessment_id).first()
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found.")
+
+    academic_class = db.query(AcademicClass).filter(AcademicClass.class_id == assessment.class_id).first()
+    division_id = academic_class.division_id if academic_class else None
+    authorize_faculty_teaching_assignment(db, faculty_id, assessment.subject_id, division_id, is_admin)
+
+    # Clean up any linked draft responses if needed
+    db.delete(assessment)
+    db.commit()
+
+    return {"status": "success", "message": f"Assessment {assessment_id} has been permanently deleted."}
+
+
+def purge_all_assessments(db: Session) -> dict[str, Any]:
+    """
+    Purges all assessments, responses (PRE, MID, END), student topic feedback,
+    interventions, and manual teaching assignments from the database.
+    """
+    db.query(StudentTopicFeedback).delete(synchronize_session=False)
+    db.query(PreSemesterResponse).delete(synchronize_session=False)
+    db.query(MidSemesterResponse).delete(synchronize_session=False)
+    db.query(EndSemesterResponse).delete(synchronize_session=False)
+    try:
+        from app.models.sli import Intervention
+        db.query(Intervention).delete(synchronize_session=False)
+    except Exception:
+        pass
+    db.query(Assessment).delete(synchronize_session=False)
+    db.query(TeachingAssignment).delete(synchronize_session=False)
+    db.commit()
+    return {"status": "success", "message": "All assessments, student responses, and manual teaching assignments have been purged."}
+
+
+
 def _format_assessment_out(
     db: Session,
     assessment: Assessment,

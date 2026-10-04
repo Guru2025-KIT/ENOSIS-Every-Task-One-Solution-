@@ -44,47 +44,6 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
     context.read<SliEndProvider>().fetchTeachingContexts();
   }
 
-  void _openAssignmentSelectionDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        return Dialog(
-          backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: SingleChildScrollView(
-              child: _SelectTeachingAssignmentCard(
-                isDialog: true,
-                stage: widget.stage,
-                onAssignmentCompleted: (newContext) {
-                  Navigator.of(dialogContext).pop();
-                  _onAssignmentCreated(newContext);
-                },
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _onAssignmentCreated(FacultyTeachingContext newContext) {
-    _refreshAllContexts();
-    context.read<SliPreProvider>().selectContext(newContext);
-    context.read<SliMidProvider>().selectContext(newContext);
-    context.read<SliEndProvider>().selectContext(newContext);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Assigned to ${newContext.subjectName} (${newContext.yearDisplay} • Div ${newContext.divisionCode})'),
-        backgroundColor: AppColors.success,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isMobile = Responsive.isMobile(context);
@@ -95,16 +54,16 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
     final isVerifiedOutcome = widget.stage == 'VERIFIED_OUTCOME';
 
     final stageTitle = isVerifiedOutcome
-        ? 'Teaching Contexts • Verified Outcome'
+        ? (isMobile ? 'Verified Outcome' : 'Teaching Contexts • Verified Outcome')
         : isEnd
-            ? 'Teaching Contexts • END Assessment'
+            ? (isMobile ? 'END Assessment' : 'Teaching Contexts • END Assessment')
             : isGapDetection
-                ? 'Teaching Contexts • Gap Detection'
+                ? (isMobile ? 'Gap Detection' : 'Teaching Contexts • Gap Detection')
                 : isAction
-                    ? 'Teaching Contexts • Faculty Action'
+                    ? (isMobile ? 'Faculty Action' : 'Teaching Contexts • Faculty Action')
                     : isMid
-                        ? 'Teaching Contexts • MID Assessment'
-                        : 'Teaching Contexts • PRE Assessment';
+                        ? (isMobile ? 'MID Assessment' : 'Teaching Contexts • MID Assessment')
+                        : (isMobile ? 'PRE Assessment' : 'Teaching Contexts • PRE Assessment');
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -123,11 +82,6 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline, color: Colors.white),
-            tooltip: 'Add / Select Assignment',
-            onPressed: () => _openAssignmentSelectionDialog(context),
-          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             tooltip: 'Refresh Contexts',
@@ -200,20 +154,56 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
               );
             }
 
-            // If no timetable / teaching assignment exists, offer course assignment selection directly
+            // If no timetable / teaching assignment exists for this faculty
             if (provider.contexts.isEmpty) {
-              return SingleChildScrollView(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isMobile ? 16 : 24,
-                  vertical: isMobile ? 16 : 24,
-                ),
-                child: ResponsiveCenter(
-                  maxWidth: 720,
-                  child: _SelectTeachingAssignmentCard(
-                    stage: widget.stage,
-                    onAssignmentCompleted: (newContext) {
-                      _onAssignmentCreated(newContext);
-                    },
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: AppColors.primarySoft,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.menu_book_outlined,
+                          size: 48,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'No Assigned Courses Found',
+                        style: AppTypography.h3.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 440),
+                        child: Text(
+                          'You can only create and manage assessments for subjects assigned to you in the official timetable schedule. If your schedule was recently generated, tap Refresh below.',
+                          textAlign: TextAlign.center,
+                          style: AppTypography.bodySecondary.copyWith(height: 1.5),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: _refreshAllContexts,
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('Refresh Assigned Courses'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -344,17 +334,6 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                        ),
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.primary,
-                            side: const BorderSide(color: AppColors.primary),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          icon: const Icon(Icons.add, size: 16),
-                          label: const Text('Add Assignment', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          onPressed: () => _openAssignmentSelectionDialog(context),
                         ),
                       ],
                     ),
@@ -753,393 +732,3 @@ class _InfoBadge extends StatelessWidget {
   }
 }
 
-/// Dynamic Teaching Assignment Selection Card allowing faculty to explicitly assign institutional courses
-class _SelectTeachingAssignmentCard extends StatefulWidget {
-  final String stage;
-  final bool isDialog;
-  final Function(FacultyTeachingContext) onAssignmentCompleted;
-
-  const _SelectTeachingAssignmentCard({
-    required this.stage,
-    this.isDialog = false,
-    required this.onAssignmentCompleted,
-  });
-
-  @override
-  State<_SelectTeachingAssignmentCard> createState() => _SelectTeachingAssignmentCardState();
-}
-
-class _SelectTeachingAssignmentCardState extends State<_SelectTeachingAssignmentCard> {
-  final SliService _sliService = SliService();
-  bool _isLoadingOptions = true;
-  String? _optionsError;
-
-  List<Map<String, dynamic>> _subjects = [];
-  List<Map<String, dynamic>> _divisions = [];
-  List<Map<String, dynamic>> _semesters = [];
-
-  String? _selectedSubjectId;
-  String? _selectedDivisionId;
-  int? _selectedSemesterId;
-
-  bool _isSubmitting = false;
-  String? _submitError;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadOptions();
-  }
-
-  Future<void> _loadOptions() async {
-    setState(() {
-      _isLoadingOptions = true;
-      _optionsError = null;
-    });
-
-    try {
-      final data = await _sliService.getAvailableTeachingOptions();
-      if (!mounted) return;
-      setState(() {
-        _subjects = List<Map<String, dynamic>>.from(data['subjects'] ?? []);
-        _divisions = List<Map<String, dynamic>>.from(data['divisions'] ?? []);
-        _semesters = List<Map<String, dynamic>>.from(data['semesters'] ?? []);
-
-        if (_subjects.isNotEmpty) {
-          _selectedSubjectId = _subjects.first['subject_id'] as String?;
-        }
-        if (_divisions.isNotEmpty) {
-          _selectedDivisionId = _divisions.first['division_id'] as String?;
-        }
-        if (_semesters.isNotEmpty) {
-          final activeSem = _semesters.firstWhere(
-            (s) => s['status'] == 'ACTIVE',
-            orElse: () => _semesters.first,
-          );
-          _selectedSemesterId = activeSem['semester_id'] as int?;
-        }
-        _isLoadingOptions = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _optionsError = e.toString();
-        _isLoadingOptions = false;
-      });
-    }
-  }
-
-  Future<void> _submitAssignment() async {
-    if (_selectedSubjectId == null || _selectedDivisionId == null) {
-      setState(() {
-        _submitError = 'Please select both a Subject and Class/Division.';
-      });
-      return;
-    }
-
-    setState(() {
-      _isSubmitting = true;
-      _submitError = null;
-    });
-
-    try {
-      final contextObj = await _sliService.assignFacultyTeachingContext(
-        subjectId: _selectedSubjectId!,
-        divisionId: _selectedDivisionId!,
-        semesterId: _selectedSemesterId,
-      );
-
-      if (!mounted) return;
-      widget.onAssignmentCompleted(contextObj);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _submitError = e.toString();
-        _isSubmitting = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoadingOptions) {
-      return const Padding(
-        padding: EdgeInsets.all(40),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              LoadingIndicator(size: 36),
-              SizedBox(height: 12),
-              Text('Loading subjects & classes...', style: TextStyle(color: AppColors.textSecondary)),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_optionsError != null) {
-      return Padding(
-        padding: const EdgeInsets.all(24),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, color: AppColors.error, size: 40),
-              const SizedBox(height: 12),
-              Text('Failed to load courses: $_optionsError', style: AppTypography.bodySmall, textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: _loadOptions,
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Try Again'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      padding: EdgeInsets.all(widget.isDialog ? 24 : 28),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.school_outlined, color: AppColors.primary, size: 24),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.isDialog ? 'Add Teaching Assignment' : 'Select Teaching Assignment',
-                      style: AppTypography.h3.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      widget.isDialog
-                          ? 'Choose a subject & division to assign to your faculty profile.'
-                          : 'No timetable assignment found. Explicitly select your course assignment to proceed with assessment & surveys.',
-                      style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          const Divider(color: AppColors.divider, height: 1),
-          const SizedBox(height: 20),
-
-          // 1. Subject Dropdown
-          Text(
-            'Select Subject *',
-            style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                isExpanded: true,
-                value: _selectedSubjectId,
-                hint: const Text('Choose a subject'),
-                items: _subjects.map((sub) {
-                  final name = sub['subject_name'] as String? ?? 'Subject';
-                  final code = sub['subject_code'] as String?;
-                  return DropdownMenuItem<String>(
-                    value: sub['subject_id'] as String,
-                    child: Text(
-                      code != null && code.isNotEmpty ? '$name ($code)' : name,
-                      style: const TextStyle(fontSize: 14),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  setState(() => _selectedSubjectId = val);
-                },
-              ),
-            ),
-          ),
-          const SizedBox(height: 18),
-
-          // 2. Division Dropdown
-          Text(
-            'Select Class / Division *',
-            style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                isExpanded: true,
-                value: _selectedDivisionId,
-                hint: const Text('Choose a division'),
-                items: _divisions.map((div) {
-                  final name = div['division_name'] as String? ?? 'Division';
-                  final yr = div['year_level'] as int? ?? 1;
-                  final yrLabel = yr == 1 ? 'FE' : yr == 2 ? 'SE' : yr == 3 ? 'TE' : 'BE';
-                  final code = div['division_code'] as String? ?? '';
-                  return DropdownMenuItem<String>(
-                    value: div['division_id'] as String,
-                    child: Text(
-                      '$name ($yrLabel • Div $code)',
-                      style: const TextStyle(fontSize: 14),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  setState(() {
-                    _selectedDivisionId = val;
-                    if (val != null) {
-                      final matchedDiv = _divisions.firstWhere(
-                        (d) => d['division_id'] == val,
-                        orElse: () => {},
-                      );
-                      final yr = matchedDiv['year_level'] as int?;
-                      if (yr != null) {
-                        final preferredSemNum = (yr * 2) - 1;
-                        final matchedSem = _semesters.firstWhere(
-                          (s) => s['semester_number'] == preferredSemNum,
-                          orElse: () => {},
-                        );
-                        if (matchedSem.isNotEmpty && matchedSem['semester_id'] != null) {
-                          _selectedSemesterId = matchedSem['semester_id'] as int;
-                        }
-                      }
-                    }
-                  });
-                },
-              ),
-            ),
-          ),
-          const SizedBox(height: 18),
-
-          // 3. Semester Dropdown
-          if (_semesters.isNotEmpty) ...[
-            Text(
-              'Select Academic Semester *',
-              style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  isExpanded: true,
-                  value: _selectedSemesterId,
-                  hint: const Text('Choose a semester'),
-                  items: _semesters.map((sem) {
-                    final num = sem['semester_number'] as int?;
-                    final yr = sem['academic_year'] as String? ?? '';
-                    final status = sem['status'] as String? ?? '';
-                    final yrName = (num != null && num > 0)
-                        ? (num <= 2 ? 'FE' : num <= 4 ? 'SE' : num <= 6 ? 'TE' : 'BE')
-                        : '';
-                    return DropdownMenuItem<int>(
-                      value: sem['semester_id'] as int,
-                      child: Text(
-                        'Semester ${num ?? 1}${yrName.isNotEmpty ? " ($yrName)" : ""} • $yr • $status',
-                        style: const TextStyle(fontSize: 14),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    setState(() => _selectedSemesterId = val);
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-
-          if (_submitError != null) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.error.withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.error_outline, color: AppColors.error, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _submitError!,
-                      style: const TextStyle(color: AppColors.error, fontSize: 13),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          // Action button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              onPressed: _isSubmitting ? null : _submitAssignment,
-              icon: _isSubmitting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
-                  : const Icon(Icons.check_circle_outline, size: 20),
-              label: Text(
-                _isSubmitting ? 'Confirming Assignment...' : 'Confirm Assignment & Continue',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

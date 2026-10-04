@@ -1218,17 +1218,19 @@ class _TimetableGenerationModeScreenState extends State<TimetableGenerationModeS
   Widget _buildHeaderCell(String text) {
     return Container(
       width: text.contains('Slot') ? 110 : 102,
-      height: 36,
+      height: 38,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: AppColors.primarySoft,
-        border: Border.all(color: AppColors.border, width: 0.5),
+        color: const Color(0xFF1E293B),
+        border: Border.all(color: const Color(0xFF334155), width: 0.5),
       ),
       child: Text(
         text,
-        style: AppTypography.captionBold.copyWith(
-          color: AppColors.primary,
-          fontWeight: FontWeight.bold,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+          fontSize: 12,
+          letterSpacing: 0.5,
         ),
       ),
     );
@@ -1306,9 +1308,9 @@ class _TimetableGenerationModeScreenState extends State<TimetableGenerationModeS
     }
 
     return Container(
-      width: 102,
-      height: 52,
-      padding: const EdgeInsets.all(3),
+      width: 104,
+      constraints: const BoxConstraints(minHeight: 54),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         border: Border.all(color: color.withValues(alpha: 0.4), width: 1.0),
