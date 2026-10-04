@@ -495,6 +495,7 @@ class TimetableGenerateRequestBody(BaseModel):
     constraints: list[dict[str, Any]] = Field(default_factory=list)
     combined_groups: list[list[str]] | None = None
     working_days: list[str] | None = None
+    schedule_config: dict[str, Any] | None = None
     lecture_duration_minutes: int = 60
     lab_duration_minutes: int = 120
     time_limit_seconds: int = 30

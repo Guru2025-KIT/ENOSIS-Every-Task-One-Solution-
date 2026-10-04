@@ -4,7 +4,6 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/app_card.dart';
-import 'admin_dashboard_screen.dart';
 import 'edit_profile_screen.dart';
 import 'help_support_screen.dart';
 import 'settings_screen.dart';
@@ -17,15 +16,25 @@ import 'settings_screen.dart';
 /// - Profile actions (Edit Profile button)
 /// - Information cards for Personal Details (Contact, Address) and Work details (Designation, Exp)
 /// - Shortcuts to Settings, Help & Support, and Admin console (conditional)
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final displayName = AuthSession.fullName ?? 'Faculty Member';
     final email = AuthSession.email ?? 'faculty@enosis.edu.in';
-    final department = AuthSession.department ?? 'Computer Science';
+    final department = AuthSession.department ?? 'Computer Science & Engineering';
     final employeeId = AuthSession.employeeId ?? 'CS2015407';
+    final designation = AuthSession.designation ?? 'Assistant Professor';
+    final contactNumber = (AuthSession.phone != null && AuthSession.phone!.isNotEmpty) ? AuthSession.phone! : 'Not specified';
+    final officeAddress = (AuthSession.officeAddress != null && AuthSession.officeAddress!.isNotEmpty) ? AuthSession.officeAddress! : 'Not specified';
+    final joiningDate = (AuthSession.joiningDate != null && AuthSession.joiningDate!.isNotEmpty) ? AuthSession.joiningDate! : 'Not specified';
+    final experience = (AuthSession.experience != null && AuthSession.experience!.isNotEmpty) ? AuthSession.experience! : 'Not specified';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -59,7 +68,7 @@ class ProfileScreen extends StatelessWidget {
                             Text(email, style: AppTypography.bodySecondary),
                             const SizedBox(height: 4),
                             Text(
-                              '$department · ID $employeeId',
+                              '$designation · $department\nID: $employeeId',
                               style: AppTypography.captionBold.copyWith(color: AppColors.primary),
                             ),
                           ],
@@ -72,10 +81,11 @@ class ProfileScreen extends StatelessWidget {
 
                 // Edit Profile Button
                 OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
+                  onPressed: () async {
+                    await Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const EditProfileScreen()),
                     );
+                    if (mounted) setState(() {});
                   },
                   icon: const Icon(Icons.edit_outlined, size: 18),
                   label: const Text('Edit Profile'),
@@ -94,9 +104,9 @@ class ProfileScreen extends StatelessWidget {
                           style: AppTypography.captionBold.copyWith(color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: 12),
-                        const _ProfileDetailRow(label: 'Contact Number', value: '+91 98765 43210'),
+                        _ProfileDetailRow(label: 'Contact Number', value: contactNumber),
                         const Divider(height: 20),
-                        const _ProfileDetailRow(label: 'Office Address', value: 'CS Block, Room 102'),
+                        _ProfileDetailRow(label: 'Office Address', value: officeAddress),
                       ],
                     ),
                   ),
@@ -115,11 +125,11 @@ class ProfileScreen extends StatelessWidget {
                           style: AppTypography.captionBold.copyWith(color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: 12),
-                        const _ProfileDetailRow(label: 'Designation', value: 'Assistant Professor'),
+                        _ProfileDetailRow(label: 'Designation', value: designation),
                         const Divider(height: 20),
-                        const _ProfileDetailRow(label: 'Joining Date', value: '15 July 2021'),
+                        _ProfileDetailRow(label: 'Joining Date', value: joiningDate),
                         const Divider(height: 20),
-                        const _ProfileDetailRow(label: 'Experience', value: '5 Years'),
+                        _ProfileDetailRow(label: 'Experience', value: experience),
                       ],
                     ),
                   ),
@@ -151,19 +161,6 @@ class ProfileScreen extends StatelessWidget {
                           );
                         },
                       ),
-                      if (AuthSession.canAccessTimetableGeneration) ...[
-                        const Divider(height: 1),
-                        ListTile(
-                          leading: const Icon(Icons.admin_panel_settings_outlined, color: AppColors.primary),
-                          title: const Text('Admin Console'),
-                          trailing: const Icon(Icons.chevron_right, size: 20),
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
-                            );
-                          },
-                        ),
-                      ],
                     ],
                   ),
                 ),

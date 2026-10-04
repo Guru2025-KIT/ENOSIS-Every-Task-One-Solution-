@@ -751,6 +751,26 @@ def delete_assessment(
     return {"status": "success", "message": f"Assessment {assessment_id} has been permanently deleted."}
 
 
+def purge_all_assessments(db: Session) -> dict[str, Any]:
+    """
+    Purges all assessments, responses (PRE, MID, END), student topic feedback,
+    interventions, and manual teaching assignments from the database.
+    """
+    db.query(StudentTopicFeedback).delete(synchronize_session=False)
+    db.query(PreSemesterResponse).delete(synchronize_session=False)
+    db.query(MidSemesterResponse).delete(synchronize_session=False)
+    db.query(EndSemesterResponse).delete(synchronize_session=False)
+    try:
+        from app.models.sli import Intervention
+        db.query(Intervention).delete(synchronize_session=False)
+    except Exception:
+        pass
+    db.query(Assessment).delete(synchronize_session=False)
+    db.query(TeachingAssignment).delete(synchronize_session=False)
+    db.commit()
+    return {"status": "success", "message": "All assessments, student responses, and manual teaching assignments have been purged."}
+
+
 
 def _format_assessment_out(
     db: Session,

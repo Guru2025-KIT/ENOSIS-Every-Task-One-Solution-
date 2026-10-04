@@ -406,6 +406,7 @@ class TimetableProvider extends ChangeNotifier {
       final assignmentsPayload = _assignments.map((a) => {
         'facultyName': a.facultyName,
         'subjectName': a.subjectName,
+        'subjectCode': a.subjectCode,
         'className': a.className,
         'type': a.type,
         'batch': a.batch,
@@ -481,6 +482,9 @@ class TimetableProvider extends ChangeNotifier {
           }
           _generatedTimetable[className] = grid;
         }
+        _publishedTimetable.clear();
+        _publishedTimetable.addAll(_generatedTimetable);
+        isTimetableSaved = true;
         _generationError = null;
         _conflictingConstraints = [];
       } else {
@@ -520,17 +524,39 @@ class TimetableProvider extends ChangeNotifier {
 
   // Transactional Publish & Persistence
   Future<bool> saveTimetableToBackend() async {
+    final timetableSource = _generatedTimetable.isNotEmpty ? _generatedTimetable : _publishedTimetable;
+    if (timetableSource.isEmpty) {
+      debugPrint('[TimetableProvider] No timetable available to publish.');
+      return false;
+    }
+
     try {
-      final payload = {'timetable': _generatedTimetable};
-      final response = await ApiClient.postJson('/timetable/publish', payload);
+      final payload = {
+        'timetable': timetableSource,
+        'working_days': _scheduleConfig?.dayNames ?? days,
+        'schedule_config': _scheduleConfig?.toJson(),
+        'assignments': _assignments.map((a) => {
+          'facultyName': a.facultyName,
+          'subjectName': a.subjectName,
+          'subjectCode': a.subjectCode,
+          'className': a.className,
+          'type': a.type,
+          'batch': a.batch,
+          'weeklyHours': a.weeklyHours,
+          'joint_group_id': a.jointGroupId,
+        }).toList(),
+      };
+      final response = await ApiClient.postJson('/timetable/publish', payload, timeoutSeconds: 60);
       if (response.statusCode == 200) {
         isTimetableSaved = true;
         await fetchPublishedTimetable();
         notifyListeners();
         return true;
+      } else {
+        debugPrint('[TimetableProvider] Publish error (${response.statusCode}): ${response.body}');
       }
     } catch (e) {
-      debugPrint('Failed to publish timetable: $e');
+      debugPrint('[TimetableProvider] Failed to publish timetable: $e');
     }
     isTimetableSaved = false;
     notifyListeners();

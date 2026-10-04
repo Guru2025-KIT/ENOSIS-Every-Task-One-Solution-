@@ -14,6 +14,9 @@ class UserCreate(BaseModel):
     department: str | None = None
     designation: str | None = None
     phone: str | None = None
+    office_address: str | None = None
+    joining_date: str | None = None
+    experience: str | None = None
 
 
 class UserOut(BaseModel):
@@ -31,6 +34,9 @@ class UserOut(BaseModel):
     department: str | None = None
     designation: str | None = None
     phone: str | None = None
+    office_address: str | None = None
+    joining_date: str | None = None
+    experience: str | None = None
     is_active: bool = True
     role: UserRole
     can_manage_timetable: bool
@@ -44,6 +50,9 @@ class UserUpdate(BaseModel):
     employee_id: str | None = None
     designation: str | None = None
     phone: str | None = None
+    office_address: str | None = None
+    joining_date: str | None = None
+    experience: str | None = None
 
 
 class FacultyCreate(BaseModel):
@@ -53,6 +62,9 @@ class FacultyCreate(BaseModel):
     department: str
     designation: str | None = "Assistant Professor"
     phone: str | None = None
+    office_address: str | None = None
+    joining_date: str | None = None
+    experience: str | None = None
     password: str | None = None  # If omitted, a default secure temporary password is assigned
 
 
@@ -63,6 +75,9 @@ class FacultyUpdate(BaseModel):
     department: str | None = None
     designation: str | None = None
     phone: str | None = None
+    office_address: str | None = None
+    joining_date: str | None = None
+    experience: str | None = None
     is_active: bool | None = None
     can_manage_timetable: bool | None = None
 
@@ -77,6 +92,9 @@ class FacultyOut(BaseModel):
     department: str | None = None
     designation: str | None = None
     phone: str | None = None
+    office_address: str | None = None
+    joining_date: str | None = None
+    experience: str | None = None
     is_active: bool = True
     can_manage_timetable: bool = False
     assigned_subject_codes: list[str] = []
@@ -124,3 +142,33 @@ class Token(BaseModel):
     """Shape returned by POST /auth/login."""
     access_token: str
     token_type: str = "bearer"
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Admin-initiated password reset for a specific faculty member."""
+    email: EmailStr
+
+
+class AdminResetPasswordRequest(BaseModel):
+    """Admin resets a faculty member's password (by user id)."""
+    send_email: bool = True  # Whether to email the new temporary password
+
+
+class AdminEmailSettingsOut(BaseModel):
+    """Current admin email configuration (read-only sensitive fields masked)."""
+    admin_email: str
+    smtp_host: str
+    smtp_port: int
+    smtp_user: str
+    smtp_configured: bool
+
+
+class AdminEmailSettingsUpdate(BaseModel):
+    """Payload for updating admin email / SMTP settings at runtime."""
+    admin_email: str | None = None
+    smtp_host: str | None = None
+    smtp_port: int | None = None
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_use_tls: bool | None = None
+

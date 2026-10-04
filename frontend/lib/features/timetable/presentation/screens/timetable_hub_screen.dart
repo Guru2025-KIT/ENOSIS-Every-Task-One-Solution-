@@ -44,9 +44,12 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
           children: [
             Icon(Icons.calendar_month, color: Color(0xFFF97316), size: 24),
             SizedBox(width: 10),
-            Text(
-              'Timetable Management',
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 19, letterSpacing: -0.3, color: Colors.white),
+            Expanded(
+              child: Text(
+                'Timetable Management',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: -0.3, color: Colors.white),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
@@ -61,7 +64,7 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 style: TextButton.styleFrom(
-                  backgroundColor: const Color(0xFFEA580C).withOpacity(0.3),
+                  backgroundColor: const Color(0xFFEA580C).withValues(alpha: 0.3),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 ),
                 onPressed: () {
@@ -92,7 +95,7 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
                 border: Border.all(color: const Color(0xFF334155)),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF0F172A).withOpacity(0.18),
+                    color: const Color(0xFF0F172A).withValues(alpha: 0.18),
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),
@@ -101,8 +104,11 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -111,6 +117,7 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: const Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(Icons.tune_rounded, color: Colors.white, size: 14),
                             SizedBox(width: 6),
@@ -125,7 +132,7 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF10B981).withOpacity(0.2),
+                            color: const Color(0xFF10B981).withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(color: const Color(0xFF10B981)),
                           ),

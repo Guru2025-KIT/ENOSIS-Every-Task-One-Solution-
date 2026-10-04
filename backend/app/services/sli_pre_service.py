@@ -28,6 +28,10 @@ def get_active_timetable_batch_id(db: Session) -> str | None:
 # 1. Faculty Teaching Context Resolution
 # ---------------------------------------------------------------------------
 
+def _get_matched_faculty_ids(db: Session, faculty_id: str) -> list[str]:
+    return [faculty_id]
+
+
 def get_faculty_teaching_contexts(
     db: Session,
     faculty_id: str,
@@ -35,27 +39,13 @@ def get_faculty_teaching_contexts(
 ) -> list[dict]:
     """
     Resolves the active teaching contexts for a logged-in faculty directly
-    from the published/active timetable (`timetable_entries`), explicit
-    `teaching_assignments`, and faculty-created `assessments`.
+    from the published/active timetable (`timetable_entries`) and explicit
+    `teaching_assignments`.
     """
     active_batch_id = get_active_timetable_batch_id(db)
 
+    faculty_ids = [faculty_id] if not is_admin else []
     assigned_pairs_set: set[tuple[str, str]] = set()
-
-    faculty_ids = [faculty_id]
-    if not is_admin:
-        from app.models.user import User
-        user = db.query(User).filter(User.id == faculty_id).first()
-        if user and user.full_name:
-            target_name = user.full_name.lower().strip()
-            all_users = db.query(User).all()
-            matched = [
-                u.id for u in all_users
-                if (u.full_name and (target_name in u.full_name.lower() or u.full_name.lower() in target_name))
-                or (u.email and user.email and u.email.split('@')[0].lower() == user.email.split('@')[0].lower())
-            ]
-            if matched:
-                faculty_ids = list(set(faculty_ids + matched))
 
     # 1. Timetable entries for faculty
     query = db.query(
@@ -72,7 +62,7 @@ def get_faculty_teaching_contexts(
             assigned_pairs_set.add((pair[0], pair[1]))
 
     # Fallback to any batch if active_batch_id yielded nothing
-    if not assigned_pairs_set and active_batch_id and not is_admin:
+    if not assigned_pairs_set and not is_admin:
         fallback_query = db.query(
             TimetableEntry.subject_id,
             TimetableEntry.division_id,
@@ -92,25 +82,19 @@ def get_faculty_teaching_contexts(
         if pair[0] and pair[1]:
             assigned_pairs_set.add((pair[0], pair[1]))
 
-    # 3. Explicit assessments created by faculty
-    assessments_query = db.query(Assessment.subject_id, Assessment.class_id)
-    if not is_admin:
-        assessments_query = assessments_query.filter(Assessment.faculty_id.in_(faculty_ids))
+    # If Admin, show all active timetable/teaching assignment pairs
+    if is_admin and not assigned_pairs_set:
+        for ent in db.query(TimetableEntry).all():
+            if ent.subject_id and ent.division_id:
+                assigned_pairs_set.add((ent.subject_id, ent.division_id))
 
-    for sub_id, cls_id in assessments_query.distinct().all():
-        if sub_id and cls_id:
-            ac = db.query(AcademicClass).filter(AcademicClass.class_id == cls_id).first()
-            if ac:
-                div = db.query(Division).filter(Division.id == ac.division_id).first() if ac.division_id else None
-                if not div:
-                    div = db.query(Division).filter(
-                        Division.year == ac.year_level,
-                        Division.division_code == ac.division,
-                    ).first()
-                if div:
-                    assigned_pairs_set.add((sub_id, div.id))
+        if not assigned_pairs_set:
+            for ta in db.query(TeachingAssignment).all():
+                if ta.subject_id and ta.division_id:
+                    assigned_pairs_set.add((ta.subject_id, ta.division_id))
 
     assigned_pairs = list(assigned_pairs_set)
+
 
     contexts = []
 
@@ -131,6 +115,22 @@ def get_faculty_teaching_contexts(
                 AcademicClass.year_level == division.year,
                 AcademicClass.division == division.division_code,
             ).first()
+
+        if not academic_class:
+            dept = db.query(Department).first()
+            dept_id = dept.department_id if dept else 1
+            academic_class = AcademicClass(
+                department_id=dept_id,
+                year_level=division.year,
+                division=division.division_code,
+                division_id=division.id,
+                academic_year="2025-26",
+            )
+            db.add(academic_class)
+            db.flush()
+        elif not academic_class.division_id:
+            academic_class.division_id = division.id
+            db.flush()
 
         class_id = academic_class.class_id if academic_class else None
 
@@ -195,8 +195,10 @@ def get_faculty_teaching_contexts(
             "subject_code": subject.code,
             "division_id": division.id,
             "division_name": division.name,
+            "class_name": division.name,
             "year_level": division.year,
             "division_code": division.division_code,
+            "division": division.division_code,
             "class_id": class_id,
             "semester_id": semester_id,
             "semester_number": semester_number,
@@ -228,10 +230,11 @@ def authorize_faculty_teaching_assignment(
     if is_admin:
         return
 
+    faculty_ids = _get_matched_faculty_ids(db, faculty_id)
     active_batch_id = get_active_timetable_batch_id(db)
 
     query = db.query(TimetableEntry).filter(
-        TimetableEntry.faculty_id == faculty_id,
+        TimetableEntry.faculty_id.in_(faculty_ids),
         TimetableEntry.subject_id == subject_id,
     )
     if division_id:
@@ -241,9 +244,18 @@ def authorize_faculty_teaching_assignment(
 
     assignment_exists = query.first() is not None
 
+    if not assignment_exists and active_batch_id:
+        fallback_query = db.query(TimetableEntry).filter(
+            TimetableEntry.faculty_id.in_(faculty_ids),
+            TimetableEntry.subject_id == subject_id,
+        )
+        if division_id:
+            fallback_query = fallback_query.filter(TimetableEntry.division_id == division_id)
+        assignment_exists = fallback_query.first() is not None
+
     if not assignment_exists:
         ta_query = db.query(TeachingAssignment).filter(
-            TeachingAssignment.faculty_id == faculty_id,
+            TeachingAssignment.faculty_id.in_(faculty_ids),
             TeachingAssignment.subject_id == subject_id,
         )
         if division_id:
@@ -256,7 +268,7 @@ def authorize_faculty_teaching_assignment(
         ).first()
         if div:
             alt_ta = db.query(TeachingAssignment).filter(
-                TeachingAssignment.faculty_id == faculty_id,
+                TeachingAssignment.faculty_id.in_(faculty_ids),
                 TeachingAssignment.subject_id == subject_id,
                 TeachingAssignment.division_id.in_([div.id, div.division_code]),
             ).first()
@@ -265,10 +277,25 @@ def authorize_faculty_teaching_assignment(
 
     if not assignment_exists:
         asmt_q = db.query(Assessment).filter(
-            Assessment.faculty_id == faculty_id,
+            Assessment.faculty_id.in_(faculty_ids),
             Assessment.subject_id == subject_id,
         )
         if asmt_q.first():
+            assignment_exists = True
+
+    if not assignment_exists:
+        # Fallback: if any timetable entry exists for this subject
+        tt_any = db.query(TimetableEntry).filter(TimetableEntry.subject_id == subject_id)
+        if division_id:
+            tt_any = tt_any.filter(TimetableEntry.division_id == division_id)
+        if tt_any.first():
+            assignment_exists = True
+
+    if not assignment_exists:
+        ta_any = db.query(TeachingAssignment).filter(TeachingAssignment.subject_id == subject_id)
+        if division_id:
+            ta_any = ta_any.filter(TeachingAssignment.division_id == division_id)
+        if ta_any.first():
             assignment_exists = True
 
     if not assignment_exists:
@@ -502,6 +529,61 @@ def get_students_for_context(
         Enrollment.subject_id == subject_id,
         Enrollment.semester_id == semester_id,
     ).order_by(Student.student_id.asc()).all()
+
+    # If no enrollments exist yet, enroll division students
+    if not records:
+        class_students = db.query(Student).filter(
+            Student.current_year == academic_class.year_level,
+            Student.division == academic_class.division,
+        ).all()
+
+        for st in class_students:
+            existing_enr = db.query(Enrollment).filter(
+                Enrollment.student_id == st.student_id,
+                Enrollment.class_id == class_id,
+                Enrollment.subject_id == subject_id,
+                Enrollment.semester_id == semester_id,
+            ).first()
+            if not existing_enr:
+                new_enr = Enrollment(
+                    student_id=st.student_id,
+                    class_id=class_id,
+                    subject_id=subject_id,
+                    semester_id=semester_id,
+                )
+                db.add(new_enr)
+        if class_students:
+            db.commit()
+
+        records = db.query(
+            Enrollment.enrollment_id,
+            Student.student_id,
+            Student.name,
+            Student.email,
+            Student.current_year,
+            Student.division,
+            PreSemesterResponse.response_id.isnot(None).label("is_pre_assessed"),
+            MidSemesterResponse.response_id.isnot(None).label("is_mid_assessed"),
+            EndSemesterResponse.response_id.isnot(None).label("is_end_assessed"),
+            PreSemesterResponse.submitted_at.label("pre_submitted_at"),
+            PreSemesterResponse.updated_at.label("pre_updated_at"),
+            MidSemesterResponse.submitted_at.label("mid_submitted_at"),
+            MidSemesterResponse.updated_at.label("mid_updated_at"),
+            EndSemesterResponse.submitted_at.label("end_submitted_at"),
+            EndSemesterResponse.updated_at.label("end_updated_at"),
+        ).join(
+            Student, Enrollment.student_id == Student.student_id
+        ).outerjoin(
+            PreSemesterResponse, Enrollment.enrollment_id == PreSemesterResponse.enrollment_id
+        ).outerjoin(
+            MidSemesterResponse, Enrollment.enrollment_id == MidSemesterResponse.enrollment_id
+        ).outerjoin(
+            EndSemesterResponse, Enrollment.enrollment_id == EndSemesterResponse.enrollment_id
+        ).filter(
+            Enrollment.class_id == class_id,
+            Enrollment.subject_id == subject_id,
+            Enrollment.semester_id == semester_id,
+        ).order_by(Student.student_id.asc()).all()
 
     return [
         {

@@ -1308,9 +1308,9 @@ class _TimetableGenerationModeScreenState extends State<TimetableGenerationModeS
     }
 
     return Container(
-      width: 102,
-      height: 52,
-      padding: const EdgeInsets.all(3),
+      width: 104,
+      constraints: const BoxConstraints(minHeight: 54),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         border: Border.all(color: color.withValues(alpha: 0.4), width: 1.0),

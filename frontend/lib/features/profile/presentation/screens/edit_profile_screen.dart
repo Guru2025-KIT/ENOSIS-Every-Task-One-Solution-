@@ -20,8 +20,13 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _profileFormKey = GlobalKey<FormState>();
   final _fullNameController = TextEditingController(text: AuthSession.fullName ?? '');
-  final _departmentController = TextEditingController();
-  final _employeeIdController = TextEditingController();
+  final _departmentController = TextEditingController(text: AuthSession.department ?? '');
+  final _employeeIdController = TextEditingController(text: AuthSession.employeeId ?? '');
+  final _designationController = TextEditingController(text: AuthSession.designation ?? 'Assistant Professor');
+  final _phoneController = TextEditingController(text: AuthSession.phone ?? '');
+  final _officeAddressController = TextEditingController(text: AuthSession.officeAddress ?? '');
+  final _joiningDateController = TextEditingController(text: AuthSession.joiningDate ?? '');
+  final _experienceController = TextEditingController(text: AuthSession.experience ?? '');
   final _authRepository = AuthRepository();
   bool _isSavingProfile = false;
 
@@ -36,6 +41,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _fullNameController.dispose();
     _departmentController.dispose();
     _employeeIdController.dispose();
+    _designationController.dispose();
+    _phoneController.dispose();
+    _officeAddressController.dispose();
+    _joiningDateController.dispose();
+    _experienceController.dispose();
     _currentPasswordController.dispose();
     _newPasswordController.dispose();
     super.dispose();
@@ -50,9 +60,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         fullName: _fullNameController.text.trim(),
         department: _departmentController.text.trim(),
         employeeId: _employeeIdController.text.trim(),
+        designation: _designationController.text.trim(),
+        phone: _phoneController.text.trim(),
+        officeAddress: _officeAddressController.text.trim(),
+        joiningDate: _joiningDateController.text.trim(),
+        experience: _experienceController.text.trim(),
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile details updated successfully!'),
+          backgroundColor: AppColors.success,
+        ),
+      );
       setState(() {}); // refresh the app bar / any AuthSession-derived text on this screen
     } on AuthException catch (e) {
       if (!mounted) return;
@@ -74,7 +94,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (!mounted) return;
       _currentPasswordController.clear();
       _newPasswordController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password changed.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password changed successfully.'), backgroundColor: AppColors.success),
+      );
     } on AuthException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message), backgroundColor: AppColors.error));
@@ -92,7 +114,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Profile Details', style: AppTypography.h3),
+            Text('Personal & Academic Profile', style: AppTypography.h3),
             const SizedBox(height: 16),
             Form(
               key: _profileFormKey,
@@ -103,18 +125,61 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _fullNameController,
+                    decoration: const InputDecoration(hintText: 'e.g. Dr. John Doe'),
                     validator: (v) => (v == null || v.trim().isEmpty) ? 'Full name is required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Designation', style: AppTypography.body),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _designationController,
+                    decoration: const InputDecoration(hintText: 'e.g. Assistant Professor / Professor & HOD'),
                   ),
                   const SizedBox(height: 16),
                   Text('Department', style: AppTypography.body),
                   const SizedBox(height: 8),
-                  TextFormField(controller: _departmentController, decoration: const InputDecoration(hintText: 'Computer Science')),
+                  TextFormField(
+                    controller: _departmentController,
+                    decoration: const InputDecoration(hintText: 'e.g. Computer Science & Engineering'),
+                  ),
                   const SizedBox(height: 16),
                   Text('Employee ID', style: AppTypography.body),
                   const SizedBox(height: 8),
-                  TextFormField(controller: _employeeIdController, decoration: const InputDecoration(hintText: 'CS2015407')),
-                  const SizedBox(height: 20),
-                  PrimaryButton(label: 'Save Changes', isLoading: _isSavingProfile, onPressed: _saveProfile),
+                  TextFormField(
+                    controller: _employeeIdController,
+                    decoration: const InputDecoration(hintText: 'e.g. CS2015407'),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Contact / Phone Number', style: AppTypography.body),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(hintText: 'e.g. +91 98765 43210'),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Office Address / Cabin', style: AppTypography.body),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _officeAddressController,
+                    decoration: const InputDecoration(hintText: 'e.g. CS Block, Room 102'),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Joining Date', style: AppTypography.body),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _joiningDateController,
+                    decoration: const InputDecoration(hintText: 'e.g. 15 July 2021'),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Teaching Experience', style: AppTypography.body),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _experienceController,
+                    decoration: const InputDecoration(hintText: 'e.g. 5 Years'),
+                  ),
+                  const SizedBox(height: 24),
+                  PrimaryButton(label: 'Save Profile Changes', isLoading: _isSavingProfile, onPressed: _saveProfile),
                 ],
               ),
             ),

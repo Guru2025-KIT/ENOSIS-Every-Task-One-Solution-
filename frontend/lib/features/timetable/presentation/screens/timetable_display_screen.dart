@@ -395,12 +395,14 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Department Timetable View', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.white)),
+        title: const Text('Timetable View', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.white)),
         backgroundColor: const Color(0xFF0F172A),
         foregroundColor: Colors.white,
         elevation: 0,
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           indicatorColor: const Color(0xFFF97316),
           indicatorWeight: 3.5,
           labelColor: const Color(0xFFFB923C),
@@ -432,6 +434,7 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
             PopupMenuButton<String>(
               tooltip: 'Download All Classes',
               color: Colors.white,
+              icon: const Icon(Icons.download_for_offline, color: Color(0xFFFB923C)),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               onSelected: (val) {
                 if (val == 'all_pdf') {
@@ -462,28 +465,8 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
                   ),
                 ),
               ],
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 10.0),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF334155)),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.download_for_offline, color: Color(0xFFFB923C), size: 16),
-                      SizedBox(width: 4),
-                      Text('All Classes', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                      Icon(Icons.arrow_drop_down, color: Color(0xFFFB923C), size: 16),
-                    ],
-                  ),
-                ),
-              ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
           ],
         ],
       ),

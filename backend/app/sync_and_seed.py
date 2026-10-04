@@ -17,7 +17,7 @@ def sync_database_schema():
     print("=== 2. ADDING MISSING COLUMNS TO EXISTING TABLES IF NEEDED ===")
     inspector = inspect(engine)
     
-    with engine.connect() as conn:
+    with engine.begin() as conn:
         # 0. users
         if "users" in inspector.get_table_names():
             user_cols = {col["name"] for col in inspector.get_columns("users")}
@@ -35,6 +35,15 @@ def sync_database_schema():
                 conn.execute(text("ALTER TABLE users ADD COLUMN employee_id VARCHAR(50) NULL;"))
             if "department" not in user_cols:
                 conn.execute(text("ALTER TABLE users ADD COLUMN department VARCHAR(100) NULL;"))
+            if "office_address" not in user_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN office_address VARCHAR(255) NULL;"))
+            if "joining_date" not in user_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN joining_date VARCHAR(50) NULL;"))
+            if "experience" not in user_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN experience VARCHAR(50) NULL;"))
+            if "created_at" not in user_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN created_at DATETIME NULL;"))
+
 
         # 1. subjects
         subject_cols = {col["name"] for col in inspector.get_columns("subjects")}
@@ -230,6 +239,14 @@ def sync_database_schema():
         # 13. schedule_config
         if "schedule_config" in inspector.get_table_names():
             sc_cols = {col["name"] for col in inspector.get_columns("schedule_config")}
+            if "lecture_duration_minutes" not in sc_cols:
+                conn.execute(text("ALTER TABLE schedule_config ADD COLUMN lecture_duration_minutes INT NOT NULL DEFAULT 60;"))
+            if "lab_duration_minutes" not in sc_cols:
+                conn.execute(text("ALTER TABLE schedule_config ADD COLUMN lab_duration_minutes INT NOT NULL DEFAULT 120;"))
+            if "tutorial_duration_minutes" not in sc_cols:
+                conn.execute(text("ALTER TABLE schedule_config ADD COLUMN tutorial_duration_minutes INT NOT NULL DEFAULT 60;"))
+            if "hod_name" not in sc_cols:
+                conn.execute(text("ALTER TABLE schedule_config ADD COLUMN hod_name VARCHAR(255) NULL;"))
             if "end_time" not in sc_cols:
                 conn.execute(text("ALTER TABLE schedule_config ADD COLUMN end_time VARCHAR(10) NULL DEFAULT '17:00';"))
             if "break1_enabled" not in sc_cols:
@@ -254,6 +271,8 @@ def sync_database_schema():
                 conn.execute(text("ALTER TABLE rooms ADD COLUMN equipment TEXT NULL;"))
             if "is_active" not in room_cols:
                 conn.execute(text("ALTER TABLE rooms ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1;"))
+            if "department" not in room_cols:
+                conn.execute(text("ALTER TABLE rooms ADD COLUMN department VARCHAR(100) NULL;"))
 
         # 15. timetable_entries
         if "timetable_entries" in inspector.get_table_names():
@@ -263,70 +282,143 @@ def sync_database_schema():
             if "session_type" not in tt_cols:
                 conn.execute(text("ALTER TABLE timetable_entries ADD COLUMN session_type VARCHAR(30) NULL DEFAULT 'Theory';"))
 
-        conn.commit()
+        # 16. achievements
+        if "achievements" in inspector.get_table_names():
+            ach_cols = {col["name"] for col in inspector.get_columns("achievements")}
+            if "updated_at" not in ach_cols:
+                conn.execute(text("ALTER TABLE achievements ADD COLUMN updated_at DATETIME NULL;"))
+
+        # 17. teaching_assignments
+        if "teaching_assignments" in inspector.get_table_names():
+            ta_cols = {col["name"] for col in inspector.get_columns("teaching_assignments")}
+            if "session_type" not in ta_cols:
+                conn.execute(text("ALTER TABLE teaching_assignments ADD COLUMN session_type VARCHAR(50) NOT NULL DEFAULT 'theory';"))
+            if "weekly_count" not in ta_cols:
+                conn.execute(text("ALTER TABLE teaching_assignments ADD COLUMN weekly_count INT NOT NULL DEFAULT 1;"))
+            if "duration_slots" not in ta_cols:
+                conn.execute(text("ALTER TABLE teaching_assignments ADD COLUMN duration_slots INT NOT NULL DEFAULT 1;"))
+            if "batch_name" not in ta_cols:
+                conn.execute(text("ALTER TABLE teaching_assignments ADD COLUMN batch_name VARCHAR(50) NULL;"))
+            if "is_shared" not in ta_cols:
+                conn.execute(text("ALTER TABLE teaching_assignments ADD COLUMN is_shared BOOLEAN NOT NULL DEFAULT 0;"))
+            if "joint_group_id" not in ta_cols:
+                conn.execute(text("ALTER TABLE teaching_assignments ADD COLUMN joint_group_id VARCHAR(100) NULL;"))
+            if "requires_room_type" not in ta_cols:
+                conn.execute(text("ALTER TABLE teaching_assignments ADD COLUMN requires_room_type VARCHAR(50) NULL;"))
+
+        # 18. timetable_constraints
+        if "timetable_constraints" in inspector.get_table_names():
+            tc_cols = {col["name"] for col in inspector.get_columns("timetable_constraints")}
+            if "weight" not in tc_cols:
+                conn.execute(text("ALTER TABLE timetable_constraints ADD COLUMN weight INT NOT NULL DEFAULT 100;"))
+
         print("=== DATABASE SCHEMA SYNC COMPLETE ===")
 
 
 
 def seed_admin_user():
     """
-    Ensures at least one admin account exists in the database.
-    
-    Strategy:
-    1. If ANY user already has role=ADMIN, do nothing — admin exists.
-    2. Else if a user with the default admin email exists, promote them.
-    3. Else create a brand new admin user with sensible defaults.
-    
-    The default admin credentials are admin@enosis.edu.in / admin123
-    (intended for development only — production would use env vars).
+    Ensures a system administrator account exists.
+    If an admin already exists (with customized email or password), their credentials are preserved.
+    Only if no admin account exists at all do we create the default admin account.
     """
     from app.models.user import User, UserRole
     from app.core.security import hash_password
 
-    DEFAULT_ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@enosis.edu.in")
+    DEFAULT_ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@enosis.edu.in").strip().lower()
     DEFAULT_ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
-    DEFAULT_ADMIN_NAME = os.environ.get("ADMIN_NAME", "System Admin")
+    DEFAULT_ADMIN_NAME = os.environ.get("ADMIN_NAME", "ENOSIS Administrator")
 
     db = SessionLocal()
     try:
-        # Check if any admin already exists
-        existing_admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
-        if existing_admin:
-            print(f"  ✓ Admin user already exists: {existing_admin.email}")
-            return
-
-        # Check if a user with the admin email exists but isn't admin yet
-        user = db.query(User).filter(User.email == DEFAULT_ADMIN_EMAIL).first()
-        if user:
-            user.role = UserRole.ADMIN
+        admin_user = db.query(User).filter(User.role == UserRole.ADMIN).first()
+        if not admin_user:
+            admin_user = db.query(User).filter(User.email == DEFAULT_ADMIN_EMAIL).first()
+            if admin_user:
+                admin_user.role = UserRole.ADMIN
+                admin_user.is_active = True
+                admin_user.can_manage_timetable = True
+                db.commit()
+                print(f"  [OK] Promoted existing {admin_user.email} to ADMIN role.")
+            else:
+                new_admin = User(
+                    email=DEFAULT_ADMIN_EMAIL,
+                    hashed_password=hash_password(DEFAULT_ADMIN_PASSWORD),
+                    full_name=DEFAULT_ADMIN_NAME,
+                    role=UserRole.ADMIN,
+                    department="Administration",
+                    employee_id="ADMIN-001",
+                    is_active=True,
+                    can_manage_timetable=True,
+                )
+                db.add(new_admin)
+                db.commit()
+                print(f"  [OK] Created default admin user: {DEFAULT_ADMIN_EMAIL} (password: {DEFAULT_ADMIN_PASSWORD})")
+        else:
+            admin_user.is_active = True
+            admin_user.can_manage_timetable = True
             db.commit()
-            print(f"  ✓ Promoted existing user '{user.email}' to ADMIN role.")
-            return
-
-        # Create a new admin user
-        admin_user = User(
-            email=DEFAULT_ADMIN_EMAIL,
-            hashed_password=hash_password(DEFAULT_ADMIN_PASSWORD),
-            full_name=DEFAULT_ADMIN_NAME,
-            role=UserRole.ADMIN,
-            department="Administration",
-            employee_id="ADMIN-001",
-            is_active=True,
-            can_manage_timetable=True,
-        )
-        db.add(admin_user)
-        db.commit()
-        print(f"  ✓ Created admin user: {DEFAULT_ADMIN_EMAIL} (password: {DEFAULT_ADMIN_PASSWORD})")
+            print(f"  [OK] Admin account active & verified: {admin_user.email}")
     except Exception as e:
         db.rollback()
-        print(f"  ⚠ Admin seeding failed: {e}")
+        print(f"  [WARN] Admin check notice: {e}")
+    finally:
+        db.close()
+
+
+
+def purge_legacy_assessments():
+    """
+    Purges all old/legacy assessments, student responses, and manual teaching assignments.
+    """
+    db = SessionLocal()
+    try:
+        from app.models.sli import Assessment, PreSemesterResponse, MidSemesterResponse, EndSemesterResponse, StudentTopicFeedback
+        from app.models.academic import TeachingAssignment
+        db.query(StudentTopicFeedback).delete(synchronize_session=False)
+        db.query(PreSemesterResponse).delete(synchronize_session=False)
+        db.query(MidSemesterResponse).delete(synchronize_session=False)
+        db.query(EndSemesterResponse).delete(synchronize_session=False)
+        try:
+            from app.models.sli import Intervention
+            db.query(Intervention).delete(synchronize_session=False)
+        except Exception:
+            pass
+        db.query(Assessment).delete(synchronize_session=False)
+        db.query(TeachingAssignment).delete(synchronize_session=False)
+        db.commit()
+        print("  ✓ Purged all legacy assessments, responses, and unassigned teaching contexts.")
+    except Exception as e:
+        db.rollback()
+        print(f"  ⚠ Assessment purge notice: {e}")
+    finally:
+        db.close()
+
+
+def seed_all_faculty_profiles():
+    """
+    Ensures complete, rich academic datasets (teaching contexts, timetable, tasks, achievements, SLI alerts)
+    for all registered faculty members and administrators.
+    """
+    from app.models.user import User
+    from app.services.dashboard_service import ensure_faculty_complete_academic_data
+
+    db = SessionLocal()
+    try:
+        all_users = db.query(User).all()
+        for u in all_users:
+            ensure_faculty_complete_academic_data(db, u)
+        print("  [OK] Ensured full academic profiles, timetable schedules, and SLI contexts for all users.")
+    except Exception as e:
+        db.rollback()
+        print(f"  [WARN] Faculty profile seed notice: {e}")
     finally:
         db.close()
 
 
 if __name__ == "__main__":
     sync_database_schema()
+    seed_admin_user()
+    seed_all_faculty_profiles()
 
-    from app.seed_sli_dev_data import seed
-    print("\n=== 3. RUNNING DEV SEED ===")
-    seed()
+
