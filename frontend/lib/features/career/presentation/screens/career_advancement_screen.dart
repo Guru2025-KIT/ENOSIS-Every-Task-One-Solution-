@@ -408,7 +408,7 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Close'),
           ),
-          if (achievement.hasCloudinaryUrl)
+          if (achievement.documentId != null || achievement.hasCloudinaryUrl)
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.secondary,
@@ -417,7 +417,7 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
               ),
               icon: const Icon(Icons.open_in_new, size: 16),
               label: const Text('Open Document'),
-              onPressed: () => _openDocument(achievement.filePath),
+              onPressed: () => _viewDocument(achievement),
             ),
         ],
       ),
