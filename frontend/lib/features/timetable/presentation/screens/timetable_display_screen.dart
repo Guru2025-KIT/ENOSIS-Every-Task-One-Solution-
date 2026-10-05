@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:universal_html/html.dart' as html;
 import '../../providers/timetable_provider.dart';
 
+
 class TimetableDisplayScreen extends StatefulWidget {
   const TimetableDisplayScreen({super.key});
 
@@ -269,95 +270,136 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
                               ],
                             ),
                           ),
-                          ...days.map((day) {
-                            String cellKey = '${day}_${slot.lectureNumber}';
-                            List<String>? cellData = grid[cellKey];
+                                ...days.map((day) {
+                                  String cellKey = '${day}_${slot.lectureNumber}';
+                                  List<String>? cellData = grid[cellKey];
 
-                            if (isBreak || cellData == null || cellData[0] == 'Break') {
-                              return DataCell(
-                                Container(
-                                  width: 140,
-                                  height: 76,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFEF3C7),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: const Color(0xFFFDE68A)),
-                                  ),
-                                  child: const Center(
-                                    child: Text(
-                                      'BREAK',
-                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFFB45309), letterSpacing: 1.0),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }
-
-                            String subj = cellData.isNotEmpty ? cellData[0] : 'Free';
-                            String fac = cellData.length > 1 ? cellData[1] : '';
-                            String room = cellData.length > 2 ? cellData[2] : '';
-                            String batch = cellData.length > 3 ? cellData[3] : '';
-
-                            if (subj == 'Free' || subj == '-') {
-                              return DataCell(
-                                Container(
-                                  width: 140,
-                                  height: 76,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF8FAFC),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: const Color(0xFFF1F5F9)),
-                                  ),
-                                  child: const Center(
-                                    child: Text('—', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 16)),
-                                  ),
-                                ),
-                              );
-                            }
-
-                            bool isLab = subj.toLowerCase().contains('lab') || batch.isNotEmpty;
-
-                            return DataCell(
-                              Container(
-                                width: 140,
-                                height: 76,
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: isLab ? const Color(0xFFFFF7ED) : const Color(0xFFF8FAFC),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: isLab ? const Color(0xFFFDBA74) : const Color(0xFFE2E8F0),
-                                    width: isLab ? 1.5 : 1,
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      '$subj ($fac)',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 11.0,
-                                        color: isLab ? const Color(0xFFC2410C) : const Color(0xFF0F172A),
+                                  if (isBreak || cellData == null || cellData[0] == 'Break') {
+                                    return DataCell(
+                                      Container(
+                                        width: 140,
+                                        height: 76,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFEF3C7),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: const Color(0xFFFDE68A)),
+                                        ),
+                                        child: const Center(
+                                          child: Text('BREAK', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFFB45309), letterSpacing: 1.0)),
+                                        ),
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    if (batch.isNotEmpty || room.isNotEmpty) ...[
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        batch.isNotEmpty ? '$batch $room' : room,
-                                        style: const TextStyle(fontSize: 9.5, color: Color(0xFF475569), fontWeight: FontWeight.w600),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                    );
+                                  }
+
+                                  String rawSubj = cellData.isNotEmpty ? cellData[0] : 'Free';
+                                  // ✅ REMOVE COURSE CODES LIKE (UAMPC0401)
+                                  String subj = rawSubj.replaceAll(RegExp(r'\s*[\(\[]([A-Z]{2,}\d+[A-Z]*)[\)\]]\s*'), '').trim();
+                                  if (subj.isEmpty) subj = rawSubj;
+
+                                  String fac = cellData.length > 1 ? cellData[1] : '';
+                                  String room = cellData.length > 2 ? cellData[2] : '';
+                                  String batch = cellData.length > 3 ? cellData[3] : '';
+
+                                  if (subj == 'Free' || subj == '-') {
+                                    return DataCell(
+                                      Container(
+                                        width: 140,
+                                        height: 76,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF8FAFC),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: const Color(0xFFF1F5F9)),
+                                        ),
+                                        child: const Center(child: Text('—', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 16))),
                                       ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            );
-                          }),
+                                    );
+                                  }
+
+                                  // ✅ GET BATCH ALIAS (e.g., Batch 1 -> A1, A2)
+                                  if (batch != 'All' && batch != '-') {
+                                    batch = context.read<TimetableProvider>().getBatchAlias(activeKey ?? '', batch);
+                                  } else {
+                                    batch = ''; // Hide "All" for theory lectures
+                                  }
+
+                                  bool isLab = subj.toLowerCase().contains('lab') || batch.isNotEmpty;
+
+                                  // ✅ VISUAL MERGE: Check if previous slot was the exact same lab/theory
+                                  bool isContinuation = false;
+                                  if (slot.lectureNumber > 1) {
+                                    String prevKey = '${day}_${slot.lectureNumber - 1}';
+                                    List<String>? prevData = grid[prevKey];
+                                    if (prevData != null && prevData.length > 1 && prevData[0] == rawSubj && prevData[1] == fac) {
+                                      isContinuation = true;
+                                    }
+                                  }
+
+                                  if (isContinuation) {
+                                    // ✅ Render empty colored block to visually merge 2-hour labs
+                                    return DataCell(
+                                      Container(
+                                        width: 140,
+                                        height: 76,
+                                        decoration: BoxDecoration(
+                                          color: isLab ? const Color(0xFFF5F3FF) : const Color(0xFFEFF6FF),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: isLab ? const Color(0xFFDDD6FE) : const Color(0xFFBFDBFE),
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }
+
+                                  // ✅ 2 SUITABLE COLORS: Theory (Blue), Lab (Purple)
+                                  Color bgColor = isLab ? const Color(0xFFF5F3FF) : const Color(0xFFEFF6FF);
+                                  Color txtColor = isLab ? const Color(0xFF6D28D9) : const Color(0xFF1D4ED8);
+                                  Color borderColor = isLab ? const Color(0xFFDDD6FE) : const Color(0xFFBFDBFE);
+
+                                  return DataCell(
+                                    Container(
+                                      width: 140,
+                                      height: 76,
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: bgColor,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: borderColor, width: 1.5),
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            subj,
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.0, color: txtColor),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          if (fac.isNotEmpty) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              fac,
+                                              style: TextStyle(fontSize: 10.0, color: txtColor.withOpacity(0.8), fontWeight: FontWeight.w500),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                          if (batch.isNotEmpty || room.isNotEmpty) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              batch.isNotEmpty ? '$batch${room.isNotEmpty ? ' | $room' : ''}' : room,
+                                              style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: txtColor.withOpacity(0.6)),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }),
                         ],
                       );
                     }).toList(),

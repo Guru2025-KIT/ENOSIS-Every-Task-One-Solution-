@@ -691,8 +691,9 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                                     ],
                                   ),
                                 ),
-                                ...days.map((day) {
+                                                                ...days.map((day) {
                                   String cellKey = '${day}_${slot.lectureNumber}';
+                                  // ✅ FIX: Use generated[selectedClass] instead of grid
                                   List<String>? cellData = generated[selectedClass]?[cellKey];
 
                                   if (isBreak || cellData == null || cellData[0] == 'Break') {
@@ -706,16 +707,17 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                                           border: Border.all(color: const Color(0xFFFDE68A)),
                                         ),
                                         child: const Center(
-                                          child: Text(
-                                            'BREAK',
-                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFFB45309), letterSpacing: 1.0),
-                                          ),
+                                          child: Text('BREAK', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFFB45309), letterSpacing: 1.0)),
                                         ),
                                       ),
                                     );
                                   }
 
-                                  String subj = cellData.isNotEmpty ? cellData[0] : 'Free';
+                                  String rawSubj = cellData.isNotEmpty ? cellData[0] : 'Free';
+                                  // ✅ REMOVE COURSE CODES LIKE (UAMPC0401)
+                                  String subj = rawSubj.replaceAll(RegExp(r'\s*[\(\[]([A-Z]{2,}\d+[A-Z]*)[\)\]]\s*'), '').trim();
+                                  if (subj.isEmpty) subj = rawSubj;
+
                                   String fac = cellData.length > 1 ? cellData[1] : '';
                                   String room = cellData.length > 2 ? cellData[2] : '';
                                   String batch = cellData.length > 3 ? cellData[3] : '';
@@ -730,14 +732,53 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                                           borderRadius: BorderRadius.circular(8),
                                           border: Border.all(color: const Color(0xFFF1F5F9)),
                                         ),
-                                        child: const Center(
-                                          child: Text('—', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 16)),
+                                        child: const Center(child: Text('—', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 16))),
+                                      ),
+                                    );
+                                  }
+
+                                  // ✅ GET BATCH ALIAS
+                                  if (batch != 'All' && batch != '-') {
+                                    // ✅ FIX: Use selectedClass instead of activeKey
+                                    batch = context.read<TimetableProvider>().getBatchAlias(selectedClass ?? '', batch);
+                                  } else {
+                                    batch = ''; 
+                                  }
+
+                                  bool isLab = subj.toLowerCase().contains('lab') || batch.isNotEmpty;
+
+                                  // ✅ VISUAL MERGE
+                                  bool isContinuation = false;
+                                  if (slot.lectureNumber > 1) {
+                                    String prevKey = '${day}_${slot.lectureNumber - 1}';
+                                    // ✅ FIX: Use generated[selectedClass] instead of grid
+                                    List<String>? prevData = generated[selectedClass]?[prevKey];
+                                    if (prevData != null && prevData.length > 1 && prevData[0] == rawSubj && prevData[1] == fac) {
+                                      isContinuation = true;
+                                    }
+                                  }
+
+                                  if (isContinuation) {
+                                    return DataCell(
+                                      Container(
+                                        width: 140,
+                                        height: 76,
+                                        decoration: BoxDecoration(
+                                          color: isLab ? const Color(0xFFF5F3FF) : const Color(0xFFEFF6FF),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: isLab ? const Color(0xFFDDD6FE) : const Color(0xFFBFDBFE),
+                                            width: 1.5,
+                                          ),
                                         ),
                                       ),
                                     );
                                   }
 
-                                  final isLab = subj.toLowerCase().contains('lab') || batch.isNotEmpty;
+                                  // ✅ 2 SUITABLE COLORS
+                                  Color bgColor = isLab ? const Color(0xFFF5F3FF) : const Color(0xFFEFF6FF);
+                                  Color txtColor = isLab ? const Color(0xFF6D28D9) : const Color(0xFF1D4ED8);
+                                  Color borderColor = isLab ? const Color(0xFFDDD6FE) : const Color(0xFFBFDBFE);
 
                                   return DataCell(
                                     Container(
@@ -745,37 +786,34 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                                       height: 76,
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                                       decoration: BoxDecoration(
-                                        color: isLab ? const Color(0xFFFFF7ED) : const Color(0xFFF8FAFC),
+                                        color: bgColor,
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: isLab ? const Color(0xFFFDBA74) : const Color(0xFFE2E8F0),
-                                          width: isLab ? 1.5 : 1,
-                                        ),
+                                        border: Border.all(color: borderColor, width: 1.5),
                                       ),
                                       child: Column(
                                         mainAxisAlignment: MainAxisAlignment.center,
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            '$subj ($fac)',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w800,
-                                              fontSize: 11.0,
-                                              color: isLab ? const Color(0xFFC2410C) : const Color(0xFF0F172A),
-                                            ),
+                                            subj,
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.0, color: txtColor),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                           ),
-                                          // ✅ Only show Batch and Room if they exist (not hardcoded)
+                                          if (fac.isNotEmpty) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              fac,
+                                              style: TextStyle(fontSize: 10.0, color: txtColor.withOpacity(0.8), fontWeight: FontWeight.w500),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
                                           if (batch.isNotEmpty || room.isNotEmpty) ...[
                                             const SizedBox(height: 4),
                                             Text(
-                                              batch.isNotEmpty ? '$batch $room' : room,
-                                              style: const TextStyle(
-                                                fontSize: 9.5,
-                                                color: Color(0xFF475569),
-                                                fontWeight: FontWeight.w600,
-                                              ),
+                                              batch.isNotEmpty ? '$batch${room.isNotEmpty ? ' | $room' : ''}' : room,
+                                              style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: txtColor.withOpacity(0.6)),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                             ),

@@ -703,7 +703,6 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
     );
   }
 
-  // ✅ NEW WIDGET: Division & Batch Structure Configuration
   Widget _buildDivisionStructureTab() {
     final provider = context.watch<TimetableProvider>();
     final structure = provider.divisionStructure;
@@ -729,7 +728,7 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Define how many lab batches each division has. The solver will automatically split lab hours equally among these batches.',
+                  'Define how many lab batches each division has. You can also alias them (e.g., "Batch 1" = "A1, A2"). The solver will use this to split lab hours.',
                   style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
                 ),
                 const SizedBox(height: 24),
@@ -743,35 +742,67 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                         padding: const EdgeInsets.symmetric(vertical: 8.0),
                         child: Text(year, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFFF97316))),
                       ),
-                      Wrap(
-                        spacing: 24,
-                        runSpacing: 16,
-                        children: divisions.map((divInfo) {
-                          final divName = divInfo['division'] as String;
-                          final batches = divInfo['batches'] as int;
-                          
-                          return Row(
-                            mainAxisSize: MainAxisSize.min,
+                      ...divisions.map((divInfo) {
+                        final divName = divInfo['division'] as String;
+                        final batches = divInfo['batches'] as int;
+                        List<dynamic> aliases = divInfo['aliases'] as List<dynamic>;
+                        
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16.0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Div $divName:', style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white)),
-                              const SizedBox(width: 12),
-                              DropdownButton<int>(
-                                dropdownColor: const Color(0xFF1E293B),
-                                value: batches,
-                                style: const TextStyle(color: Colors.white, fontSize: 14),
-                                items: [1, 2, 3, 4].map((b) {
-                                  return DropdownMenuItem(value: b, child: Text('$b Batch${b > 1 ? "es" : ""}'));
-                                }).toList(),
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    provider.updateDivisionBatches(year, divName, val);
-                                  }
-                                },
+                              SizedBox(
+                                width: 80,
+                                child: Text('Div $divName:', style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white, height: 2.5)),
                               ),
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                DropdownButton<int>(
+                                  dropdownColor: const Color(0xFF1E293B),
+                                  value: batches,
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                  items: [1, 2, 3, 4].map((b) {
+                                    return DropdownMenuItem(value: b, child: Text('$b Batch${b > 1 ? "es" : ""}'));
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      provider.updateDivisionBatches(year, divName, val);
+                                    }
+                                  },
+                                ),
+                                const SizedBox(height: 8),
+                                // Alias Text Fields
+                                Wrap(
+                                  spacing: 12,
+                                  runSpacing: 8,
+                                  children: List.generate(batches, (i) {
+                                    return SizedBox(
+                                      width: 100,
+                                      child: TextField(
+                                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                                        decoration: InputDecoration(
+                                          labelText: 'Batch ${i+1}',
+                                          labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                                          isDense: true,
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                        ),
+                                        controller: TextEditingController(text: aliases.length > i ? aliases[i] : ''),
+                                        onChanged: (val) => provider.updateBatchAlias(year, divName, i, val),
+                                      ),
+                                    );
+                                  }),
+                                )
+                              ],
+                                ),
+                              )
                             ],
-                          );
-                        }).toList(),
-                      ),
+                          ),
+                        );
+                      }).toList(),
                       const Divider(color: Color(0xFF334155), height: 32),
                     ],
                   );

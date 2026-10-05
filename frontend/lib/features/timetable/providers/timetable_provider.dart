@@ -354,12 +354,23 @@ class TimetableProvider extends ChangeNotifier {
     return true;
   }
 
-    // ✅ NEW: Division & Batch Structure Configuration
-  // Map<Year, List<DivisionInfo>>
+    // ✅ NEW: Division & Batch Structure Configuration with Aliases
   Map<String, List<Map<String, dynamic>>> _divisionStructure = {
-    'SY': [{'division': 'A', 'batches': 2}, {'division': 'B', 'batches': 2}, {'division': 'C', 'batches': 2}],
-    'TY': [{'division': 'A', 'batches': 2}, {'division': 'B', 'batches': 2}, {'division': 'DS', 'batches': 1}],
-    'BTECH': [{'division': 'A', 'batches': 2}, {'division': 'B', 'batches': 2}, {'division': 'DS', 'batches': 2}],
+    'SY': [
+      {'division': 'A', 'batches': 2, 'aliases': ['A1, A2', 'A3, A4']},
+      {'division': 'B', 'batches': 2, 'aliases': ['B1, B2', 'B3, B4']},
+      {'division': 'C', 'batches': 2, 'aliases': ['C1, C2', 'C3, C4']},
+    ],
+    'TY': [
+      {'division': 'A', 'batches': 2, 'aliases': ['A1, A2', 'A3, A4']},
+      {'division': 'B', 'batches': 2, 'aliases': ['B1, B2', 'B3, B4']},
+      {'division': 'DS', 'batches': 1, 'aliases': ['All']},
+    ],
+    'BTECH': [
+      {'division': 'A', 'batches': 2, 'aliases': ['A1, A2', 'A3, A4']},
+      {'division': 'B', 'batches': 2, 'aliases': ['B1, B2', 'B3, B4']},
+      {'division': 'DS', 'batches': 2, 'aliases': ['D1, D2', 'D3, D4']},
+    ],
   };
   Map<String, List<Map<String, dynamic>>> get divisionStructure => _divisionStructure;
 
@@ -369,11 +380,55 @@ class TimetableProvider extends ChangeNotifier {
       final idx = divList.indexWhere((d) => d['division'] == division);
       if (idx != -1) {
         _divisionStructure[year]![idx]['batches'] = batches;
+        // Auto-adjust aliases list size
+        List<dynamic> currentAliases = _divisionStructure[year]![idx]['aliases'];
+        if (currentAliases.length < batches) {
+          for (int i = currentAliases.length; i < batches; i++) {
+            currentAliases.add('Batch ${i + 1}');
+          }
+        } else if (currentAliases.length > batches) {
+          currentAliases.removeRange(batches, currentAliases.length);
+        }
         notifyListeners();
       }
     }
   }
 
+  void updateBatchAlias(String year, String division, int batchIndex, String alias) {
+    final divList = _divisionStructure[year];
+    if (divList != null) {
+      final idx = divList.indexWhere((d) => d['division'] == division);
+      if (idx != -1) {
+        List<dynamic> aliases = _divisionStructure[year]![idx]['aliases'];
+        if (batchIndex < aliases.length) {
+          aliases[batchIndex] = alias;
+          notifyListeners();
+        }
+      }
+    }
+  }
+
+  // ✅ Helper to fetch alias for UI display
+  String getBatchAlias(String className, String batchName) {
+    if (batchName.isEmpty || batchName == 'All' || batchName == '-') return '';
+    try {
+      var parts = className.split('-');
+      if (parts.length >= 3) {
+        String year = parts[0]; // e.g., SY
+        String div = parts[2];  // e.g., A
+        var divInfo = _divisionStructure[year]?.firstWhere((d) => d['division'] == div);
+        if (divInfo != null) {
+          int idx = int.tryParse(batchName.replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
+          idx--; // Convert to 0-indexed
+          var aliases = divInfo['aliases'] as List<dynamic>;
+          if (idx >= 0 && idx < aliases.length) {
+            return aliases[idx];
+          }
+        }
+      }
+    } catch (_) {}
+    return batchName; // Fallback to original name
+  }
   // Natural Language Rule Parsing
   bool _stringMatches(String a, String b) {
     if (a.isEmpty || b.isEmpty) return false;
