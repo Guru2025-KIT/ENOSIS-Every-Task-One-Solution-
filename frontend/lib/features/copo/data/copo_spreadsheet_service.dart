@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
-import 'dart:html' as html;
+import 'package:universal_html/html.dart' as html;
 import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
 import 'copo_repository.dart';
@@ -57,7 +57,8 @@ class CopoSpreadsheetService {
   }
 
   /// Parses bytes from either CSV or Excel format
-  static ParsedSpreadsheetResult parseFileBytes(Uint8List bytes, String fileName) {
+  static ParsedSpreadsheetResult parseFileBytes(
+      Uint8List bytes, String fileName) {
     List<List<String>> rawRows = [];
 
     if (fileName.toLowerCase().endsWith('.csv')) {
@@ -65,7 +66,10 @@ class CopoSpreadsheetService {
       final lines = const LineSplitter().convert(text);
       for (final line in lines) {
         if (line.trim().isEmpty) continue;
-        rawRows.add(line.split(',').map((cell) => cell.trim().replaceAll('"', '')).toList());
+        rawRows.add(line
+            .split(',')
+            .map((cell) => cell.trim().replaceAll('"', ''))
+            .toList());
       }
     } else {
       // Excel decode
@@ -74,7 +78,9 @@ class CopoSpreadsheetService {
         final sheet = excel.tables[table];
         if (sheet != null) {
           for (final row in sheet.rows) {
-            final rowStrings = row.map((cell) => cell?.value?.toString().trim() ?? '').toList();
+            final rowStrings = row
+                .map((cell) => cell?.value?.toString().trim() ?? '')
+                .toList();
             if (rowStrings.any((s) => s.isNotEmpty)) {
               rawRows.add(rowStrings);
             }
@@ -85,7 +91,8 @@ class CopoSpreadsheetService {
     }
 
     if (rawRows.isEmpty) {
-      return ParsedSpreadsheetResult(fileName: fileName, totalRows: 0, rows: [], detectedQuestions: []);
+      return ParsedSpreadsheetResult(
+          fileName: fileName, totalRows: 0, rows: [], detectedQuestions: []);
     }
 
     // Locate header row & column indexes
@@ -100,15 +107,22 @@ class CopoSpreadsheetService {
       final row = rawRows[i].map((s) => s.toLowerCase()).toList();
       for (int c = 0; c < row.length; c++) {
         final val = row[c];
-        if (val.contains('roll') || val.contains('r.no') || val.contains('rollno')) {
+        if (val.contains('roll') ||
+            val.contains('r.no') ||
+            val.contains('rollno')) {
           rollCol = c;
-        } else if (val.contains('prn') || val.contains('p.r.n') || val.contains('reg')) {
+        } else if (val.contains('prn') ||
+            val.contains('p.r.n') ||
+            val.contains('reg')) {
           prnCol = c;
         } else if (val.contains('name') || val.contains('student')) {
           nameCol = c;
-        } else if (val.contains('mark') || val.contains('total') || val.contains('score')) {
+        } else if (val.contains('mark') ||
+            val.contains('total') ||
+            val.contains('score')) {
           markCol = c;
-        } else if (val.startsWith('q') && (val.length <= 15 || val.contains('question'))) {
+        } else if (val.startsWith('q') &&
+            (val.length <= 15 || val.contains('question'))) {
           String rawHeader = rawRows[i][c].trim();
           if (rawHeader.contains('(')) {
             rawHeader = rawHeader.split('(')[0].trim();
@@ -136,12 +150,16 @@ class CopoSpreadsheetService {
       if (rollCol >= row.length) continue;
 
       final roll = row[rollCol].trim();
-      if (roll.isEmpty || ['roll no', 'prn', 'sr.no', 'total', 'average'].contains(roll.toLowerCase())) {
+      if (roll.isEmpty ||
+          ['roll no', 'prn', 'sr.no', 'total', 'average']
+              .contains(roll.toLowerCase())) {
         continue;
       }
 
-      final name = (nameCol != -1 && nameCol < row.length) ? row[nameCol].trim() : '';
-      final prn = (prnCol != -1 && prnCol < row.length) ? row[prnCol].trim() : null;
+      final name =
+          (nameCol != -1 && nameCol < row.length) ? row[nameCol].trim() : '';
+      final prn =
+          (prnCol != -1 && prnCol < row.length) ? row[prnCol].trim() : null;
 
       double? singleMark;
       if (markCol != -1 && markCol < row.length) {
@@ -193,12 +211,14 @@ class CopoSpreadsheetService {
         '3,CS003,Student Three,20240103\n';
   }
 
-  static String getIseCsvTemplate(String examType, List<StudentRosterItem> roster) {
+  static String getIseCsvTemplate(
+      String examType, List<StudentRosterItem> roster) {
     final buffer = StringBuffer();
     buffer.writeln('Sr.No,Roll No,Student Name,PRN,Marks (Out of 10)');
     if (roster.isNotEmpty) {
       for (final s in roster) {
-        buffer.writeln('${s.srNo},${s.rollNo},${s.name},${s.prn ?? '24250${s.rollNo}'},7.5');
+        buffer.writeln(
+            '${s.srNo},${s.rollNo},${s.name},${s.prn ?? '24250${s.rollNo}'},7.5');
       }
     } else {
       buffer.writeln('1,CS001,Student 1,20240101,7.5');
@@ -210,7 +230,8 @@ class CopoSpreadsheetService {
   static String getIse1MarksCsvTemplate() => getIseCsvTemplate('ISE1', []);
   static String getIse2MarksCsvTemplate() => getIseCsvTemplate('ISE2', []);
 
-  static String getQuestionWiseCsvTemplate(List<QuestionConfig> questions, List<StudentRosterItem> roster) {
+  static String getQuestionWiseCsvTemplate(
+      List<QuestionConfig> questions, List<StudentRosterItem> roster) {
     final buffer = StringBuffer();
     final qHeaders = questions.isNotEmpty
         ? questions.map((q) => '${q.questionId} (${q.coTag})').join(',')
@@ -218,11 +239,18 @@ class CopoSpreadsheetService {
     buffer.writeln('Sr.No,Roll No,Student Name,PRN,$qHeaders');
     if (roster.isNotEmpty) {
       for (final s in roster) {
-        final dummyMarks = (questions.isNotEmpty ? questions : [
-          QuestionConfig(questionId: 'Q1', coTag: 'CO1', maxMarks: 5.0),
-          QuestionConfig(questionId: 'Q2', coTag: 'CO2', maxMarks: 5.0),
-        ]).map((q) => (q.maxMarks * 0.7).toStringAsFixed(1)).join(',');
-        buffer.writeln('${s.srNo},${s.rollNo},${s.name},${s.prn ?? '24250${s.rollNo}'},$dummyMarks');
+        final dummyMarks = (questions.isNotEmpty
+                ? questions
+                : [
+                    QuestionConfig(
+                        questionId: 'Q1', coTag: 'CO1', maxMarks: 5.0),
+                    QuestionConfig(
+                        questionId: 'Q2', coTag: 'CO2', maxMarks: 5.0),
+                  ])
+            .map((q) => (q.maxMarks * 0.7).toStringAsFixed(1))
+            .join(',');
+        buffer.writeln(
+            '${s.srNo},${s.rollNo},${s.name},${s.prn ?? '24250${s.rollNo}'},$dummyMarks');
       }
     } else {
       buffer.writeln('1,CS001,Student 1,20240101,3.5,3.5');
@@ -232,17 +260,17 @@ class CopoSpreadsheetService {
   }
 
   static String getMseMarksCsvTemplate() => getQuestionWiseCsvTemplate([
-    QuestionConfig(questionId: 'Q1', coTag: 'CO1', maxMarks: 5.0),
-    QuestionConfig(questionId: 'Q2', coTag: 'CO2', maxMarks: 5.0),
-    QuestionConfig(questionId: 'Q3', coTag: 'CO3', maxMarks: 10.0),
-    QuestionConfig(questionId: 'Q4', coTag: 'CO4', maxMarks: 10.0),
-  ], []);
+        QuestionConfig(questionId: 'Q1', coTag: 'CO1', maxMarks: 5.0),
+        QuestionConfig(questionId: 'Q2', coTag: 'CO2', maxMarks: 5.0),
+        QuestionConfig(questionId: 'Q3', coTag: 'CO3', maxMarks: 10.0),
+        QuestionConfig(questionId: 'Q4', coTag: 'CO4', maxMarks: 10.0),
+      ], []);
 
   static String getEseMarksCsvTemplate() => getQuestionWiseCsvTemplate([
-    QuestionConfig(questionId: 'Q1', coTag: 'CO1', maxMarks: 10.0),
-    QuestionConfig(questionId: 'Q2', coTag: 'CO2', maxMarks: 10.0),
-    QuestionConfig(questionId: 'Q3', coTag: 'CO3', maxMarks: 10.0),
-    QuestionConfig(questionId: 'Q4', coTag: 'CO4', maxMarks: 10.0),
-    QuestionConfig(questionId: 'Q5', coTag: 'CO5', maxMarks: 20.0),
-  ], []);
+        QuestionConfig(questionId: 'Q1', coTag: 'CO1', maxMarks: 10.0),
+        QuestionConfig(questionId: 'Q2', coTag: 'CO2', maxMarks: 10.0),
+        QuestionConfig(questionId: 'Q3', coTag: 'CO3', maxMarks: 10.0),
+        QuestionConfig(questionId: 'Q4', coTag: 'CO4', maxMarks: 10.0),
+        QuestionConfig(questionId: 'Q5', coTag: 'CO5', maxMarks: 20.0),
+      ], []);
 }

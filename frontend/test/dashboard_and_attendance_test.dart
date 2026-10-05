@@ -20,7 +20,7 @@ class FakeDashboardService extends DashboardService {
   @override
   Future<DashboardSummaryModel> getDashboardSummary({DateTime? targetDate}) async {
     return customSummary ??
-        DashboardSummaryModel(
+        const DashboardSummaryModel(
           facultyId: 'fac-1',
           facultyName: 'Dr. Alan Turing',
           facultyEmail: 'alan@college.edu',
@@ -36,7 +36,7 @@ class FakeDashboardService extends DashboardService {
           sliCriticalStudentsCount: 1,
           verifiedAchievementsCount: 4,
           todaySchedule: [
-            const TodayScheduleSlotModel(
+            TodayScheduleSlotModel(
               timetableEntryId: 'tt-1',
               slotNumber: 1,
               timeRange: '09:00 AM - 10:00 AM',
@@ -52,7 +52,7 @@ class FakeDashboardService extends DashboardService {
               attendanceRecorded: true,
               sessionId: 1,
             ),
-            const TodayScheduleSlotModel(
+            TodayScheduleSlotModel(
               timetableEntryId: 'tt-2',
               slotNumber: 2,
               timeRange: '10:00 AM - 11:00 AM',

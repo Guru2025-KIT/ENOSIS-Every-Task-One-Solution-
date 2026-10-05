@@ -128,15 +128,15 @@ class _FacultyUploadDialogState extends State<FacultyUploadDialog> with SingleTi
                   child: const Icon(Icons.cloud_upload_outlined, color: AppColors.primary, size: 24),
                 ),
                 const SizedBox(width: 14),
-                Expanded(
+                const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Import Faculty Master Data',
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                       ),
-                      const SizedBox(height: 2),
+                      SizedBox(height: 2),
                       Text(
                         'Upload Excel (.xlsx, .xls) or CSV with automatic pre-import verification',
                         style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
@@ -177,9 +177,9 @@ class _FacultyUploadDialogState extends State<FacultyUploadDialog> with SingleTi
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.error.withOpacity(0.1),
+                  color: AppColors.error.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                  border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
@@ -263,7 +263,7 @@ class _FacultyUploadDialogState extends State<FacultyUploadDialog> with SingleTi
           children: [
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: AppColors.primarySoft,
                 shape: BoxShape.circle,
               ),
@@ -309,13 +309,13 @@ class _FacultyUploadDialogState extends State<FacultyUploadDialog> with SingleTi
           children: [
             _buildMetricPill('Total Rows', '${v.totalRows}', AppColors.textPrimary, Colors.grey.shade200),
             const SizedBox(width: 10),
-            _buildMetricPill('Valid to Import', '${v.validCount}', AppColors.success, AppColors.success.withOpacity(0.12)),
+            _buildMetricPill('Valid to Import', '${v.validCount}', AppColors.success, AppColors.success.withValues(alpha: 0.12)),
             const SizedBox(width: 10),
-            _buildMetricPill('Duplicate Records', '${v.duplicateCount}', Colors.deepOrange, Colors.deepOrange.withOpacity(0.12)),
+            _buildMetricPill('Duplicate Records', '${v.duplicateCount}', Colors.deepOrange, Colors.deepOrange.withValues(alpha: 0.12)),
             const SizedBox(width: 10),
-            _buildMetricPill('Missing Fields', '${v.missingFieldsCount}', Colors.amber.shade900, Colors.amber.withOpacity(0.15)),
+            _buildMetricPill('Missing Fields', '${v.missingFieldsCount}', Colors.amber.shade900, Colors.amber.withValues(alpha: 0.15)),
             const SizedBox(width: 10),
-            _buildMetricPill('Invalid Email/Format', '${v.invalidCount}', AppColors.error, AppColors.error.withOpacity(0.12)),
+            _buildMetricPill('Invalid Email/Format', '${v.invalidCount}', AppColors.error, AppColors.error.withValues(alpha: 0.12)),
           ],
         ),
         const SizedBox(height: 14),
@@ -371,7 +371,7 @@ class _FacultyUploadDialogState extends State<FacultyUploadDialog> with SingleTi
           const SizedBox(width: 6),
           Text(
             label,
-            style: TextStyle(fontSize: 11.5, color: textColor.withOpacity(0.85), fontWeight: FontWeight.w500),
+            style: TextStyle(fontSize: 11.5, color: textColor.withValues(alpha: 0.85), fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -420,7 +420,7 @@ class _FacultyUploadDialogState extends State<FacultyUploadDialog> with SingleTi
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.1),
+                        color: AppColors.error.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(

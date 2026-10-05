@@ -59,7 +59,7 @@ class FacultyInsightsScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF4338CA).withOpacity(0.2),
+                        color: const Color(0xFF4338CA).withValues(alpha: 0.2),
                         blurRadius: 16,
                         offset: const Offset(0, 6),
                       ),
@@ -71,9 +71,9 @@ class FacultyInsightsScreen extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF818CF8).withOpacity(0.25),
+                          color: const Color(0xFF818CF8).withValues(alpha: 0.25),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFF818CF8).withOpacity(0.4)),
+                          border: Border.all(color: const Color(0xFF818CF8).withValues(alpha: 0.4)),
                         ),
                         child: const Wrap(
                           crossAxisAlignment: WrapCrossAlignment.center,
@@ -105,7 +105,7 @@ class FacultyInsightsScreen extends StatelessWidget {
                       Text(
                         'ENOSIS bridges the critical gap between early student perception and end-of-semester verified CO-PO outcomes, recommending precise interventions.',
                         style: AppTypography.bodyMedium.copyWith(
-                          color: Colors.white.withOpacity(0.85),
+                          color: Colors.white.withValues(alpha: 0.85),
                           fontSize: isMobile ? 13 : 14.5,
                         ),
                       ),
@@ -314,7 +314,7 @@ class FacultyInsightsScreen extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0284C7).withOpacity(0.1),
+                          color: const Color(0xFF0284C7).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(
@@ -367,10 +367,10 @@ class _PreSemesterActionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.3), width: 1.5),
+        border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.3), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0284C7).withOpacity(0.06),
+            color: const Color(0xFF0284C7).withValues(alpha: 0.06),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -385,7 +385,7 @@ class _PreSemesterActionCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0284C7).withOpacity(0.12),
+                  color: const Color(0xFF0284C7).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
@@ -465,10 +465,10 @@ class _MidSemesterActionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF7C3AED).withOpacity(0.3), width: 1.5),
+        border: Border.all(color: const Color(0xFF7C3AED).withValues(alpha: 0.3), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF7C3AED).withOpacity(0.06),
+            color: const Color(0xFF7C3AED).withValues(alpha: 0.06),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -483,7 +483,7 @@ class _MidSemesterActionCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF7C3AED).withOpacity(0.12),
+                  color: const Color(0xFF7C3AED).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
@@ -563,10 +563,10 @@ class _EndSemesterActionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF16A34A).withOpacity(0.3), width: 1.5),
+        border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.3), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF16A34A).withOpacity(0.06),
+            color: const Color(0xFF16A34A).withValues(alpha: 0.06),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -581,7 +581,7 @@ class _EndSemesterActionCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF16A34A).withOpacity(0.12),
+                  color: const Color(0xFF16A34A).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
@@ -669,12 +669,12 @@ class _StageCard extends StatelessWidget {
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isActive ? color.withOpacity(0.5) : AppColors.border,
+            color: isActive ? color.withValues(alpha: 0.5) : AppColors.border,
             width: isActive ? 1.5 : 1.0,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 8,
               offset: const Offset(0, 3),
             ),
@@ -689,7 +689,7 @@ class _StageCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
+                    color: color.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(stage['icon'] as IconData, color: color, size: 20),

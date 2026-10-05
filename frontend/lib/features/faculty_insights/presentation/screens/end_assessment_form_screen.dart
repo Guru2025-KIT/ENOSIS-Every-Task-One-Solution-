@@ -179,9 +179,9 @@ class EndAssessmentFormScreen extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF59E0B).withOpacity(0.12),
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4)),
+                        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
                       ),
                       child: Row(
                         children: [
@@ -227,9 +227,9 @@ class EndAssessmentFormScreen extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.1),
+                        color: AppColors.error.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         children: [
@@ -316,15 +316,15 @@ class EndAssessmentFormScreen extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            const Color(0xFF0284C7).withOpacity(0.06),
-            const Color(0xFF7C3AED).withOpacity(0.06),
-            const Color(0xFF16A34A).withOpacity(0.06),
+            const Color(0xFF0284C7).withValues(alpha: 0.06),
+            const Color(0xFF7C3AED).withValues(alpha: 0.06),
+            const Color(0xFF16A34A).withValues(alpha: 0.06),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF16A34A).withOpacity(0.25)),
+        border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,7 +345,7 @@ class EndAssessmentFormScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF16A34A).withOpacity(0.15),
+                    color: const Color(0xFF16A34A).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Text(
@@ -384,7 +384,7 @@ class EndAssessmentFormScreen extends StatelessWidget {
                   color: const Color(0xFF0284C7),
                 ),
               ] else
-                _NoBaselinePill(stage: 'PRE'),
+                const _NoBaselinePill(stage: 'PRE'),
 
               if (mid.hasMidAssessment) ...[
                 _BaselinePill(
@@ -406,7 +406,7 @@ class EndAssessmentFormScreen extends StatelessWidget {
                   color: const Color(0xFF7C3AED),
                 ),
               ] else
-                _NoBaselinePill(stage: 'MID'),
+                const _NoBaselinePill(stage: 'MID'),
             ],
           ),
         ],
@@ -1314,7 +1314,7 @@ class _BaselinePill extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1322,7 +1322,7 @@ class _BaselinePill extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(3),
             ),
             child: Text(

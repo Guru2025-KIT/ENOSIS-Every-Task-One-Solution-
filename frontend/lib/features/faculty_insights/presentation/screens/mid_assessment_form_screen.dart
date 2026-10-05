@@ -181,9 +181,9 @@ class MidAssessmentFormScreen extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.1),
+                        color: AppColors.error.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         children: [
@@ -220,9 +220,9 @@ class MidAssessmentFormScreen extends StatelessWidget {
         horizontal: isMobile ? 12 : 24,
         vertical: 12,
       ),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: AppColors.surface,
-        border: const Border(bottom: BorderSide(color: AppColors.border)),
+        border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: ResponsiveCenter(
         maxWidth: 860,
@@ -269,14 +269,14 @@ class MidAssessmentFormScreen extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            const Color(0xFF0284C7).withOpacity(0.08),
-            const Color(0xFF7C3AED).withOpacity(0.08),
+            const Color(0xFF0284C7).withValues(alpha: 0.08),
+            const Color(0xFF7C3AED).withValues(alpha: 0.08),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.2)),
+        border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -297,7 +297,7 @@ class MidAssessmentFormScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF16A34A).withOpacity(0.15),
+                    color: const Color(0xFF16A34A).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Text(
@@ -776,7 +776,7 @@ class MidAssessmentFormScreen extends StatelessWidget {
         border: const Border(top: BorderSide(color: AppColors.border)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, -4),
           ),
@@ -958,7 +958,7 @@ class _BaselinePill extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.3)),
+        border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

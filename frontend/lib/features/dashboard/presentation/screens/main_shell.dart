@@ -306,7 +306,7 @@ class _MainShellState extends State<MainShell> {
                   Container(
                     height: 40,
                     decoration: BoxDecoration(
-                      color: AppColors.primaryDark.withOpacity(0.4),
+                      color: AppColors.primaryDark.withValues(alpha: 0.4),
                       border: const Border(
                         top: BorderSide(color: Colors.white12, width: 0.8),
                       ),
@@ -376,7 +376,7 @@ class _MainShellState extends State<MainShell> {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 8,
                 offset: const Offset(0, -2),
               ),
@@ -477,7 +477,7 @@ class _MainShellState extends State<MainShell> {
         child: Material(
           color: AppColors.primary,
           elevation: 2,
-          shadowColor: Colors.black.withOpacity(0.2),
+          shadowColor: Colors.black.withValues(alpha: 0.2),
           child: SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -610,8 +610,8 @@ class _MainShellState extends State<MainShell> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.08),
-                              border: Border.all(color: Colors.white.withOpacity(0.24)),
+                              color: Colors.white.withValues(alpha: 0.08),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Row(
@@ -762,7 +762,7 @@ class _WebTabButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
-        hoverColor: Colors.white.withOpacity(0.08),
+        hoverColor: Colors.white.withValues(alpha: 0.08),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
           decoration: BoxDecoration(

@@ -114,7 +114,7 @@ class TopicAssessmentCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isCompleted
-              ? AppColors.success.withOpacity(0.4)
+              ? AppColors.success.withValues(alpha: 0.4)
               : AppColors.border,
         ),
       ),

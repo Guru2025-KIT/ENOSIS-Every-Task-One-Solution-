@@ -50,7 +50,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
   }
 
   List<KitCourseInfo> get _availableCourses {
-    return kitAimlCourses.where((c) => c.semester == _selectedSemester).toList();
+    return kitAimlCourses
+        .where((c) => c.semester == _selectedSemester)
+        .toList();
   }
 
   void _onYearChanged(String newYear) {
@@ -140,7 +142,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Loaded standard DBE sample course dataset with 30 students.'),
+        content:
+            Text('Loaded standard DBE sample course dataset with 30 students.'),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -155,7 +158,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       if (result == null || result.rows.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No spreadsheet selected or file was empty.')),
+            const SnackBar(
+                content: Text('No spreadsheet selected or file was empty.')),
           );
         }
         return;
@@ -164,7 +168,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       int matched = 0;
       for (final parsed in result.rows) {
         final existingIdx = exam.scores.indexWhere(
-          (s) => s.rollNo.trim().toLowerCase() == parsed.rollNo.trim().toLowerCase(),
+          (s) =>
+              s.rollNo.trim().toLowerCase() ==
+              parsed.rollNo.trim().toLowerCase(),
         );
 
         if (existingIdx != -1) {
@@ -172,7 +178,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           matched++;
         } else {
           // Add new student score if not already present
-          exam.scores.add(StudentIseScore(rollNo: parsed.rollNo, marks: parsed.singleMark));
+          exam.scores.add(
+              StudentIseScore(rollNo: parsed.rollNo, marks: parsed.singleMark));
           matched++;
         }
       }
@@ -182,7 +189,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Successfully extracted marks for $matched students from ${result.fileName}!'),
+            content: Text(
+                'Successfully extracted marks for $matched students from ${result.fileName}!'),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
           ),
@@ -191,7 +199,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Extraction error: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Extraction error: $e'),
+              backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -206,7 +216,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       if (result == null || result.rows.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No spreadsheet selected or file was empty.')),
+            const SnackBar(
+                content: Text('No spreadsheet selected or file was empty.')),
           );
         }
         return;
@@ -215,13 +226,16 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       int matched = 0;
       for (final parsed in result.rows) {
         final existingIdx = exam.studentScores.indexWhere(
-          (s) => s.rollNo.trim().toLowerCase() == parsed.rollNo.trim().toLowerCase(),
+          (s) =>
+              s.rollNo.trim().toLowerCase() ==
+              parsed.rollNo.trim().toLowerCase(),
         );
 
         if (existingIdx != -1) {
           for (final q in exam.questions) {
             if (parsed.questionMarks.containsKey(q.questionId)) {
-              exam.studentScores[existingIdx].scores[q.questionId] = parsed.questionMarks[q.questionId];
+              exam.studentScores[existingIdx].scores[q.questionId] =
+                  parsed.questionMarks[q.questionId];
             }
           }
           matched++;
@@ -239,7 +253,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Extracted question marks for $matched students from ${result.fileName}!'),
+            content: Text(
+                'Extracted question marks for $matched students from ${result.fileName}!'),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
           ),
@@ -248,7 +263,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Extraction error: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Extraction error: $e'),
+              backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -281,7 +298,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Imported ${newRoster.length} students into Roll Call!'),
+            content:
+                Text('Imported ${newRoster.length} students into Roll Call!'),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
           ),
@@ -290,7 +308,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Roster import error: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Roster import error: $e'),
+              backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -335,7 +355,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   Text(
                     'Dept of CSE (Artificial Intelligence & Machine Learning) · NEP Syllabus Framework',
                     style: AppTypography.caption.copyWith(
-                      color: Colors.white.withOpacity(0.85),
+                      color: Colors.white.withValues(alpha: 0.85),
                       fontSize: 11.5,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -407,7 +427,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F1F44).withOpacity(0.2),
+            color: const Color(0xFF0F1F44).withValues(alpha: 0.2),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -419,7 +439,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: AppColors.secondary,
                   borderRadius: BorderRadius.circular(20),
@@ -438,7 +459,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               Text(
                 'NEP 2020 Framework',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.85),
+                  color: Colors.white.withValues(alpha: 0.85),
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                 ),
@@ -458,7 +479,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           Text(
             'Select your Academic Year, corresponding Semester, and Course from the autonomous KITCoEK CSE (AIML) syllabus. Once confirmed, the system launches the 5×14 correlation matrix, roll call, and attainment engine.',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.85),
+              color: Colors.white.withValues(alpha: 0.85),
               fontSize: 13.5,
               height: 1.4,
             ),
@@ -472,9 +493,11 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             children: [
               _buildWorkflowStepBadge('1', 'Year: $_selectedYear', true),
               const Icon(Icons.chevron_right, color: Colors.white60, size: 18),
-              _buildWorkflowStepBadge('2', 'Semester: $_selectedSemester', true),
+              _buildWorkflowStepBadge(
+                  '2', 'Semester: $_selectedSemester', true),
               const Icon(Icons.chevron_right, color: Colors.white60, size: 18),
-              _buildWorkflowStepBadge('3', 'Course: ${_selectedCourse.code}', true),
+              _buildWorkflowStepBadge(
+                  '3', 'Course: ${_selectedCourse.code}', true),
             ],
           ),
         ],
@@ -486,9 +509,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withOpacity(0.3)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -498,13 +521,17 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             backgroundColor: AppColors.secondary,
             child: Text(
               num,
-              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold),
             ),
           ),
           const SizedBox(width: 6),
           Text(
             text,
-            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+                color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -554,15 +581,26 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 color: AppColors.primary,
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: const Text('STEP 1', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+              child: const Text('STEP 1',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11)),
             ),
             const SizedBox(width: 10),
             const Text(
               'Select Academic Year',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary),
             ),
             const SizedBox(width: 8),
-            const Text('(Mandatory)', style: TextStyle(color: AppColors.secondary, fontSize: 12, fontWeight: FontWeight.bold)),
+            const Text('(Mandatory)',
+                style: TextStyle(
+                    color: AppColors.secondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold)),
           ],
         ),
         const SizedBox(height: 12),
@@ -586,22 +624,25 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       duration: const Duration(milliseconds: 200),
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primary.withOpacity(0.05) : AppColors.surface,
+                        color: isSelected
+                            ? AppColors.primary.withValues(alpha: 0.05)
+                            : AppColors.surface,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: isSelected ? AppColors.primary : AppColors.border,
+                          color:
+                              isSelected ? AppColors.primary : AppColors.border,
                           width: isSelected ? 2 : 1,
                         ),
                         boxShadow: [
                           if (isSelected)
                             BoxShadow(
-                              color: AppColors.primary.withOpacity(0.12),
+                              color: AppColors.primary.withValues(alpha: 0.12),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             )
                           else
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.02),
+                              color: Colors.black.withValues(alpha: 0.02),
                               blurRadius: 4,
                               offset: const Offset(0, 2),
                             ),
@@ -616,18 +657,23 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: isSelected ? AppColors.primary : AppColors.surfaceVariant,
+                                  color: isSelected
+                                      ? AppColors.primary
+                                      : AppColors.surfaceVariant,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Icon(
                                   y.$5,
-                                  color: isSelected ? Colors.white : AppColors.primary,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : AppColors.primary,
                                   size: 20,
                                 ),
                               ),
                               if (isSelected)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 7, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: AppColors.primary,
                                     borderRadius: BorderRadius.circular(10),
@@ -635,9 +681,14 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                                   child: const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.check, color: Colors.white, size: 12),
+                                      Icon(Icons.check,
+                                          color: Colors.white, size: 12),
                                       SizedBox(width: 3),
-                                      Text('Active', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                      Text('Active',
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold)),
                                     ],
                                   ),
                                 ),
@@ -649,26 +700,33 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
-                              color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : AppColors.textPrimary,
                             ),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             y.$3,
-                            style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                            style: const TextStyle(
+                                fontSize: 11.5, color: AppColors.textSecondary),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 10),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
                               color: AppColors.surfaceVariant,
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
                               y.$4,
-                              style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                              style: const TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary),
                             ),
                           ),
                         ],
@@ -686,16 +744,20 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           decoration: BoxDecoration(
             color: AppColors.primarySoft,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
           ),
           child: Row(
             children: [
-              const Icon(Icons.check_circle, color: AppColors.primary, size: 16),
+              const Icon(Icons.check_circle,
+                  color: AppColors.primary, size: 16),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Year Selected: $_selectedYear · Next: Choose Semester in Step 2 below ➔',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.primary),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      color: AppColors.primary),
                 ),
               ),
             ],
@@ -717,12 +779,19 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 color: AppColors.primary,
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: const Text('STEP 2', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+              child: const Text('STEP 2',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11)),
             ),
             const SizedBox(width: 10),
             Text(
               'Select Semester for $_selectedYear',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary),
             ),
           ],
         ),
@@ -758,18 +827,23 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: AppColors.secondary.withOpacity(0.1),
+            color: AppColors.secondary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.secondary.withOpacity(0.3)),
+            border:
+                Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
-              const Icon(Icons.check_circle, color: AppColors.secondary, size: 16),
+              const Icon(Icons.check_circle,
+                  color: AppColors.secondary, size: 16),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Semester Selected: $_selectedSemester · Next: Pick Course in Step 3 below ➔',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.secondary),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      color: AppColors.secondary),
                 ),
               ),
             ],
@@ -791,12 +865,19 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 color: AppColors.primary,
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: const Text('STEP 3', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+              child: const Text('STEP 3',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11)),
             ),
             const SizedBox(width: 10),
             Text(
               'Select Course (${courses.length} subjects available in $_selectedSemester)',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary),
             ),
           ],
         ),
@@ -821,22 +902,27 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       duration: const Duration(milliseconds: 180),
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: isSelected ? AppColors.secondary.withOpacity(0.06) : AppColors.surface,
+                        color: isSelected
+                            ? AppColors.secondary.withValues(alpha: 0.06)
+                            : AppColors.surface,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: isSelected ? AppColors.secondary : AppColors.border,
+                          color: isSelected
+                              ? AppColors.secondary
+                              : AppColors.border,
                           width: isSelected ? 2 : 1,
                         ),
                         boxShadow: [
                           if (isSelected)
                             BoxShadow(
-                              color: AppColors.secondary.withOpacity(0.15),
+                              color:
+                                  AppColors.secondary.withValues(alpha: 0.15),
                               blurRadius: 8,
                               offset: const Offset(0, 3),
                             )
                           else
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.02),
+                              color: Colors.black.withValues(alpha: 0.02),
                               blurRadius: 4,
                               offset: const Offset(0, 1),
                             ),
@@ -862,22 +948,28 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                                   crossAxisAlignment: WrapCrossAlignment.center,
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 7, vertical: 2),
                                       decoration: BoxDecoration(
-                                        color: isSelected ? AppColors.secondary : AppColors.primarySoft,
+                                        color: isSelected
+                                            ? AppColors.secondary
+                                            : AppColors.primarySoft,
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(
                                         course.code,
                                         style: TextStyle(
-                                          color: isSelected ? Colors.white : AppColors.primary,
+                                          color: isSelected
+                                              ? Colors.white
+                                              : AppColors.primary,
                                           fontWeight: FontWeight.bold,
                                           fontSize: 11,
                                         ),
                                       ),
                                     ),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
                                         color: AppColors.surfaceVariant,
                                         borderRadius: BorderRadius.circular(4),
@@ -899,7 +991,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14.5,
-                                    color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                                    color: isSelected
+                                        ? AppColors.primary
+                                        : AppColors.textPrimary,
                                   ),
                                 ),
                                 const SizedBox(height: 6),
@@ -936,7 +1030,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
         border: Border.all(color: AppColors.border, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -950,10 +1044,11 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.secondary.withOpacity(0.12),
+                  color: AppColors.secondary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.verified_outlined, color: AppColors.secondary, size: 22),
+                child: const Icon(Icons.verified_outlined,
+                    color: AppColors.secondary, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -962,11 +1057,15 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   children: [
                     const Text(
                       'Ready to Begin Course Mapping',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: AppColors.textPrimary),
                     ),
                     Text(
                       '${_selectedCourse.code} · ${_selectedCourse.name} (${_selectedCourse.year}, ${_selectedCourse.semester})',
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 12.5),
                     ),
                   ],
                 ),
@@ -978,25 +1077,30 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           const SizedBox(height: 16),
           const Text(
             'Defined Course Outcomes (CO1 to CO5):',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: AppColors.textPrimary),
+            style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12.5,
+                color: AppColors.textPrimary),
           ),
           const SizedBox(height: 8),
           ..._selectedCourse.cos.take(5).map((co) => Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.check_circle_outline, color: AppColors.success, size: 15),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    co,
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  ),
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.check_circle_outline,
+                        color: AppColors.success, size: 15),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        co,
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          )),
+              )),
           const SizedBox(height: 20),
           // Giant Start Button
           SizedBox(
@@ -1014,7 +1118,10 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               icon: const Icon(Icons.arrow_forward_rounded, size: 20),
               label: Text(
                 'Start CO-PO Mapping for ${_selectedCourse.code} ➔',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 0.3),
+                style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.3),
               ),
               onPressed: () {
                 _repository.selectCourse(_selectedCourse);
@@ -1046,11 +1153,13 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           children: [
             Text(
               'CO-PO Attainment Workbench',
-              style: AppTypography.h3.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+              style: AppTypography.h3
+                  .copyWith(color: Colors.white, fontWeight: FontWeight.bold),
             ),
             Text(
               '${_repository.master.courseCode} · ${_repository.master.courseName} (${_repository.master.semester})',
-              style: AppTypography.caption.copyWith(color: Colors.white.withOpacity(0.85), fontSize: 11.5),
+              style: AppTypography.caption.copyWith(
+                  color: Colors.white.withValues(alpha: 0.85), fontSize: 11.5),
             ),
           ],
         ),
@@ -1063,26 +1172,30 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             icon: const Icon(Icons.tune_rounded, size: 15),
             label: Text(
               'Attainment Rules (${_repository.config.directWeightPercent.toInt()}/${_repository.config.indirectWeightPercent.toInt()} · Cutoff ${_repository.config.passingThresholdPercent.toInt()}%)',
-              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+              style:
+                  const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
             ),
             onPressed: _showAttainmentConfigDialog,
           ),
           const SizedBox(width: 6),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white.withOpacity(0.18),
+              backgroundColor: Colors.white.withValues(alpha: 0.18),
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             icon: const Icon(Icons.picture_as_pdf_outlined, size: 15),
-            label: const Text('Export PDF', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+            label: const Text('Export PDF',
+                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
             onPressed: () => _exportPdfReport(report),
           ),
           const SizedBox(width: 6),
@@ -1093,7 +1206,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             ),
             icon: const Icon(Icons.school_outlined, size: 15),
-            label: const Text('Switch Course / Year', style: TextStyle(fontSize: 11.5)),
+            label: const Text('Switch Course / Year',
+                style: TextStyle(fontSize: 11.5)),
             onPressed: () {
               setState(() {
                 _hasStartedMapping = false;
@@ -1102,7 +1216,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           ),
           const SizedBox(width: 4),
           IconButton(
-            icon: const Icon(Icons.functions_rounded, color: Colors.white, size: 20),
+            icon: const Icon(Icons.functions_rounded,
+                color: Colors.white, size: 20),
             tooltip: 'View Formulas',
             onPressed: _showFormulaGuideDialog,
           ),
@@ -1123,18 +1238,34 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 controller: _tabController,
                 isScrollable: true,
                 labelColor: Colors.white,
-                unselectedLabelColor: Colors.white.withOpacity(0.65),
+                unselectedLabelColor: Colors.white.withValues(alpha: 0.65),
                 indicatorColor: AppColors.secondary,
                 indicatorWeight: 3.5,
                 tabs: const [
-                  Tab(icon: Icon(Icons.grid_on, size: 16), text: '1. Master & Matrix'),
-                  Tab(icon: Icon(Icons.people_outline, size: 16), text: '2. Roll Call'),
-                  Tab(icon: Icon(Icons.assignment_outlined, size: 16), text: '3. ISE 1'),
-                  Tab(icon: Icon(Icons.quiz_outlined, size: 16), text: '4. MSE'),
-                  Tab(icon: Icon(Icons.assignment_turned_in_outlined, size: 16), text: '5. ISE 2'),
-                  Tab(icon: Icon(Icons.school_outlined, size: 16), text: '6. ESE'),
-                  Tab(icon: Icon(Icons.rate_review_outlined, size: 16), text: '7. Exit Survey'),
-                  Tab(icon: Icon(Icons.analytics_outlined, size: 16), text: '8. Attainment Report'),
+                  Tab(
+                      icon: Icon(Icons.grid_on, size: 16),
+                      text: '1. Master & Matrix'),
+                  Tab(
+                      icon: Icon(Icons.people_outline, size: 16),
+                      text: '2. Roll Call'),
+                  Tab(
+                      icon: Icon(Icons.assignment_outlined, size: 16),
+                      text: '3. ISE 1'),
+                  Tab(
+                      icon: Icon(Icons.quiz_outlined, size: 16),
+                      text: '4. MSE'),
+                  Tab(
+                      icon: Icon(Icons.assignment_turned_in_outlined, size: 16),
+                      text: '5. ISE 2'),
+                  Tab(
+                      icon: Icon(Icons.school_outlined, size: 16),
+                      text: '6. ESE'),
+                  Tab(
+                      icon: Icon(Icons.rate_review_outlined, size: 16),
+                      text: '7. Exit Survey'),
+                  Tab(
+                      icon: Icon(Icons.analytics_outlined, size: 16),
+                      text: '8. Attainment Report'),
                 ],
               ),
             ],
@@ -1154,10 +1285,14 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 children: [
                   _buildMasterMatrixTab(),
                   _buildRollCallTab(),
-                  _buildSingleIseTab(report, _repository.ise1, report.ise1Stats, 2),
-                  _buildSingleQuestionWiseTab(report, _repository.mse, report.mseQuestionStats, report.mseCoLevels, 3),
-                  _buildSingleIseTab(report, _repository.ise2, report.ise2Stats, 4),
-                  _buildSingleQuestionWiseTab(report, _repository.ese, report.eseQuestionStats, report.eseCoLevels, 5),
+                  _buildSingleIseTab(
+                      report, _repository.ise1, report.ise1Stats, 2),
+                  _buildSingleQuestionWiseTab(report, _repository.mse,
+                      report.mseQuestionStats, report.mseCoLevels, 3),
+                  _buildSingleIseTab(
+                      report, _repository.ise2, report.ise2Stats, 4),
+                  _buildSingleQuestionWiseTab(report, _repository.ese,
+                      report.eseQuestionStats, report.eseCoLevels, 5),
                   _buildExitSurveyTab(report),
                   _buildAttainmentReportTab(report),
                 ],
@@ -1185,7 +1320,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               Expanded(
                 child: _buildCategoryChip(
                   title: '1. Direct Attainment',
-                  subtitle: isWide ? 'ISE1, MSE, ISE2, ESE & Matrix' : '6 Assessment Steps',
+                  subtitle: isWide
+                      ? 'ISE1, MSE, ISE2, ESE & Matrix'
+                      : '6 Assessment Steps',
                   icon: Icons.assignment_turned_in_rounded,
                   isSelected: activeCat == 0,
                   onTap: () {
@@ -1197,7 +1334,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               Expanded(
                 child: _buildCategoryChip(
                   title: '2. Indirect Attainment',
-                  subtitle: isWide ? 'Course Exit Survey Feedback' : 'Student Survey',
+                  subtitle:
+                      isWide ? 'Course Exit Survey Feedback' : 'Student Survey',
                   icon: Icons.rate_review_rounded,
                   isSelected: activeCat == 1,
                   onTap: () => _goToTab(6),
@@ -1207,7 +1345,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               Expanded(
                 child: _buildCategoryChip(
                   title: '3. Overall Summary',
-                  subtitle: isWide ? 'Direct + Indirect Attainment & Reports' : 'Final Audit & Chart',
+                  subtitle: isWide
+                      ? 'Direct + Indirect Attainment & Reports'
+                      : 'Final Audit & Chart',
                   icon: Icons.analytics_rounded,
                   isSelected: activeCat == 2,
                   onTap: () => _goToTab(7),
@@ -1241,7 +1381,12 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             width: isSelected ? 2 : 1,
           ),
           boxShadow: isSelected
-              ? [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 4, offset: const Offset(0, 2))]
+              ? [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.12),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2))
+                ]
               : null,
         ),
         child: Row(
@@ -1271,7 +1416,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     subtitle,
                     style: TextStyle(
                       fontSize: 10,
-                      color: isSelected ? AppColors.textSecondary : Colors.white70,
+                      color:
+                          isSelected ? AppColors.textSecondary : Colors.white70,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1296,10 +1442,11 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        border: const Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+        border:
+            const Border(bottom: BorderSide(color: AppColors.border, width: 1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -1314,52 +1461,78 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppColors.primary,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: const Text(
                     'KITCoEK NEP',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5),
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10.5),
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Text('1. Academic Year: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                const Text('1. Academic Year: ',
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 const SizedBox(width: 6),
                 DropdownButton<String>(
                   value: _selectedYear,
                   isDense: true,
                   underline: const SizedBox(),
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 12.5),
-                  items: ['F.Y. B.Tech', 'S.Y. B.Tech', 'T.Y. B.Tech', 'Final Year B.Tech']
-                      .map((y) => DropdownMenuItem(value: y, child: Text(y))).toList(),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                      fontSize: 12.5),
+                  items: [
+                    'F.Y. B.Tech',
+                    'S.Y. B.Tech',
+                    'T.Y. B.Tech',
+                    'Final Year B.Tech'
+                  ]
+                      .map((y) => DropdownMenuItem(value: y, child: Text(y)))
+                      .toList(),
                   onChanged: (y) {
                     if (y != null) _onYearChanged(y);
                   },
                 ),
                 const SizedBox(width: 18),
-                const Text('2. Semester: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                const Text('2. Semester: ',
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 const SizedBox(width: 6),
                 DropdownButton<String>(
                   value: _selectedSemester,
                   isDense: true,
                   underline: const SizedBox(),
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 12.5),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                      fontSize: 12.5),
                   items: _availableSemesters
-                      .map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                      .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                      .toList(),
                   onChanged: (s) {
                     if (s != null) _onSemesterChanged(s);
                   },
                 ),
                 const SizedBox(width: 18),
-                const Text('3. Course: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                const Text('3. Course: ',
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 const SizedBox(width: 6),
                 DropdownButton<String>(
                   value: _selectedCourse.code,
                   isDense: true,
                   underline: const SizedBox(),
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.secondary, fontSize: 12.5),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.secondary,
+                      fontSize: 12.5),
                   items: courses.map((c) {
                     return DropdownMenuItem(
                       value: c.code,
@@ -1391,11 +1564,13 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 child: Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 9, vertical: 4),
                       decoration: BoxDecoration(
                         color: AppColors.primarySoft,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                        border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.3)),
                       ),
                       child: Text(
                         _selectedCourse.code,
@@ -1422,7 +1597,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                           ),
                           Text(
                             'KIT\'s College of Engineering (Autonomous), Kolhapur · Department of CSE (AI & ML) · ${_selectedCourse.semester}',
-                            style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 11),
+                            style: AppTypography.caption.copyWith(
+                                color: AppColors.textSecondary, fontSize: 11),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1436,29 +1612,38 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: isOverallAttained
-                          ? AppColors.success.withOpacity(0.15)
-                          : AppColors.error.withOpacity(0.15),
+                          ? AppColors.success.withValues(alpha: 0.15)
+                          : AppColors.error.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: isOverallAttained ? AppColors.success : AppColors.error,
+                        color: isOverallAttained
+                            ? AppColors.success
+                            : AppColors.error,
                       ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          isOverallAttained ? Icons.check_circle : Icons.warning_amber_rounded,
+                          isOverallAttained
+                              ? Icons.check_circle
+                              : Icons.warning_amber_rounded,
                           size: 14,
-                          color: isOverallAttained ? AppColors.success : AppColors.error,
+                          color: isOverallAttained
+                              ? AppColors.success
+                              : AppColors.error,
                         ),
                         const SizedBox(width: 6),
                         Text(
                           isOverallAttained ? 'ATTAINED' : 'NOT ATTAINED',
                           style: AppTypography.captionBold.copyWith(
-                            color: isOverallAttained ? AppColors.success : AppColors.error,
+                            color: isOverallAttained
+                                ? AppColors.success
+                                : AppColors.error,
                             fontSize: 11,
                           ),
                         ),
@@ -1472,11 +1657,16 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     children: [
                       const Text(
                         'Overall Attainment:',
-                        style: TextStyle(fontSize: 10.5, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                            fontSize: 10.5,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500),
                       ),
                       Text(
                         '${overall.toStringAsFixed(2)} / 3.00',
-                        style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary),
+                        style: AppTypography.h3.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary),
                       ),
                     ],
                   ),
@@ -1499,7 +1689,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
         children: [
           // ─── STEP 1A: COURSE OUTCOME DEFINITIONS (CO1 - CO5) ────────────────
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
@@ -1513,12 +1704,14 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                         children: [
                           Text(
                             'Step 1: Course Outcomes (CO1 - CO5) Entry',
-                            style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold),
+                            style: AppTypography.h3
+                                .copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             'Enter or customize the 5 Course Outcome (CO) statements for ${_repository.master.courseCode}',
-                            style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                            style: AppTypography.caption
+                                .copyWith(color: AppColors.textSecondary),
                           ),
                         ],
                       ),
@@ -1526,7 +1719,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                         onPressed: () {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Course Outcomes (CO1 - CO5) confirmed! Now complete the CO-PO correlation matrix below.'),
+                              content: Text(
+                                  'Course Outcomes (CO1 - CO5) confirmed! Now complete the CO-PO correlation matrix below.'),
                               backgroundColor: AppColors.success,
                               behavior: SnackBarBehavior.floating,
                             ),
@@ -1559,18 +1753,24 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                             ),
                             child: Text(
                               'CO${i + 1}',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: TextFormField(
-                              initialValue: i < _repository.coDescriptions.length
-                                  ? _repository.coDescriptions[i]
-                                  : 'CO${i + 1}: Outcome statement...',
+                              initialValue:
+                                  i < _repository.coDescriptions.length
+                                      ? _repository.coDescriptions[i]
+                                      : 'CO${i + 1}: Outcome statement...',
                               decoration: InputDecoration(
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 10),
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8)),
                                 hintText: 'Enter CO${i + 1} statement...',
                               ),
                               onChanged: (val) {
@@ -1593,7 +1793,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
 
           // ─── STEP 1B: CO-PO & PSO CORRELATION MATRIX ──────────────────────
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
@@ -1605,15 +1806,21 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Step 2: CO-PO & PSO Correlation Matrix', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+                          Text('Step 2: CO-PO & PSO Correlation Matrix',
+                              style: AppTypography.h3
+                                  .copyWith(fontWeight: FontWeight.bold)),
                           const SizedBox(height: 4),
-                          Text('Click any cell to cycle values: 0 (-) → 1 (Low) → 2 (Medium) → 3 (High)', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                          Text(
+                              'Click any cell to cycle values: 0 (-) → 1 (Low) → 2 (Medium) → 3 (High)',
+                              style: AppTypography.caption
+                                  .copyWith(color: AppColors.textSecondary)),
                         ],
                       ),
                       OutlinedButton.icon(
                         onPressed: () {
                           setState(() {
-                            _repository.matrix = List.generate(5, (_) => List.generate(14, (_) => 0));
+                            _repository.matrix = List.generate(
+                                5, (_) => List.generate(14, (_) => 0));
                             _recalculate();
                           });
                         },
@@ -1643,16 +1850,20 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.primarySoft.withOpacity(0.5),
+        color: AppColors.primarySoft.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: AppTypography.caption.copyWith(color: AppColors.textTertiary, fontSize: 10.5)),
+          Text(label,
+              style: AppTypography.caption
+                  .copyWith(color: AppColors.textTertiary, fontSize: 10.5)),
           const SizedBox(height: 2),
-          Text(value, style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+          Text(value,
+              style: AppTypography.bodyMedium
+                  .copyWith(fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -1662,15 +1873,19 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     return Table(
       defaultColumnWidth: const FixedColumnWidth(54),
       columnWidths: const {0: FixedColumnWidth(80)},
-      border: TableBorder.all(color: AppColors.border, width: 1, borderRadius: BorderRadius.circular(8)),
+      border: TableBorder.all(
+          color: AppColors.border,
+          width: 1,
+          borderRadius: BorderRadius.circular(8)),
       children: [
         // Header row
         TableRow(
-          decoration: BoxDecoration(color: AppColors.primarySoft),
+          decoration: const BoxDecoration(color: AppColors.primarySoft),
           children: [
             const Padding(
               padding: EdgeInsets.all(8.0),
-              child: Text('CO / PO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              child: Text('CO / PO',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
             ),
             for (final po in poColumnNames)
               Padding(
@@ -1681,7 +1896,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 11,
-                      color: po.startsWith('PSO') ? AppColors.secondary : AppColors.primary,
+                      color: po.startsWith('PSO')
+                          ? AppColors.secondary
+                          : AppColors.primary,
                     ),
                   ),
                 ),
@@ -1694,13 +1911,16 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             children: [
               Padding(
                 padding: const EdgeInsets.all(8.0),
-                child: Text('CO${r + 1}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                child: Text('CO${r + 1}',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 12)),
               ),
               for (int c = 0; c < 14; c++)
                 InkWell(
                   onTap: () {
                     setState(() {
-                      _repository.matrix[r][c] = (_repository.matrix[r][c] + 1) % 4;
+                      _repository.matrix[r][c] =
+                          (_repository.matrix[r][c] + 1) % 4;
                       _recalculate();
                     });
                   },
@@ -1709,11 +1929,15 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     alignment: Alignment.center,
                     color: _getColorForMatrixVal(_repository.matrix[r][c]),
                     child: Text(
-                      _repository.matrix[r][c] == 0 ? '-' : '${_repository.matrix[r][c]}',
+                      _repository.matrix[r][c] == 0
+                          ? '-'
+                          : '${_repository.matrix[r][c]}',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
-                        color: _repository.matrix[r][c] == 0 ? AppColors.textTertiary : Colors.white,
+                        color: _repository.matrix[r][c] == 0
+                            ? AppColors.textTertiary
+                            : Colors.white,
                       ),
                     ),
                   ),
@@ -1722,11 +1946,15 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           ),
         // Average Row
         TableRow(
-          decoration: BoxDecoration(color: AppColors.surface),
+          decoration: const BoxDecoration(color: AppColors.surface),
           children: [
             const Padding(
               padding: EdgeInsets.all(8.0),
-              child: Text('Avg', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary)),
+              child: Text('Avg',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      color: AppColors.primary)),
             ),
             for (int c = 0; c < 14; c++)
               Container(
@@ -1734,7 +1962,10 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 alignment: Alignment.center,
                 child: Text(
                   _calculateColumnAvg(c).toStringAsFixed(1),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppColors.primary),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                      color: AppColors.primary),
                 ),
               ),
           ],
@@ -1776,7 +2007,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
         children: [
           // Header & Upload Controls Card
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
@@ -1788,9 +2020,15 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Step 2: Student Master Roll Call (${roster.length} Enrolled)', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+                          Text(
+                              'Step 2: Student Master Roll Call (${roster.length} Enrolled)',
+                              style: AppTypography.h3
+                                  .copyWith(fontWeight: FontWeight.bold)),
                           const SizedBox(height: 4),
-                          Text('Upload or manage the master list of all students with Sr. No., Roll No., Name, and PRN.', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                          Text(
+                              'Upload or manage the master list of all students with Sr. No., Roll No., Name, and PRN.',
+                              style: AppTypography.caption
+                                  .copyWith(color: AppColors.textSecondary)),
                         ],
                       ),
                       Wrap(
@@ -1804,12 +2042,15 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                               );
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Downloaded Roll Call Sample Template (.csv)'),
+                                  content: Text(
+                                      'Downloaded Roll Call Sample Template (.csv)'),
                                   behavior: SnackBarBehavior.floating,
                                 ),
                               );
                             },
-                            icon: const Icon(Icons.download_for_offline_outlined, size: 16),
+                            icon: const Icon(
+                                Icons.download_for_offline_outlined,
+                                size: 16),
                             label: const Text('Download Excel Template'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: AppColors.primary,
@@ -1817,9 +2058,11 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                             ),
                           ),
                           ElevatedButton.icon(
-                            onPressed: _isProcessing ? null : _handleUploadRoster,
+                            onPressed:
+                                _isProcessing ? null : _handleUploadRoster,
                             icon: const Icon(Icons.upload_file, size: 16),
-                            label: const Text('Upload Student List (Excel/CSV)'),
+                            label:
+                                const Text('Upload Student List (Excel/CSV)'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white,
@@ -1838,7 +2081,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           // Master Student Data Table Card
           // Master Student Data Table Card
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
@@ -1847,7 +2091,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Enrolled Student Roster', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+                      Text('Enrolled Student Roster',
+                          style: AppTypography.h3
+                              .copyWith(fontWeight: FontWeight.bold)),
                       Chip(
                         label: Text('Total Students: ${roster.length}'),
                         backgroundColor: AppColors.primarySoft,
@@ -1858,7 +2104,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   if (roster.isEmpty)
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 36, horizontal: 20),
                       decoration: BoxDecoration(
                         color: AppColors.surfaceVariant.withOpacity(0.5),
                         borderRadius: BorderRadius.circular(10),
@@ -1872,18 +2119,23 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                               color: AppColors.primarySoft,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.people_outline_rounded, size: 36, color: AppColors.primary),
+                            child: const Icon(Icons.people_outline_rounded,
+                                size: 36, color: AppColors.primary),
                           ),
                           const SizedBox(height: 14),
                           const Text(
                             'No Student Roll Call Loaded Yet',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: AppColors.textPrimary),
                           ),
                           const SizedBox(height: 4),
                           const Text(
                             'Upload your Excel/CSV file with Sr. No., Roll No., Student Name, and PRN to populate the roster across all assessment modules.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+                            style: TextStyle(
+                                color: AppColors.textSecondary, fontSize: 12.5),
                           ),
                           const SizedBox(height: 18),
                           Wrap(
@@ -1892,21 +2144,26 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                             runSpacing: 10,
                             children: [
                               ElevatedButton.icon(
-                                onPressed: _isProcessing ? null : _handleUploadRoster,
+                                onPressed:
+                                    _isProcessing ? null : _handleUploadRoster,
                                 icon: const Icon(Icons.upload_file, size: 16),
-                                label: const Text('Upload Student List (Excel/CSV)'),
+                                label: const Text(
+                                    'Upload Student List (Excel/CSV)'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.primary,
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 18, vertical: 10),
                                 ),
                               ),
                               OutlinedButton.icon(
                                 onPressed: _resetToSample,
-                                icon: const Icon(Icons.playlist_add_check, size: 16),
+                                icon: const Icon(Icons.playlist_add_check,
+                                    size: 16),
                                 label: const Text('Load Demo Dataset'),
                                 style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 10),
                                 ),
                               ),
                             ],
@@ -1918,19 +2175,42 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
-                        headingRowColor: MaterialStateProperty.all(AppColors.primarySoft),
+                        headingRowColor:
+                            MaterialStateProperty.all(AppColors.primarySoft),
                         columns: const [
-                          DataColumn(label: Text('Sr. No.', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Roll No.', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('Student Name', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('PRN', style: TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(
+                              label: Text('Sr. No.',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(
+                              label: Text('Roll No.',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(
+                              label: Text('Student Name',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold))),
+                          DataColumn(
+                              label: Text('PRN',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold))),
                         ],
                         rows: roster.map((student) {
                           return DataRow(cells: [
-                            DataCell(Text('${student.srNo}', style: const TextStyle(fontWeight: FontWeight.bold))),
-                            DataCell(Text(student.rollNo, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.primary))),
-                            DataCell(Text(student.name, style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold))),
-                            DataCell(Text(student.prn ?? '24250${student.rollNo}', style: const TextStyle(fontFamily: 'monospace'))),
+                            DataCell(Text('${student.srNo}',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold))),
+                            DataCell(Text(student.rollNo,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primary))),
+                            DataCell(Text(student.name,
+                                style: AppTypography.bodyMedium
+                                    .copyWith(fontWeight: FontWeight.bold))),
+                            DataCell(Text(
+                                student.prn ?? '24250${student.rollNo}',
+                                style:
+                                    const TextStyle(fontFamily: 'monospace'))),
                           ]);
                         }).toList(),
                       ),
@@ -1948,7 +2228,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
   }
 
   // ─── TAB 3 & TAB 5: SINGLE IN-SEM EVALUATIONS (ISE 1 & ISE 2) ────────────────
-  Widget _buildSingleIseTab(CopoAttainmentReport report, IseExamData exam, ExamKpiStats stats, int stepIndex) {
+  Widget _buildSingleIseTab(CopoAttainmentReport report, IseExamData exam,
+      ExamKpiStats stats, int stepIndex) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -1959,23 +2240,28 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             children: [
               Text(
                 '${exam.examType} (In-Semester Evaluation)',
-                style: AppTypography.h2.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary),
+                style: AppTypography.h2.copyWith(
+                    fontWeight: FontWeight.bold, color: AppColors.primary),
               ),
               Row(
                 children: [
                   OutlinedButton.icon(
                     onPressed: () {
-                      final content = CopoSpreadsheetService.getIseCsvTemplate(exam.examType, _repository.roster);
-                      final filename = '${_repository.master.courseCode}_${exam.examType}_Sample_Template.csv';
+                      final content = CopoSpreadsheetService.getIseCsvTemplate(
+                          exam.examType, _repository.roster);
+                      final filename =
+                          '${_repository.master.courseCode}_${exam.examType}_Sample_Template.csv';
                       CopoSpreadsheetService.downloadCsvFile(filename, content);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Downloaded $filename with ${_repository.roster.length} students'),
+                          content: Text(
+                              'Downloaded $filename with ${_repository.roster.length} students'),
                           behavior: SnackBarBehavior.floating,
                         ),
                       );
                     },
-                    icon: const Icon(Icons.download_for_offline_outlined, size: 16),
+                    icon: const Icon(Icons.download_for_offline_outlined,
+                        size: 16),
                     label: Text('Download ${exam.examType} Template'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.secondary,
@@ -1984,10 +2270,14 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton.icon(
-                    onPressed: _isProcessing ? null : () => _handleUploadIseMarks(exam),
+                    onPressed: _isProcessing
+                        ? null
+                        : () => _handleUploadIseMarks(exam),
                     icon: const Icon(Icons.cloud_upload_outlined, size: 16),
                     label: Text('Upload ${exam.examType} Marks (Excel/CSV)'),
-                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary, foregroundColor: Colors.white),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.secondary,
+                        foregroundColor: Colors.white),
                   ),
                 ],
               ),
@@ -1997,24 +2287,34 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
 
           // Config row for Mapped COs
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Text('Mapped COs for ${exam.examType}: ', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text('Mapped COs for ${exam.examType}: ',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 13)),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Wrap(
                       spacing: 8,
                       runSpacing: 4,
                       children: ['CO1', 'CO2', 'CO3', 'CO4', 'CO5'].map((co) {
-                        final isSelected = exam.mappedCos.contains(co) || exam.mappedCo == co;
+                        final isSelected =
+                            exam.mappedCos.contains(co) || exam.mappedCo == co;
                         return FilterChip(
                           selected: isSelected,
                           showCheckmark: isSelected,
-                          label: Text(co, style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? Colors.white : AppColors.textPrimary, fontSize: 12)),
+                          label: Text(co,
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : AppColors.textPrimary,
+                                  fontSize: 12)),
                           selectedColor: AppColors.secondary,
                           checkmarkColor: Colors.white,
                           onSelected: (selected) {
@@ -2038,7 +2338,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       }).toList(),
                     ),
                   ),
-                  Text('Max Marks: ${exam.maxMarks.toStringAsFixed(0)}', style: AppTypography.captionBold),
+                  Text('Max Marks: ${exam.maxMarks.toStringAsFixed(0)}',
+                      style: AppTypography.captionBold),
                 ],
               ),
             ),
@@ -2048,20 +2349,41 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           // KPI Stats Cards
           Row(
             children: [
-              Expanded(child: _buildKpiCard('Attempted', '${stats.attemptedCount} (${stats.attemptedPercentage}%)', Icons.people_alt_outlined, const Color(0xFF0284C7))),
+              Expanded(
+                  child: _buildKpiCard(
+                      'Attempted',
+                      '${stats.attemptedCount} (${stats.attemptedPercentage}%)',
+                      Icons.people_alt_outlined,
+                      const Color(0xFF0284C7))),
               const SizedBox(width: 12),
-              Expanded(child: _buildKpiCard('Scoring >= 50% (5 Marks)', '${stats.scoring50Count} (${stats.scoring50Percentage}%)', Icons.check_circle_outline, const Color(0xFF16A34A))),
+              Expanded(
+                  child: _buildKpiCard(
+                      'Scoring >= 50% (5 Marks)',
+                      '${stats.scoring50Count} (${stats.scoring50Percentage}%)',
+                      Icons.check_circle_outline,
+                      const Color(0xFF16A34A))),
               const SizedBox(width: 12),
-              Expanded(child: _buildKpiCard('Scoring >= 55% (5.5 Marks)', '${stats.scoring55Count} (${stats.scoring55Percentage}%)', Icons.trending_up, const Color(0xFFD97706))),
+              Expanded(
+                  child: _buildKpiCard(
+                      'Scoring >= 55% (5.5 Marks)',
+                      '${stats.scoring55Count} (${stats.scoring55Percentage}%)',
+                      Icons.trending_up,
+                      const Color(0xFFD97706))),
               const SizedBox(width: 12),
-              Expanded(child: _buildKpiCard('Attainment Level', 'Level ${stats.attainmentLevel} / 3', Icons.star_border_purple500, const Color(0xFF8B5CF6))),
+              Expanded(
+                  child: _buildKpiCard(
+                      'Attainment Level',
+                      'Level ${stats.attainmentLevel} / 3',
+                      Icons.star_border_purple500,
+                      const Color(0xFF8B5CF6))),
             ],
           ),
           const SizedBox(height: 20),
 
           // Marks entry table
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2073,12 +2395,15 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       Expanded(
                         child: Text(
                           'Student Marks (Out of 10) — Pre-filled from Roll Call',
-                          style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold),
+                          style: AppTypography.h3
+                              .copyWith(fontWeight: FontWeight.bold),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Text('Real-time calculation', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                      Text('Real-time calculation',
+                          style: AppTypography.caption
+                              .copyWith(color: AppColors.textSecondary)),
                     ],
                   ),
                 ),
@@ -2092,25 +2417,44 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     final scoreItem = exam.scores[idx];
                     final student = _repository.roster.firstWhere(
                       (s) => s.rollNo == scoreItem.rollNo,
-                      orElse: () => StudentRosterItem(srNo: idx + 1, rollNo: scoreItem.rollNo, name: scoreItem.rollNo),
+                      orElse: () => StudentRosterItem(
+                          srNo: idx + 1,
+                          rollNo: scoreItem.rollNo,
+                          name: scoreItem.rollNo),
                     );
 
                     return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                       child: Row(
                         children: [
-                          SizedBox(width: 80, child: Text(scoreItem.rollNo, style: const TextStyle(fontWeight: FontWeight.bold))),
-                          Expanded(child: Text(student.name, style: AppTypography.bodyMedium)),
-                          SizedBox(width: 130, child: Text(student.prn ?? 'PRN-${student.rollNo}', style: const TextStyle(fontSize: 11, fontFamily: 'monospace'))),
+                          SizedBox(
+                              width: 80,
+                              child: Text(scoreItem.rollNo,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold))),
+                          Expanded(
+                              child: Text(student.name,
+                                  style: AppTypography.bodyMedium)),
+                          SizedBox(
+                              width: 130,
+                              child: Text(
+                                  student.prn ?? 'PRN-${student.rollNo}',
+                                  style: const TextStyle(
+                                      fontSize: 11, fontFamily: 'monospace'))),
                           SizedBox(
                             width: 100,
                             height: 36,
                             child: TextFormField(
-                              key: ValueKey('${exam.examType}_${scoreItem.rollNo}'),
+                              key: ValueKey(
+                                  '${exam.examType}_${scoreItem.rollNo}'),
                               initialValue: scoreItem.marks?.toString() ?? '',
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                      decimal: true),
                               decoration: const InputDecoration(
-                                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 6),
                                 border: OutlineInputBorder(),
                                 hintText: '0-10',
                               ),
@@ -2132,63 +2476,91 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
 
           // Calculation & Attainment Summary Table (Spreadsheet Replica)
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Attainment Calculation Summary for ${exam.examType}', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+                  Text('Attainment Calculation Summary for ${exam.examType}',
+                      style: AppTypography.h3
+                          .copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
-                      headingRowColor: MaterialStateProperty.all(AppColors.primarySoft),
+                      headingRowColor:
+                          MaterialStateProperty.all(AppColors.primarySoft),
                       columns: [
-                        const DataColumn(label: Text('Calculation Metric', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text(exam.examType, style: const TextStyle(fontWeight: FontWeight.bold))),
+                        const DataColumn(
+                            label: Text('Calculation Metric',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text(exam.examType,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold))),
                       ],
                       rows: [
                         DataRow(cells: [
-                          const DataCell(Text('No. of Students attempted', style: TextStyle(fontWeight: FontWeight.w600))),
+                          const DataCell(Text('No. of Students attempted',
+                              style: TextStyle(fontWeight: FontWeight.w600))),
                           DataCell(Text('${stats.attemptedCount}')),
                         ]),
                         DataRow(cells: [
-                          const DataCell(Text('% of Students attempted', style: TextStyle(fontWeight: FontWeight.w600))),
+                          const DataCell(Text('% of Students attempted',
+                              style: TextStyle(fontWeight: FontWeight.w600))),
                           DataCell(Text('${stats.attemptedPercentage}%')),
                         ]),
                         DataRow(cells: [
-                          const DataCell(Text('No. of Students score > 50%', style: TextStyle(fontWeight: FontWeight.w600))),
+                          const DataCell(Text('No. of Students score > 50%',
+                              style: TextStyle(fontWeight: FontWeight.w600))),
                           DataCell(Text('${stats.scoring50Count}')),
                         ]),
                         DataRow(cells: [
-                          const DataCell(Text('% of attainment (>50%)', style: TextStyle(fontWeight: FontWeight.w600))),
-                          DataCell(Text('${stats.scoring50Percentage}%', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
+                          const DataCell(Text('% of attainment (>50%)',
+                              style: TextStyle(fontWeight: FontWeight.w600))),
+                          DataCell(Text('${stats.scoring50Percentage}%',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primary))),
                         ]),
                         DataRow(cells: [
-                          const DataCell(Text('No. of Students score > 55%', style: TextStyle(fontWeight: FontWeight.w600))),
+                          const DataCell(Text('No. of Students score > 55%',
+                              style: TextStyle(fontWeight: FontWeight.w600))),
                           DataCell(Text('${stats.scoring55Count}')),
                         ]),
                         DataRow(cells: [
-                          const DataCell(Text('% of attainment (>55%)', style: TextStyle(fontWeight: FontWeight.w600))),
+                          const DataCell(Text('% of attainment (>55%)',
+                              style: TextStyle(fontWeight: FontWeight.w600))),
                           DataCell(Text('${stats.scoring55Percentage}%')),
                         ]),
                         DataRow(cells: [
-                          const DataCell(Text('Attainment Level', style: TextStyle(fontWeight: FontWeight.bold))),
+                          const DataCell(Text('Attainment Level',
+                              style: TextStyle(fontWeight: FontWeight.bold))),
                           DataCell(
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: _getLevelBadgeColor(stats.attainmentLevel),
+                                color:
+                                    _getLevelBadgeColor(stats.attainmentLevel),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: Text('Level ${stats.attainmentLevel}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                              child: Text('Level ${stats.attainmentLevel}',
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12)),
                             ),
                           ),
                         ]),
                         DataRow(cells: [
-                          const DataCell(Text('Applicable COs', style: TextStyle(fontWeight: FontWeight.w600))),
-                          DataCell(Text(exam.mappedCos.isNotEmpty ? exam.mappedCos.join(', ') : exam.mappedCo)),
+                          const DataCell(Text('Applicable COs',
+                              style: TextStyle(fontWeight: FontWeight.w600))),
+                          DataCell(Text(exam.mappedCos.isNotEmpty
+                              ? exam.mappedCos.join(', ')
+                              : exam.mappedCo)),
                         ]),
                       ],
                     ),
@@ -2211,9 +2583,12 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
         boxShadow: [
-          BoxShadow(color: color.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2)),
+          BoxShadow(
+              color: color.withValues(alpha: 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -2225,7 +2600,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               Expanded(
                 child: Text(
                   title,
-                  style: AppTypography.captionBold.copyWith(color: AppColors.textSecondary, fontSize: 11),
+                  style: AppTypography.captionBold
+                      .copyWith(color: AppColors.textSecondary, fontSize: 11),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -2235,7 +2611,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             ],
           ),
           const SizedBox(height: 6),
-          Text(value, style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold, color: color)),
+          Text(value,
+              style: AppTypography.h3
+                  .copyWith(fontWeight: FontWeight.bold, color: color)),
         ],
       ),
     );
@@ -2259,26 +2637,31 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             children: [
               Text(
                 '${exam.examType} (Question-Wise Assessment)',
-                style: AppTypography.h2.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary),
+                style: AppTypography.h2.copyWith(
+                    fontWeight: FontWeight.bold, color: AppColors.primary),
               ),
               Row(
                 children: [
                   OutlinedButton.icon(
                     onPressed: () {
-                      final content = CopoSpreadsheetService.getQuestionWiseCsvTemplate(
+                      final content =
+                          CopoSpreadsheetService.getQuestionWiseCsvTemplate(
                         exam.questions,
                         _repository.roster,
                       );
-                      final filename = '${_repository.master.courseCode}_${exam.examType}_Custom_Template.csv';
+                      final filename =
+                          '${_repository.master.courseCode}_${exam.examType}_Custom_Template.csv';
                       CopoSpreadsheetService.downloadCsvFile(filename, content);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Downloaded dynamic $filename with ${exam.questions.length} questions & ${_repository.roster.length} students'),
+                          content: Text(
+                              'Downloaded dynamic $filename with ${exam.questions.length} questions & ${_repository.roster.length} students'),
                           behavior: SnackBarBehavior.floating,
                         ),
                       );
                     },
-                    icon: const Icon(Icons.download_for_offline_outlined, size: 16),
+                    icon: const Icon(Icons.download_for_offline_outlined,
+                        size: 16),
                     label: Text('Download ${exam.examType} Template'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.primary,
@@ -2287,10 +2670,14 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton.icon(
-                    onPressed: _isProcessing ? null : () => _handleUploadQuestionWiseMarks(exam),
+                    onPressed: _isProcessing
+                        ? null
+                        : () => _handleUploadQuestionWiseMarks(exam),
                     icon: const Icon(Icons.upload_file, size: 16),
                     label: Text('Upload ${exam.examType} Sheet (Excel/CSV)'),
-                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white),
                   ),
                 ],
               ),
@@ -2300,7 +2687,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
 
           // ─── QUESTION CONFIGURATION (ADD / TYPE CUSTOM QUESTIONS & ASSIGN COs + MARKS) ──────
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
@@ -2312,9 +2700,15 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Step 1: ${exam.examType} Questions & CO Mapping', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+                          Text(
+                              'Step 1: ${exam.examType} Questions & CO Mapping',
+                              style: AppTypography.h3
+                                  .copyWith(fontWeight: FontWeight.bold)),
                           const SizedBox(height: 4),
-                          Text('Type custom Questions, select Max Marks (1–10) & assign Course Outcome (CO)', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                          Text(
+                              'Type custom Questions, select Max Marks (1–10) & assign Course Outcome (CO)',
+                              style: AppTypography.caption
+                                  .copyWith(color: AppColors.textSecondary)),
                         ],
                       ),
                       ElevatedButton.icon(
@@ -2334,23 +2728,35 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     runSpacing: 10,
                     children: exam.questions.map((q) {
                       return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
                           color: AppColors.surfaceVariant,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(q.questionId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary)),
+                            Text(q.questionId,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: AppColors.primary)),
                             const SizedBox(width: 8),
                             DropdownButton<String>(
                               value: q.coTag,
                               isDense: true,
                               underline: const SizedBox(),
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 12),
-                              items: ['CO1', 'CO2', 'CO3', 'CO4', 'CO5'].map((co) => DropdownMenuItem(value: co, child: Text(co))).toList(),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primary,
+                                  fontSize: 12),
+                              items: ['CO1', 'CO2', 'CO3', 'CO4', 'CO5']
+                                  .map((co) => DropdownMenuItem(
+                                      value: co, child: Text(co)))
+                                  .toList(),
                               onChanged: (val) {
                                 if (val != null) {
                                   setState(() {
@@ -2365,13 +2771,21 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                               value: q.maxMarks,
                               isDense: true,
                               underline: const SizedBox(),
-                              style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w600),
                               items: () {
                                 final markList = <double>{
-                                  ...List.generate(20, (i) => (i + 1).toDouble()),
+                                  ...List.generate(
+                                      20, (i) => (i + 1).toDouble()),
                                   q.maxMarks,
-                                }.toList()..sort();
-                                return markList.map((m) => DropdownMenuItem(value: m, child: Text('${m.toInt()}M'))).toList();
+                                }.toList()
+                                  ..sort();
+                                return markList
+                                    .map((m) => DropdownMenuItem(
+                                        value: m, child: Text('${m.toInt()}M')))
+                                    .toList();
                               }(),
                               onChanged: (val) {
                                 if (val != null) {
@@ -2391,7 +2805,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                                     _recalculate();
                                   });
                                 },
-                                child: const Icon(Icons.close, size: 16, color: AppColors.error),
+                                child: const Icon(Icons.close,
+                                    size: 16, color: AppColors.error),
                               ),
                             ],
                           ],
@@ -2407,20 +2822,27 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
 
           // ─── QUESTION-WISE ATTAINMENT CALCULATION TABLE (SPREADSHEET REPLICA) ───
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Step 2: Question-wise Attainment Metrics Table', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+                  Text('Step 2: Question-wise Attainment Metrics Table',
+                      style: AppTypography.h3
+                          .copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
-                  Text('Calculates Attempted %, Scoring >50%, Scoring >55%, and Attainment Level per Question', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                  Text(
+                      'Calculates Attempted %, Scoring >50%, Scoring >55%, and Attainment Level per Question',
+                      style: AppTypography.caption
+                          .copyWith(color: AppColors.textSecondary)),
                   const SizedBox(height: 16),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
-                      headingRowColor: MaterialStateProperty.all(AppColors.primarySoft),
+                      headingRowColor:
+                          WidgetStateProperty.all(AppColors.primarySoft),
                       columns: const [
                         DataColumn(label: Text('Metric / Question')),
                         DataColumn(label: Text('Max Marks')),
@@ -2435,25 +2857,40 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       ],
                       rows: questionStats.map((q) {
                         return DataRow(cells: [
-                          DataCell(Text(q.questionId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                          DataCell(Text(q.questionId,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 13))),
                           DataCell(Text('${q.maxMarks.toInt()} M')),
                           DataCell(Text('${q.stats.attemptedCount}')),
                           DataCell(Text('${q.stats.attemptedPercentage}%')),
                           DataCell(Text('${q.stats.scoring50Count}')),
-                          DataCell(Text('${q.stats.scoring50Percentage}%', style: const TextStyle(fontWeight: FontWeight.w600))),
+                          DataCell(Text('${q.stats.scoring50Percentage}%',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600))),
                           DataCell(Text('${q.stats.scoring55Count}')),
                           DataCell(Text('${q.stats.scoring55Percentage}%')),
                           DataCell(
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: _getLevelBadgeColor(q.stats.attainmentLevel),
+                                color: _getLevelBadgeColor(
+                                    q.stats.attainmentLevel),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: Text('Level ${q.stats.attainmentLevel}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11.5)),
+                              child: Text('Level ${q.stats.attainmentLevel}',
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11.5)),
                             ),
                           ),
-                          DataCell(Chip(label: Text(q.coTag, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)), backgroundColor: AppColors.primarySoft)),
+                          DataCell(Chip(
+                              label: Text(q.coTag,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11)),
+                              backgroundColor: AppColors.primarySoft)),
                         ]);
                       }).toList(),
                     ),
@@ -2466,7 +2903,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
 
           // ─── CO AVERAGE ATTAINMENT SUMMARY TABLE (SPREADSHEET REPLICA) ───
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
@@ -2475,9 +2913,13 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Step 3: CO Average Attainment Summary for ${exam.examType}', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+                      Text(
+                          'Step 3: CO Average Attainment Summary for ${exam.examType}',
+                          style: AppTypography.h3
+                              .copyWith(fontWeight: FontWeight.bold)),
                       Chip(
-                        label: const Text('Threshold Rules: 81-100% = L3 | 61-80% = L2 | 40-60% = L1'),
+                        label: const Text(
+                            'Threshold Rules: 81-100% = L3 | 61-80% = L2 | 40-60% = L1'),
                         backgroundColor: AppColors.primarySoft,
                       ),
                     ],
@@ -2486,25 +2928,46 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
-                      headingRowColor: MaterialStateProperty.all(AppColors.surfaceVariant),
+                      headingRowColor:
+                          MaterialStateProperty.all(AppColors.surfaceVariant),
                       columns: const [
-                        DataColumn(label: Text('Course Outcome (CO)', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('Question Attainments', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('Average Attainment Level', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('Course Outcome (CO)',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('Question Attainments',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('Average Attainment Level',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
                       ],
                       rows: ['CO1', 'CO2', 'CO3', 'CO4', 'CO5'].map((co) {
-                        final qLevels = questionStats.where((q) => q.coTag == co).map((q) => '${q.questionId}: Level ${q.stats.attainmentLevel}').join(', ');
+                        final qLevels = questionStats
+                            .where((q) => q.coTag == co)
+                            .map((q) =>
+                                '${q.questionId}: Level ${q.stats.attainmentLevel}')
+                            .join(', ');
                         final avgVal = coLevels[co] ?? 0.0;
                         return DataRow(cells: [
-                          DataCell(Text(co, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary))),
-                          DataCell(Text(qLevels.isNotEmpty ? qLevels : 'No Questions assigned')),
+                          DataCell(Text(co,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: AppColors.primary))),
+                          DataCell(Text(qLevels.isNotEmpty
+                              ? qLevels
+                              : 'No Questions assigned')),
                           DataCell(
                             Text(
                               avgVal.toStringAsFixed(2),
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
-                                color: avgVal >= 2.0 ? AppColors.success : (avgVal >= 1.0 ? AppColors.warning : AppColors.error),
+                                color: avgVal >= 2.0
+                                    ? AppColors.success
+                                    : (avgVal >= 1.0
+                                        ? AppColors.warning
+                                        : AppColors.error),
                               ),
                             ),
                           ),
@@ -2525,7 +2988,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
   }
 
   void _showAddQuestionDialog(QuestionWiseExamData exam) {
-    final idController = TextEditingController(text: 'Q${exam.questions.length + 1}');
+    final idController =
+        TextEditingController(text: 'Q${exam.questions.length + 1}');
     String selectedCo = 'CO1';
     double maxMarks = 5.0;
 
@@ -2535,8 +2999,11 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
         return StatefulBuilder(
           builder: (context, setDlgState) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              title: Text('Add / Type Custom Question (${exam.examType})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+              title: Text('Add / Type Custom Question (${exam.examType})',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -2553,10 +3020,16 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: selectedCo,
-                          decoration: const InputDecoration(labelText: 'Mapped CO', border: OutlineInputBorder()),
-                          items: ['CO1', 'CO2', 'CO3', 'CO4', 'CO5'].map((co) => DropdownMenuItem(value: co, child: Text(co))).toList(),
+                          decoration: const InputDecoration(
+                              labelText: 'Mapped CO',
+                              border: OutlineInputBorder()),
+                          items: ['CO1', 'CO2', 'CO3', 'CO4', 'CO5']
+                              .map((co) =>
+                                  DropdownMenuItem(value: co, child: Text(co)))
+                              .toList(),
                           onChanged: (val) {
-                            if (val != null) setDlgState(() => selectedCo = val);
+                            if (val != null)
+                              setDlgState(() => selectedCo = val);
                           },
                         ),
                       ),
@@ -2564,8 +3037,13 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       Expanded(
                         child: DropdownButtonFormField<double>(
                           value: maxMarks,
-                          decoration: const InputDecoration(labelText: 'Max Marks (1-20)', border: OutlineInputBorder()),
-                          items: List.generate(20, (i) => (i + 1).toDouble()).map((m) => DropdownMenuItem(value: m, child: Text('${m.toInt()} Marks'))).toList(),
+                          decoration: const InputDecoration(
+                              labelText: 'Max Marks (1-20)',
+                              border: OutlineInputBorder()),
+                          items: List.generate(20, (i) => (i + 1).toDouble())
+                              .map((m) => DropdownMenuItem(
+                                  value: m, child: Text('${m.toInt()} Marks')))
+                              .toList(),
                           onChanged: (val) {
                             if (val != null) setDlgState(() => maxMarks = val);
                           },
@@ -2576,9 +3054,13 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 ],
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+                TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('Cancel')),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.secondary,
+                      foregroundColor: Colors.white),
                   onPressed: () {
                     final qId = idController.text.trim();
                     if (qId.isNotEmpty) {
@@ -2624,18 +3106,20 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Course Exit Survey (Indirect Attainment)', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+          Text('Course Exit Survey (Indirect Attainment)',
+              style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
           Text(
             'Weighted average scale 1.0 to 3.0: Strongly Agree = 3, Agree = 2, Neutral = 1. Used in 90/10 direct/indirect calculation.',
-            style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+            style:
+                AppTypography.caption.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 16),
-
           for (final resp in _repository.surveyResponses)
             Card(
               margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -2648,13 +3132,18 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                         color: AppColors.primary,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text(resp.coId, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                      child: Text(resp.coId,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15)),
                     ),
                     const SizedBox(width: 20),
                     Expanded(
                       child: Row(
                         children: [
-                          _buildSurveyCounter('Strongly Agree (3)', resp.stronglyAgree3, (v) {
+                          _buildSurveyCounter(
+                              'Strongly Agree (3)', resp.stronglyAgree3, (v) {
                             setState(() {
                               resp.stronglyAgree3 = v;
                               _recalculate();
@@ -2668,7 +3157,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                             });
                           }),
                           const SizedBox(width: 16),
-                          _buildSurveyCounter('Neutral (1)', resp.neutral1, (v) {
+                          _buildSurveyCounter('Neutral (1)', resp.neutral1,
+                              (v) {
                             setState(() {
                               resp.neutral1 = v;
                               _recalculate();
@@ -2681,10 +3171,14 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text('Indirect Attainment', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                        Text('Indirect Attainment',
+                            style: AppTypography.caption
+                                .copyWith(color: AppColors.textSecondary)),
                         Text(
                           _getSurveyScore(resp).toStringAsFixed(2),
-                          style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary),
+                          style: AppTypography.h3.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary),
                         ),
                       ],
                     ),
@@ -2703,15 +3197,23 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
   double _getSurveyScore(ExitSurveyCoData resp) {
     final tot = resp.stronglyAgree3 + resp.agree2 + resp.neutral1;
     if (tot == 0) return 2.50;
-    return ((resp.stronglyAgree3 * 3) + (resp.agree2 * 2) + (resp.neutral1 * 1)) / tot;
+    return ((resp.stronglyAgree3 * 3) +
+            (resp.agree2 * 2) +
+            (resp.neutral1 * 1)) /
+        tot;
   }
 
-  Widget _buildSurveyCounter(String label, int value, ValueChanged<int> onChanged) {
+  Widget _buildSurveyCounter(
+      String label, int value, ValueChanged<int> onChanged) {
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary)),
           const SizedBox(height: 4),
           Row(
             children: [
@@ -2719,7 +3221,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 icon: const Icon(Icons.remove_circle_outline, size: 20),
                 onPressed: value > 0 ? () => onChanged(value - 1) : null,
               ),
-              Text('$value', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              Text('$value',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 14)),
               IconButton(
                 icon: const Icon(Icons.add_circle_outline, size: 20),
                 onPressed: () => onChanged(value + 1),
@@ -2744,14 +3248,17 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [AppColors.primary, AppColors.primary.withOpacity(0.85)],
+                colors: [
+                  AppColors.primary,
+                  AppColors.primary.withValues(alpha: 0.85)
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primary.withOpacity(0.2),
+                  color: AppColors.primary.withValues(alpha: 0.2),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -2768,10 +3275,11 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.18),
+                            color: Colors.white.withValues(alpha: 0.18),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.picture_as_pdf_rounded, color: Colors.white, size: 24),
+                          child: const Icon(Icons.picture_as_pdf_rounded,
+                              color: Colors.white, size: 24),
                         ),
                         const SizedBox(width: 12),
                         Column(
@@ -2779,11 +3287,15 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                           children: [
                             const Text(
                               'NBA Compliance Audit Report Generator',
-                              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold),
                             ),
                             Text(
                               'Active Rules: Direct ${_repository.config.directWeightPercent.toInt()}% · Survey ${_repository.config.indirectWeightPercent.toInt()}% · Passing Cutoff ${_repository.config.passingThresholdPercent.toInt()}% · Target ${_repository.config.targetBenchmark.toStringAsFixed(2)}',
-                              style: const TextStyle(color: Colors.white70, fontSize: 11.5),
+                              style: const TextStyle(
+                                  color: Colors.white70, fontSize: 11.5),
                             ),
                           ],
                         ),
@@ -2793,10 +3305,13 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.white,
                         side: const BorderSide(color: Colors.white60),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
                       ),
                       icon: const Icon(Icons.tune_rounded, size: 16),
-                      label: const Text('Configure Calculation %', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      label: const Text('Configure Calculation %',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 12)),
                       onPressed: _showAttainmentConfigDialog,
                     ),
                   ],
@@ -2813,28 +3328,35 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                         backgroundColor: AppColors.secondary,
                         foregroundColor: Colors.white,
                         elevation: 2,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
                       ),
                       icon: const Icon(Icons.print_rounded, size: 18),
                       label: const Text(
                         'Print / Save as PDF Report 🖨️',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                       onPressed: () => _exportPdfReport(report),
                     ),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white.withOpacity(0.18),
+                        backgroundColor: Colors.white.withValues(alpha: 0.18),
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
                       ),
-                      icon: const Icon(Icons.download_for_offline_outlined, size: 18),
+                      icon: const Icon(Icons.download_for_offline_outlined,
+                          size: 18),
                       label: const Text(
                         'Download HTML Audit Report',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 12.5),
                       ),
                       onPressed: () {
                         CopoPdfService.downloadReportHtml(
@@ -2844,7 +3366,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                         );
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Downloaded standalone HTML audit report file.'),
+                            content: Text(
+                                'Downloaded standalone HTML audit report file.'),
                             backgroundColor: AppColors.success,
                             behavior: SnackBarBehavior.floating,
                           ),
@@ -2862,45 +3385,83 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
 
           // ─── 1. DIRECT CO ATTAINMENT TABLE (EXCEL REPLICA SCREENSHOT 1) ───
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Direct CO Attainment Table', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary)),
+                  Text('Direct CO Attainment Table',
+                      style: AppTypography.h3.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary)),
                   const SizedBox(height: 4),
-                  Text('Average of all in-semester & end-semester direct assessments for each Course Outcome', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                  Text(
+                      'Average of all in-semester & end-semester direct assessments for each Course Outcome',
+                      style: AppTypography.caption
+                          .copyWith(color: AppColors.textSecondary)),
                   const SizedBox(height: 16),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
-                      headingRowColor: MaterialStateProperty.all(AppColors.primarySoft),
+                      headingRowColor:
+                          WidgetStateProperty.all(AppColors.primarySoft),
                       columns: const [
-                        DataColumn(label: Text('Course Outcome', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('ISE 1 Attainment', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('ISE 2 Attainment', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('MSE Attainment', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('ESE Attainment', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('Direct Attainment', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('Course Outcome',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('ISE 1 Attainment',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('ISE 2 Attainment',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('MSE Attainment',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('ESE Attainment',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('Direct Attainment',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
                       ],
                       rows: report.coAttainments.map((co) {
                         return DataRow(cells: [
-                          DataCell(Text(co.coId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary))),
-                          DataCell(Text(co.ise1Level != null ? co.ise1Level!.toDouble().toStringAsFixed(2) : '-')),
-                          DataCell(Text(co.ise2Level != null ? co.ise2Level!.toDouble().toStringAsFixed(2) : '-')),
-                          DataCell(Text(co.mseLevel != null ? co.mseLevel!.toStringAsFixed(2) : '-')),
-                          DataCell(Text(co.eseLevel != null ? co.eseLevel!.toStringAsFixed(2) : '-')),
+                          DataCell(Text(co.coId,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: AppColors.primary))),
+                          DataCell(Text(co.ise1Level != null
+                              ? co.ise1Level!.toDouble().toStringAsFixed(2)
+                              : '-')),
+                          DataCell(Text(co.ise2Level != null
+                              ? co.ise2Level!.toDouble().toStringAsFixed(2)
+                              : '-')),
+                          DataCell(Text(co.mseLevel != null
+                              ? co.mseLevel!.toStringAsFixed(2)
+                              : '-')),
+                          DataCell(Text(co.eseLevel != null
+                              ? co.eseLevel!.toStringAsFixed(2)
+                              : '-')),
                           DataCell(
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: AppColors.primarySoft,
+                                color: co.isAttained
+                                    ? AppColors.success.withValues(alpha: 0.15)
+                                    : AppColors.error.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
                                 co.directAttainment.toStringAsFixed(2),
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.primary),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13.5,
+                                    color: AppColors.primary),
                               ),
                             ),
                           ),
@@ -2916,7 +3477,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
 
           // ─── 2. FINAL CO ATTAINMENT TABLE (EXCEL REPLICA SCREENSHOT 2) ───
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
@@ -2925,12 +3487,18 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Final Course Outcome (CO) Attainment', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary)),
+                      Text('Final Course Outcome (CO) Attainment',
+                          style: AppTypography.h3.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary)),
                       Tooltip(
-                        message: 'Click to edit Target Benchmark & Calculation Rules',
+                        message:
+                            'Click to edit Target Benchmark & Calculation Rules',
                         child: ActionChip(
-                          avatar: const Icon(Icons.edit_rounded, size: 14, color: AppColors.primary),
-                          label: Text('Target: ${_repository.config.targetBenchmark.toStringAsFixed(2)} / 3.00'),
+                          avatar: const Icon(Icons.edit_rounded,
+                              size: 14, color: AppColors.primary),
+                          label: Text(
+                              'Target: ${_repository.config.targetBenchmark.toStringAsFixed(2)} / 3.00'),
                           backgroundColor: AppColors.primarySoft,
                           onPressed: _showAttainmentConfigDialog,
                         ),
@@ -2939,48 +3507,83 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   ),
                   const SizedBox(height: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       'Formula: Course Attainment = ${(_repository.config.directWeightPercent / 100).toStringAsFixed(1)} * Direct Attainment + ${(_repository.config.indirectWeightPercent / 100).toStringAsFixed(1)} * Indirect Attainment',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textPrimary, fontFamily: 'monospace'),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: AppColors.textPrimary,
+                          fontFamily: 'monospace'),
                     ),
                   ),
                   const SizedBox(height: 16),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
-                      headingRowColor: MaterialStateProperty.all(AppColors.surfaceVariant),
+                      headingRowColor:
+                          MaterialStateProperty.all(AppColors.surfaceVariant),
                       columns: const [
-                        DataColumn(label: Text('Course Outcome', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('Direct Attainment', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('Indirect Attainment', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('Course Outcome Attainment', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('Target', style: TextStyle(fontWeight: FontWeight.bold))),
-                        DataColumn(label: Text('Remark', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('Course Outcome',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('Direct Attainment',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('Indirect Attainment',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('Course Outcome Attainment',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('Target',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(
+                            label: Text('Remark',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
                       ],
                       rows: report.coAttainments.map((co) {
                         return DataRow(cells: [
-                          DataCell(Text(co.coId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-                          DataCell(Text(co.directAttainment.toStringAsFixed(2))),
-                          DataCell(Text(co.indirectAttainment.toStringAsFixed(2))),
-                          DataCell(Text(co.finalAttainment.toStringAsFixed(2), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.primary))),
-                          DataCell(Text(_repository.config.targetBenchmark.toStringAsFixed(2))),
+                          DataCell(Text(co.coId,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 13))),
+                          DataCell(
+                              Text(co.directAttainment.toStringAsFixed(2))),
+                          DataCell(
+                              Text(co.indirectAttainment.toStringAsFixed(2))),
+                          DataCell(Text(co.finalAttainment.toStringAsFixed(2),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13.5,
+                                  color: AppColors.primary))),
+                          DataCell(Text(_repository.config.targetBenchmark
+                              .toStringAsFixed(2))),
                           DataCell(
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: co.isAttained ? AppColors.success.withOpacity(0.15) : AppColors.error.withOpacity(0.15),
+                                color: co.isAttained
+                                    ? AppColors.success.withOpacity(0.15)
+                                    : AppColors.error.withOpacity(0.15),
                                 borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: co.isAttained ? AppColors.success : AppColors.error),
+                                border: Border.all(
+                                    color: co.isAttained
+                                        ? AppColors.success
+                                        : AppColors.error),
                               ),
                               child: Text(
                                 co.remark,
                                 style: TextStyle(
-                                  color: co.isAttained ? AppColors.success : AppColors.error,
+                                  color: co.isAttained
+                                      ? AppColors.success
+                                      : AppColors.error,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 11.5,
                                 ),
@@ -2996,38 +3599,60 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      const Text('Course Outcome Attainment = ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      const Text('Course Outcome Attainment = ',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14)),
                       Text(
                         '${report.overallCourseAttainment.toStringAsFixed(2)}  ',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
-                          color: report.overallCourseAttainment >= _repository.config.targetBenchmark ? AppColors.success : AppColors.error,
+                          color: report.overallCourseAttainment >=
+                                  _repository.config.targetBenchmark
+                              ? AppColors.success
+                              : AppColors.error,
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: report.overallCourseAttainment >= _repository.config.targetBenchmark
+                          color: report.overallCourseAttainment >=
+                                  _repository.config.targetBenchmark
                               ? AppColors.success.withOpacity(0.15)
                               : AppColors.error.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: report.overallCourseAttainment >= _repository.config.targetBenchmark ? AppColors.success : AppColors.error),
+                          border: Border.all(
+                              color: report.overallCourseAttainment >=
+                                      _repository.config.targetBenchmark
+                                  ? AppColors.success
+                                  : AppColors.error),
                         ),
                         child: Text(
-                          report.overallCourseAttainment >= _repository.config.targetBenchmark ? 'Attained ✓' : 'Not Attained ✗',
+                          report.overallCourseAttainment >=
+                                  _repository.config.targetBenchmark
+                              ? 'Attained ✓'
+                              : 'Not Attained ✗',
                           style: TextStyle(
-                            color: report.overallCourseAttainment >= _repository.config.targetBenchmark ? AppColors.success : AppColors.error,
+                            color: report.overallCourseAttainment >=
+                                    _repository.config.targetBenchmark
+                                ? AppColors.success
+                                : AppColors.error,
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
                         ),
                       ),
                       const SizedBox(width: 24),
-                      const Text('Target Attainment = ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      const Text('Target Attainment = ',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14)),
                       Text(
                         _repository.config.targetBenchmark.toStringAsFixed(2),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.primary),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: AppColors.primary),
                       ),
                     ],
                   ),
@@ -3043,7 +3668,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
 
           // ─── 4. COMPLETE CO-PO, PSO MATRIX & PO ATTAINMENT TABLE (EXCEL REPLICA SCREENSHOT 4) ───
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
@@ -3051,23 +3677,36 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 children: [
                   Text(
                     '${_repository.master.courseName} CO-PO,PSO Matrix (${_repository.master.academicYear})',
-                    style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary),
+                    style: AppTypography.h3.copyWith(
+                        fontWeight: FontWeight.bold, color: AppColors.primary),
                   ),
                   const SizedBox(height: 4),
-                  Text('Correlation Matrix weights (1: Low, 2: Medium, 3: High) mapped to Program Outcomes', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                  Text(
+                      'Correlation Matrix weights (1: Low, 2: Medium, 3: High) mapped to Program Outcomes',
+                      style: AppTypography.caption
+                          .copyWith(color: AppColors.textSecondary)),
                   const SizedBox(height: 16),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
-                      headingRowColor: MaterialStateProperty.all(AppColors.primarySoft),
+                      headingRowColor:
+                          WidgetStateProperty.all(AppColors.primarySoft),
                       columns: [
-                        const DataColumn(label: Text('COs', style: TextStyle(fontWeight: FontWeight.bold))),
-                        ...poColumnNames.map((po) => DataColumn(label: Text(po, style: const TextStyle(fontWeight: FontWeight.bold)))),
+                        const DataColumn(
+                            label: Text('COs',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                        ...poColumnNames.map((po) => DataColumn(
+                            label: Text(po,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold)))),
                       ],
                       rows: [
                         ...List.generate(5, (rIdx) {
                           return DataRow(cells: [
-                            DataCell(Text('CO${rIdx + 1}', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
+                            DataCell(Text('CO${rIdx + 1}',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary))),
                             ...List.generate(14, (cIdx) {
                               final val = _repository.matrix[rIdx][cIdx];
                               return DataCell(Text(val > 0 ? '$val' : ''));
@@ -3075,28 +3714,48 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                           ]);
                         }),
                         DataRow(
-                          color: MaterialStateProperty.all(const Color(0xFFF1F5F9)),
+                          color: MaterialStateProperty.all(
+                              const Color(0xFFF1F5F9)),
                           cells: [
-                            const DataCell(Text('Sum', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary))),
-                            ...report.poAttainments.map((po) => DataCell(Text('${po.correlationSum}', style: const TextStyle(fontWeight: FontWeight.bold)))),
+                            const DataCell(Text('Sum',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: AppColors.primary))),
+                            ...report.poAttainments.map((po) => DataCell(Text(
+                                '${po.correlationSum}',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold)))),
                           ],
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  Text('Direct Attainment - PO', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold, color: AppColors.secondary)),
+                  Text('Direct Attainment - PO',
+                      style: AppTypography.h3.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.secondary)),
                   const SizedBox(height: 4),
-                  Text('PO Attainment = ∑(Correlation_i × Final_CO_i) / Sum(Correlation_i)', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                  Text(
+                      'PO Attainment = ∑(Correlation_i × Final_CO_i) / Sum(Correlation_i)',
+                      style: AppTypography.caption
+                          .copyWith(color: AppColors.textSecondary)),
                   const SizedBox(height: 12),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
-                      headingRowColor: MaterialStateProperty.all(AppColors.surfaceVariant),
-                      columns: poColumnNames.map((po) => DataColumn(label: Text(po, style: const TextStyle(fontWeight: FontWeight.bold)))).toList(),
+                      headingRowColor:
+                          MaterialStateProperty.all(AppColors.surfaceVariant),
+                      columns: poColumnNames
+                          .map((po) => DataColumn(
+                              label: Text(po,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold))))
+                          .toList(),
                       rows: [
-                        DataRow(cells: report.poAttainments.map((po) {
+                        DataRow(
+                            cells: report.poAttainments.map((po) {
                           final val = po.poAttainment;
                           return DataCell(
                             Text(
@@ -3104,7 +3763,11 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
-                                color: val != null ? (val >= report.master.targetAttainment ? AppColors.success : AppColors.textPrimary) : Colors.transparent,
+                                color: val != null
+                                    ? (val >= report.master.targetAttainment
+                                        ? AppColors.success
+                                        : AppColors.textPrimary)
+                                    : Colors.transparent,
                               ),
                             ),
                           );
@@ -3138,11 +3801,14 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Final CO Attainment Visualization', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary)),
+                Text('Final CO Attainment Visualization',
+                    style: AppTypography.h3.copyWith(
+                        fontWeight: FontWeight.bold, color: AppColors.primary)),
                 Tooltip(
                   message: 'Click to edit Target Benchmark',
                   child: ActionChip(
-                    avatar: const Icon(Icons.edit_rounded, size: 14, color: AppColors.primary),
+                    avatar: const Icon(Icons.edit_rounded,
+                        size: 14, color: AppColors.primary),
                     label: Text('Target: ${target.toStringAsFixed(2)}'),
                     backgroundColor: AppColors.primarySoft,
                     onPressed: _showAttainmentConfigDialog,
@@ -3160,18 +3826,50 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     padding: EdgeInsets.only(top: 28, bottom: 24),
                     child: SizedBox(
                       width: 36,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text('3.00', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
-                          Text('2.50', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
-                          Text('2.00', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
-                          Text('1.50', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
-                          Text('1.00', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
-                          Text('0.50', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
-                          Text('0.00', style: TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
-                        ],
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text('3.00',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.bold)),
+                            Text('2.50',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.bold)),
+                            Text('2.00',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.bold)),
+                            Text('1.50',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.bold)),
+                            Text('1.00',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.bold)),
+                            Text('0.50',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.bold)),
+                            Text('0.00',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.bold)),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -3185,7 +3883,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                         final plotAreaH = constraints.maxHeight - xAxisH;
                         final usableBarH = plotAreaH - topPadding;
                         final targetRatio = (target / maxVal).clamp(0.0, 1.0);
-                        final targetTop = topPadding + (usableBarH * (1.0 - targetRatio));
+                        final targetTop =
+                            topPadding + (usableBarH * (1.0 - targetRatio));
 
                         return Stack(
                           children: [
@@ -3196,8 +3895,12 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                               left: 0,
                               right: 0,
                               child: Column(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: List.generate(7, (_) => const Divider(height: 1, color: AppColors.border)),
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: List.generate(
+                                    7,
+                                    (_) => const Divider(
+                                        height: 1, color: AppColors.border)),
                               ),
                             ),
                             // Target Benchmark Line
@@ -3214,14 +3917,18 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                                     ),
                                   ),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: Colors.redAccent,
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
                                       'Target ${target.toStringAsFixed(2)}',
-                                      style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.bold),
                                     ),
                                   ),
                                 ],
@@ -3234,41 +3941,58 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                               left: 0,
                               right: 0,
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceAround,
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: report.coAttainments.map((co) {
                                   final val = co.finalAttainment;
-                                  final valRatio = (val / maxVal).clamp(0.0, 1.0);
-                                  final barH = (valRatio * usableBarH).clamp(4.0, usableBarH);
+                                  final valRatio =
+                                      (val / maxVal).clamp(0.0, 1.0);
+                                  final barH = (valRatio * usableBarH)
+                                      .clamp(4.0, usableBarH);
                                   final barColor = val >= target
                                       ? const Color(0xFF2563EB)
-                                      : (val >= 2.0 ? const Color(0xFFD97706) : const Color(0xFFDC2626));
+                                      : (val >= 2.0
+                                          ? const Color(0xFFD97706)
+                                          : const Color(0xFFDC2626));
 
                                   return Column(
                                     mainAxisAlignment: MainAxisAlignment.end,
                                     children: [
                                       // Value badge above bar
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
                                         decoration: BoxDecoration(
                                           color: barColor,
-                                          borderRadius: BorderRadius.circular(4),
+                                          borderRadius:
+                                              BorderRadius.circular(4),
                                         ),
                                         child: Text(
                                           val.toStringAsFixed(2),
-                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 11),
                                         ),
                                       ),
                                       const SizedBox(height: 4),
                                       AnimatedContainer(
-                                        duration: const Duration(milliseconds: 400),
+                                        duration:
+                                            const Duration(milliseconds: 400),
                                         width: 44,
                                         height: barH,
                                         decoration: BoxDecoration(
                                           color: barColor,
-                                          borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                                          borderRadius:
+                                              const BorderRadius.vertical(
+                                                  top: Radius.circular(6)),
                                           boxShadow: [
-                                            BoxShadow(color: barColor.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 2)),
+                                            BoxShadow(
+                                                color:
+                                                    barColor.withOpacity(0.3),
+                                                blurRadius: 4,
+                                                offset: const Offset(0, 2)),
                                           ],
                                         ),
                                       ),
@@ -3284,14 +4008,18 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                               left: 0,
                               right: 0,
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceAround,
                                 children: report.coAttainments.map((co) {
                                   return SizedBox(
                                     width: 44,
                                     child: Text(
                                       co.coId,
                                       textAlign: TextAlign.center,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                          color: AppColors.primary),
                                     ),
                                   );
                                 }).toList(),
@@ -3319,15 +4047,22 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: AppColors.secondary.withOpacity(0.12),
+              color: AppColors.secondary.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
@@ -3343,7 +4078,10 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           const SizedBox(width: 10),
           Text(
             'Current Step: ${_stepNames[currentStep]}',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.textPrimary),
+            style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13.5,
+                color: AppColors.textPrimary),
           ),
         ],
       ),
@@ -3354,17 +4092,19 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     final currentIndex = _tabController.index;
     final hasPrev = currentIndex > 0;
     final hasNext = currentIndex < 7;
-    final prevTitle = hasPrev ? _stepNames[currentIndex - 1] : 'Course Selection';
+    final prevTitle =
+        hasPrev ? _stepNames[currentIndex - 1] : 'Course Selection';
     final nextTitle = hasNext ? _stepNames[currentIndex + 1] : 'Recalculate';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        border: const Border(top: BorderSide(color: AppColors.border, width: 1)),
+        border:
+            const Border(top: BorderSide(color: AppColors.border, width: 1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 10,
             offset: const Offset(0, -3),
           ),
@@ -3378,13 +4118,16 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.textPrimary,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
               ),
               icon: const Icon(Icons.arrow_back, size: 16),
               label: Text(
                 hasPrev ? 'Back: $prevTitle' : 'Switch Course',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
               ),
               onPressed: hasPrev
                   ? () => _goToTab(currentIndex - 1)
@@ -3428,16 +4171,20 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             // Next Step
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: hasNext ? AppColors.secondary : AppColors.success,
+                backgroundColor:
+                    hasNext ? AppColors.secondary : AppColors.success,
                 foregroundColor: Colors.white,
                 elevation: 2,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
               ),
               icon: Icon(hasNext ? Icons.arrow_forward : Icons.check, size: 16),
               label: Text(
                 hasNext ? 'Next: $nextTitle ➔' : 'Report Ready ✓',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
               ),
               onPressed: () {
                 if (hasNext) {
@@ -3446,7 +4193,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   _recalculate();
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Attainment report is fully computed across all 8 stages.'),
+                      content: Text(
+                          'Attainment report is fully computed across all 8 stages.'),
                       backgroundColor: AppColors.success,
                       behavior: SnackBarBehavior.floating,
                     ),
@@ -3465,26 +4213,30 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       context: context,
       builder: (ctx) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 780, maxHeight: 680),
             child: Column(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                   decoration: const BoxDecoration(
                     color: AppColors.primary,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(16)),
                   ),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
+                          color: Colors.white.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.calculate_rounded, color: Colors.white, size: 22),
+                        child: const Icon(Icons.calculate_rounded,
+                            color: Colors.white, size: 22),
                       ),
                       const SizedBox(width: 12),
                       const Expanded(
@@ -3493,11 +4245,15 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                           children: [
                             Text(
                               'NBA / DBE CO-PO Attainment Mathematical Formulas',
-                              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold),
                             ),
                             Text(
                               'Standard calculations implemented across all 6 stages of this workbench',
-                              style: TextStyle(color: Colors.white70, fontSize: 12),
+                              style: TextStyle(
+                                  color: Colors.white70, fontSize: 12),
                             ),
                           ],
                         ),
@@ -3517,50 +4273,64 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       children: [
                         _buildFormulaCard(
                           title: '1. Single Exam / Question Attainment & KPI',
-                          formula: '• Threshold 50% = 0.50 × Max Marks\n• Attempted % = (Attempted Students / Total Strength) × 100\n• % Scoring ≥ 50% = (Count(Marks ≥ Threshold 50%) / Attempted Students) × 100\n• % Scoring ≥ 55% = (Count(Marks ≥ Threshold 55%) / Attempted Students) × 100',
-                          description: 'Evaluates percentage of enrolled students who appeared and achieved the benchmark threshold in ISE 1, ISE 2, or individual MSE/ESE questions.',
+                          formula:
+                              '• Threshold 50% = 0.50 × Max Marks\n• Attempted % = (Attempted Students / Total Strength) × 100\n• % Scoring ≥ 50% = (Count(Marks ≥ Threshold 50%) / Attempted Students) × 100\n• % Scoring ≥ 55% = (Count(Marks ≥ Threshold 55%) / Attempted Students) × 100',
+                          description:
+                              'Evaluates percentage of enrolled students who appeared and achieved the benchmark threshold in ISE 1, ISE 2, or individual MSE/ESE questions.',
                           color: const Color(0xFF0284C7),
                         ),
                         const SizedBox(height: 14),
                         _buildFormulaCard(
                           title: '2. NBA 40 / 60 / 80 Attainment Level Rule',
-                          formula: '• Level 3 (High): ≥ 80.5% (81-100%) of students scored ≥ 50%\n• Level 2 (Medium): 60.5% to 80.49% (61-80%) of students scored ≥ 50%\n• Level 1 (Low): 39.5% to 60.49% (40-60%) of students scored ≥ 50%\n• Level 0 (Unattained): < 39.5% of students scored ≥ 50%',
-                          description: 'Standard 40/60/80 rubric buckets percentages into discrete academic attainment levels from 0 to 3.',
+                          formula:
+                              '• Level 3 (High): ≥ 80.5% (81-100%) of students scored ≥ 50%\n• Level 2 (Medium): 60.5% to 80.49% (61-80%) of students scored ≥ 50%\n• Level 1 (Low): 39.5% to 60.49% (40-60%) of students scored ≥ 50%\n• Level 0 (Unattained): < 39.5% of students scored ≥ 50%',
+                          description:
+                              'Standard 40/60/80 rubric buckets percentages into discrete academic attainment levels from 0 to 3.',
                           color: const Color(0xFF16A34A),
                         ),
                         const SizedBox(height: 14),
                         _buildFormulaCard(
                           title: '3. MSE & ESE Question-wise CO Level',
-                          formula: '• Question Level = Map40_60_80(% Scoring ≥ 50% in Question)\n• Exam CO Level = ∑ (Levels of Questions mapped to CO) / Count(Questions for CO)',
-                          description: 'Averages the attainment levels of all specific questions mapped to a particular Course Outcome in MSE or ESE.',
+                          formula:
+                              '• Question Level = Map40_60_80(% Scoring ≥ 50% in Question)\n• Exam CO Level = ∑ (Levels of Questions mapped to CO) / Count(Questions for CO)',
+                          description:
+                              'Averages the attainment levels of all specific questions mapped to a particular Course Outcome in MSE or ESE.',
                           color: const Color(0xFF7C3AED),
                         ),
                         const SizedBox(height: 14),
                         _buildFormulaCard(
                           title: '4. Course Exit Survey (Indirect Attainment)',
-                          formula: '• Weights: Strongly Agree = 3, Agree = 2, Neutral = 1\n• Indirect Attainment(CO) = (3 × SA + 2 × A + 1 × N) / (SA + A + N)',
-                          description: 'Quantifies qualitative student perception on a normalized 1.00 to 3.00 scale for each Course Outcome.',
+                          formula:
+                              '• Weights: Strongly Agree = 3, Agree = 2, Neutral = 1\n• Indirect Attainment(CO) = (3 × SA + 2 × A + 1 × N) / (SA + A + N)',
+                          description:
+                              'Quantifies qualitative student perception on a normalized 1.00 to 3.00 scale for each Course Outcome.',
                           color: const Color(0xFFD97706),
                         ),
                         const SizedBox(height: 14),
                         _buildFormulaCard(
                           title: '5. Direct Attainment per CO',
-                          formula: '• Direct Attainment(CO) = Average of applicable [ISE 1, ISE 2, MSE Level, ESE Level]',
-                          description: 'Aggregates all direct in-semester and end-semester assessments that tested that specific CO.',
+                          formula:
+                              '• Direct Attainment(CO) = Average of applicable [ISE 1, ISE 2, MSE Level, ESE Level]',
+                          description:
+                              'Aggregates all direct in-semester and end-semester assessments that tested that specific CO.',
                           color: const Color(0xFF0891B2),
                         ),
                         const SizedBox(height: 14),
                         _buildFormulaCard(
                           title: '6. Final CO Attainment & Target Benchmark',
-                          formula: '• Final CO Attainment = (0.90 × Direct Attainment) + (0.10 × Indirect Survey)\n• Status: ATTAINED if Final Attainment ≥ Target Level (e.g., 2.50), else NOT ATTAINED\n• Overall Course Attainment = ∑ Final CO Attainment (CO1..CO5) / 5',
-                          description: 'Applies standard 90% direct evaluation + 10% indirect survey weighting.',
+                          formula:
+                              '• Final CO Attainment = (0.90 × Direct Attainment) + (0.10 × Indirect Survey)\n• Status: ATTAINED if Final Attainment ≥ Target Level (e.g., 2.50), else NOT ATTAINED\n• Overall Course Attainment = ∑ Final CO Attainment (CO1..CO5) / 5',
+                          description:
+                              'Applies standard 90% direct evaluation + 10% indirect survey weighting.',
                           color: const Color(0xFF2563EB),
                         ),
                         const SizedBox(height: 14),
                         _buildFormulaCard(
                           title: '7. Program Outcome (PO & PSO) Attainment',
-                          formula: '• Correlation Sum = ∑ (Correlation_i) for i = 1..5\n• If Correlation Sum > 0:\n    PO Attainment = ∑ (Correlation_i × Final CO Attainment_i) / Correlation Sum\n• If Correlation Sum == 0:\n    Not Mapped (N/A)',
-                          description: 'Correlation weights (1: Low, 2: Medium, 3: High) from the master matrix weigh each CO’s final attainment to determine institutional PO attainment.',
+                          formula:
+                              '• Correlation Sum = ∑ (Correlation_i) for i = 1..5\n• If Correlation Sum > 0:\n    PO Attainment = ∑ (Correlation_i × Final CO Attainment_i) / Correlation Sum\n• If Correlation Sum == 0:\n    Not Mapped (N/A)',
+                          description:
+                              'Correlation weights (1: Low, 2: Medium, 3: High) from the master matrix weigh each CO’s final attainment to determine institutional PO attainment.',
                           color: const Color(0xFFBE185D),
                         ),
                       ],
@@ -3568,7 +4338,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   decoration: const BoxDecoration(
                     border: Border(top: BorderSide(color: AppColors.border)),
                   ),
@@ -3576,7 +4347,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white),
                         onPressed: () => Navigator.of(ctx).pop(),
                         child: const Text('Got it!'),
                       ),
@@ -3603,9 +4376,12 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.35)),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
         boxShadow: [
-          BoxShadow(color: color.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2)),
+          BoxShadow(
+              color: color.withValues(alpha: 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -3616,13 +4392,17 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               Container(
                 width: 4,
                 height: 18,
-                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(
+                    color: color, borderRadius: BorderRadius.circular(2)),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   title,
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: color),
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13.5,
+                      color: color),
                 ),
               ),
             ],
@@ -3632,9 +4412,10 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             width: double.infinity,
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.surfaceVariant.withOpacity(0.4),
+              color: AppColors.surfaceVariant.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AppColors.border.withOpacity(0.5)),
+              border:
+                  Border.all(color: AppColors.border.withValues(alpha: 0.5)),
             ),
             child: Text(
               formula,
@@ -3650,7 +4431,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           const SizedBox(height: 6),
           Text(
             description,
-            style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary, height: 1.3),
+            style: const TextStyle(
+                fontSize: 11.5, color: AppColors.textSecondary, height: 1.3),
           ),
         ],
       ),
@@ -3675,27 +4457,31 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return Dialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 640),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 16),
                       decoration: const BoxDecoration(
                         color: AppColors.primary,
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(16)),
                       ),
                       child: Row(
                         children: [
                           Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.15),
+                              color: Colors.white.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Icon(Icons.tune_rounded, color: Colors.white, size: 22),
+                            child: const Icon(Icons.tune_rounded,
+                                color: Colors.white, size: 22),
                           ),
                           const SizedBox(width: 12),
                           const Expanded(
@@ -3704,11 +4490,15 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                               children: [
                                 Text(
                                   'Dynamic Attainment Rules & Calculation %',
-                                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold),
                                 ),
                                 Text(
                                   'Faculty customizable passing cutoff, direct/indirect weighting & rubric cutoffs',
-                                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                                  style: TextStyle(
+                                      color: Colors.white70, fontSize: 12),
                                 ),
                               ],
                             ),
@@ -3727,11 +4517,14 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // 1. Student Passing Threshold
-                            _buildConfigSectionTitle('1. Student Passing Cutoff (% of Max Marks)', 'Students scoring ≥ this % are counted as benchmark achievers.'),
+                            _buildConfigSectionTitle(
+                                '1. Student Passing Cutoff (% of Max Marks)',
+                                'Students scoring ≥ this % are counted as benchmark achievers.'),
                             const SizedBox(height: 8),
                             Row(
                               children: [40.0, 50.0, 55.0, 60.0].map((val) {
-                                final isSelected = (passingCutoff - val).abs() < 0.5;
+                                final isSelected =
+                                    (passingCutoff - val).abs() < 0.5;
                                 return Padding(
                                   padding: const EdgeInsets.only(right: 8),
                                   child: ChoiceChip(
@@ -3739,11 +4532,17 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                                     selected: isSelected,
                                     selectedColor: AppColors.primarySoft,
                                     labelStyle: TextStyle(
-                                      color: isSelected ? AppColors.primary : AppColors.textPrimary,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                      color: isSelected
+                                          ? AppColors.primary
+                                          : AppColors.textPrimary,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
                                     ),
                                     onSelected: (sel) {
-                                      if (sel) setDialogState(() => passingCutoff = val);
+                                      if (sel)
+                                        setDialogState(
+                                            () => passingCutoff = val);
                                     },
                                   ),
                                 );
@@ -3756,34 +4555,63 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                               divisions: 9,
                               label: '${passingCutoff.toInt()}%',
                               activeColor: AppColors.primary,
-                              onChanged: (v) => setDialogState(() => passingCutoff = v),
+                              onChanged: (v) =>
+                                  setDialogState(() => passingCutoff = v),
                             ),
                             const SizedBox(height: 16),
 
                             // 2. Internal vs External Assessment Split
-                            _buildConfigSectionTitle('2. Direct Component Split (Internal vs. External Exam)', 'Weightage given to In-Sem (ISE/MSE) vs. External (ESE) University exams.'),
+                            _buildConfigSectionTitle(
+                                '2. Direct Component Split (Internal vs. External Exam)',
+                                'Weightage given to In-Sem (ISE/MSE) vs. External (ESE) University exams.'),
                             const SizedBox(height: 8),
                             Row(
                               children: [
                                 Expanded(
                                   child: OutlinedButton(
                                     style: OutlinedButton.styleFrom(
-                                      backgroundColor: (_repository.config.internalWeightPercent == 20.0) ? AppColors.primarySoft : null,
-                                      side: BorderSide(color: (_repository.config.internalWeightPercent == 20.0) ? AppColors.primary : AppColors.border),
+                                      backgroundColor: (_repository.config
+                                                  .internalWeightPercent ==
+                                              20.0)
+                                          ? AppColors.primarySoft
+                                          : null,
+                                      side: BorderSide(
+                                          color: (_repository.config
+                                                      .internalWeightPercent ==
+                                                  20.0)
+                                              ? AppColors.primary
+                                              : AppColors.border),
                                     ),
                                     onPressed: () => setDialogState(() {}),
-                                    child: const Text('20% Internal : 80% External', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                                    child: const Text(
+                                        '20% Internal : 80% External',
+                                        style: TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.bold)),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: OutlinedButton(
                                     style: OutlinedButton.styleFrom(
-                                      backgroundColor: (_repository.config.internalWeightPercent == 30.0) ? AppColors.primarySoft : null,
-                                      side: BorderSide(color: (_repository.config.internalWeightPercent == 30.0) ? AppColors.primary : AppColors.border),
+                                      backgroundColor: (_repository.config
+                                                  .internalWeightPercent ==
+                                              30.0)
+                                          ? AppColors.primarySoft
+                                          : null,
+                                      side: BorderSide(
+                                          color: (_repository.config
+                                                      .internalWeightPercent ==
+                                                  30.0)
+                                              ? AppColors.primary
+                                              : AppColors.border),
                                     ),
                                     onPressed: () => setDialogState(() {}),
-                                    child: const Text('30% Internal : 70% External', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                                    child: const Text(
+                                        '30% Internal : 70% External',
+                                        style: TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.bold)),
                                   ),
                                 ),
                               ],
@@ -3791,41 +4619,62 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                             const SizedBox(height: 16),
 
                             // 3. Direct vs Indirect Split
-                            _buildConfigSectionTitle('3. Direct Assessment vs. Indirect Exit Survey Split', 'Standard Autonomous institutes use 80:20 or 90:10.'),
+                            _buildConfigSectionTitle(
+                                '3. Direct Assessment vs. Indirect Exit Survey Split',
+                                'Standard Autonomous institutes use 80:20 or 90:10.'),
                             const SizedBox(height: 8),
                             Row(
                               children: [
                                 Expanded(
                                   child: OutlinedButton(
                                     style: OutlinedButton.styleFrom(
-                                      backgroundColor: directWeight == 80.0 ? AppColors.primarySoft : null,
-                                      side: BorderSide(color: directWeight == 80.0 ? AppColors.primary : AppColors.border),
+                                      backgroundColor: directWeight == 80.0
+                                          ? AppColors.primarySoft
+                                          : null,
+                                      side: BorderSide(
+                                          color: directWeight == 80.0
+                                              ? AppColors.primary
+                                              : AppColors.border),
                                     ),
                                     onPressed: () => setDialogState(() {
                                       directWeight = 80.0;
                                       indirectWeight = 20.0;
                                     }),
-                                    child: const Text('80% Direct : 20% Survey', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                    child: const Text('80% Direct : 20% Survey',
+                                        style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold)),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: OutlinedButton(
                                     style: OutlinedButton.styleFrom(
-                                      backgroundColor: directWeight == 90.0 ? AppColors.primarySoft : null,
-                                      side: BorderSide(color: directWeight == 90.0 ? AppColors.primary : AppColors.border),
+                                      backgroundColor: directWeight == 90.0
+                                          ? AppColors.primarySoft
+                                          : null,
+                                      side: BorderSide(
+                                          color: directWeight == 90.0
+                                              ? AppColors.primary
+                                              : AppColors.border),
                                     ),
                                     onPressed: () => setDialogState(() {
                                       directWeight = 90.0;
                                       indirectWeight = 10.0;
                                     }),
-                                    child: const Text('90% Direct : 10% Survey', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                    child: const Text('90% Direct : 10% Survey',
+                                        style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold)),
                                   ),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 10),
-                            Text('Active Split: Direct ${directWeight.toInt()}%  ·  Survey ${indirectWeight.toInt()}%', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                            Text(
+                                'Active Split: Direct ${directWeight.toInt()}%  ·  Survey ${indirectWeight.toInt()}%',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600, fontSize: 12)),
                             Slider(
                               value: directWeight,
                               min: 60.0,
@@ -3841,23 +4690,33 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                             const SizedBox(height: 16),
 
                             // 4. Target Attainment Benchmark
-                            _buildConfigSectionTitle('4. NBA Target Attainment Benchmark', 'Target performance score on a 1.00 to 3.00 scale (e.g., 2.25).'),
+                            _buildConfigSectionTitle(
+                                '4. NBA Target Attainment Benchmark',
+                                'Target performance score on a 1.00 to 3.00 scale (e.g., 2.25).'),
                             const SizedBox(height: 8),
                             Row(
-                              children: [1.80, 2.00, 2.25, 2.50, 2.75].map((val) {
+                              children:
+                                  [1.80, 2.00, 2.25, 2.50, 2.75].map((val) {
                                 final isSelected = (target - val).abs() < 0.05;
                                 return Padding(
                                   padding: const EdgeInsets.only(right: 8),
                                   child: ChoiceChip(
-                                    label: Text('Target ${val.toStringAsFixed(2)}'),
+                                    label: Text(
+                                        'Target ${val.toStringAsFixed(2)}'),
                                     selected: isSelected,
-                                    selectedColor: AppColors.success.withOpacity(0.2),
+                                    selectedColor:
+                                        AppColors.success.withOpacity(0.2),
                                     labelStyle: TextStyle(
-                                      color: isSelected ? AppColors.success : AppColors.textPrimary,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                      color: isSelected
+                                          ? AppColors.success
+                                          : AppColors.textPrimary,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
                                     ),
                                     onSelected: (sel) {
-                                      if (sel) setDialogState(() => target = val);
+                                      if (sel)
+                                        setDialogState(() => target = val);
                                     },
                                   ),
                                 );
@@ -3874,18 +4733,23 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                                     divisions: 30,
                                     label: target.toStringAsFixed(2),
                                     activeColor: AppColors.success,
-                                    onChanged: (v) => setDialogState(() => target = double.parse(v.toStringAsFixed(2))),
+                                    onChanged: (v) => setDialogState(() =>
+                                        target =
+                                            double.parse(v.toStringAsFixed(2))),
                                   ),
                                 ),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
                                   decoration: BoxDecoration(
                                     color: AppColors.primarySoft,
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
                                     '${target.toStringAsFixed(2)} / 3.00',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.primary),
                                   ),
                                 ),
                               ],
@@ -3902,12 +4766,16 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.verified, color: AppColors.secondary, size: 20),
+                                  const Icon(Icons.verified,
+                                      color: AppColors.secondary, size: 20),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
                                       'Active Formula: Final CO = (${(directWeight / 100).toStringAsFixed(2)} × Direct) + (${(indirectWeight / 100).toStringAsFixed(2)} × Survey)\nPassing Benchmark: ${passingCutoff.toInt()}% of Max Marks · Target: ${target.toStringAsFixed(2)}',
-                                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                                      style: const TextStyle(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textPrimary),
                                     ),
                                   ),
                                 ],
@@ -3918,9 +4786,11 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 14),
                       decoration: const BoxDecoration(
-                        border: Border(top: BorderSide(color: AppColors.border)),
+                        border:
+                            Border(top: BorderSide(color: AppColors.border)),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -3940,10 +4810,13 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.secondary,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 12),
                             ),
-                            icon: const Icon(Icons.check_circle_outline, size: 18),
-                            label: const Text('Apply & Recalculate Now', style: TextStyle(fontWeight: FontWeight.bold)),
+                            icon: const Icon(Icons.check_circle_outline,
+                                size: 18),
+                            label: const Text('Apply & Recalculate Now',
+                                style: TextStyle(fontWeight: FontWeight.bold)),
                             onPressed: () {
                               final newConfig = AttainmentConfig(
                                 passingThresholdPercent: passingCutoff,
@@ -3959,7 +4832,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                               Navigator.of(ctx).pop();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('Attainment Rules Updated: Direct ${directWeight.toInt()}%, Survey ${indirectWeight.toInt()}%, Cutoff ${passingCutoff.toInt()}%. Recalculated!'),
+                                  content: Text(
+                                      'Attainment Rules Updated: Direct ${directWeight.toInt()}%, Survey ${indirectWeight.toInt()}%, Cutoff ${passingCutoff.toInt()}%. Recalculated!'),
                                   backgroundColor: AppColors.success,
                                   behavior: SnackBarBehavior.floating,
                                 ),
@@ -3983,8 +4857,14 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.textPrimary)),
-        Text(subtitle, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+        Text(title,
+            style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13.5,
+                color: AppColors.textPrimary)),
+        Text(subtitle,
+            style:
+                const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
       ],
     );
   }
@@ -3997,7 +4877,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     );
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Opening printable CO-PO Attainment Report. Use "Print / Save as PDF" in your browser.'),
+        content: Text(
+            'Opening printable CO-PO Attainment Report. Use "Print / Save as PDF" in your browser.'),
         backgroundColor: AppColors.primary,
         behavior: SnackBarBehavior.floating,
       ),

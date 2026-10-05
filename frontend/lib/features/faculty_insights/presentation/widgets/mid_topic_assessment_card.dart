@@ -36,7 +36,7 @@ class MidTopicAssessmentCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: (topic.midConfidence != null && topic.midDifficulty != null)
-              ? const Color(0xFF7C3AED).withOpacity(0.3)
+              ? const Color(0xFF7C3AED).withValues(alpha: 0.3)
               : AppColors.border,
           width: 1.2,
         ),
@@ -51,7 +51,7 @@ class MidTopicAssessmentCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF7C3AED).withOpacity(0.12),
+                  color: const Color(0xFF7C3AED).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(

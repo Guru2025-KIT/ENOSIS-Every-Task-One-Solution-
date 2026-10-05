@@ -48,7 +48,7 @@ class _StudentAssessmentPortalScreenState extends State<StudentAssessmentPortalS
 
   // MID Form State
   int _currentConfidence = 4;
-  int _currentInterest = 4;
+  final int _currentInterest = 4;
   int _understandingLevel = 4;
   int _learningSatisfaction = 4;
   String _usefulFormat = 'PRACTICAL_LABS';
@@ -58,13 +58,13 @@ class _StudentAssessmentPortalScreenState extends State<StudentAssessmentPortalS
 
   // END Form State
   int _finalConfidence = 5;
-  int _finalInterest = 5;
+  final int _finalInterest = 5;
   int _coreConceptsMastery = 5;
   int _problemSolvingAbility = 4;
   int _practicalLabCompetence = 5;
   int _independentLearningAbility = 4;
-  int _realWorldApplication = 5;
-  String _effectiveFormat = 'HYBRID';
+  final int _realWorldApplication = 5;
+  final String _effectiveFormat = 'HYBRID';
   int _overallLearningExperience = 5;
 
   static const List<Map<String, String>> _availableBarriers = [

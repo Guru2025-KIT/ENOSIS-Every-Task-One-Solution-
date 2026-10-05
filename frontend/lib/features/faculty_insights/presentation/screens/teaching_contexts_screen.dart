@@ -164,7 +164,7 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
                     children: [
                       Container(
                         padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: AppColors.primarySoft,
                           shape: BoxShape.circle,
                         ),
@@ -234,13 +234,13 @@ class _TeachingContextsScreenState extends State<TeachingContextsScreen> {
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
                               color: isVerifiedOutcome || isEnd
-                                  ? const Color(0xFF16A34A).withOpacity(0.12)
+                                  ? const Color(0xFF16A34A).withValues(alpha: 0.12)
                                   : isGapDetection
-                                      ? const Color(0xFFE11D48).withOpacity(0.12)
+                                      ? const Color(0xFFE11D48).withValues(alpha: 0.12)
                                       : isAction
-                                          ? const Color(0xFFD97706).withOpacity(0.12)
+                                          ? const Color(0xFFD97706).withValues(alpha: 0.12)
                                           : isMid
-                                              ? const Color(0xFF7C3AED).withOpacity(0.12)
+                                              ? const Color(0xFF7C3AED).withValues(alpha: 0.12)
                                               : AppColors.primarySoft,
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -407,7 +407,7 @@ class _TeachingContextCard extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -424,7 +424,7 @@ class _TeachingContextCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: cardThemeColor.withOpacity(0.08),
+                    color: cardThemeColor.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(

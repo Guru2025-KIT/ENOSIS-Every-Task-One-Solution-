@@ -909,7 +909,7 @@ class _AssessmentManagementScreenState extends State<AssessmentManagementScreen>
                   icon: const Icon(Icons.delete_outline_rounded, size: 16, color: AppColors.error),
                   label: const Text('Delete', style: TextStyle(fontSize: 12, color: AppColors.error, fontWeight: FontWeight.bold)),
                   style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: AppColors.error.withOpacity(0.5)),
+                    side: BorderSide(color: AppColors.error.withValues(alpha: 0.5)),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   onPressed: () => _confirmDeleteAssessment(a),
@@ -932,7 +932,7 @@ class _AssessmentManagementScreenState extends State<AssessmentManagementScreen>
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.12),
+                color: AppColors.error.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.delete_forever_rounded, color: AppColors.error, size: 22),

@@ -74,52 +74,6 @@ class AuthRepository {
     }
   }
 
-  /// Restores session on app startup/refresh:
-  /// Reads persisted token -> calls /auth/me -> updates AuthSession -> returns true if authenticated.
-  Future<bool> restoreSession() async {
-    try {
-      final token = await AuthSession.getPersistedToken();
-      if (token == null || token.isEmpty) {
-        await AuthSession.clear();
-        return false;
-      }
-
-      AuthSession.token = token;
-      final response = await ApiClient.get('/auth/me', token: token);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        AuthSession.userId = data['id'] as String;
-        AuthSession.fullName = data['full_name'] as String;
-        AuthSession.email = data['email'] as String;
-        AuthSession.role = data['role'] as String?;
-        AuthSession.department = data['department'] as String?;
-        AuthSession.employeeId = data['employee_id'] as String?;
-        AuthSession.canManageTimetable = data['can_manage_timetable'] as bool? ?? false;
-        await AuthSession.saveToPreferences();
-        debugPrint('[AuthRepository] Restored session for ${AuthSession.email} (${AuthSession.role})');
-        return true;
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        debugPrint('[AuthRepository] Persisted token expired or invalid (HTTP ${response.statusCode}). Clearing session.');
-        await AuthSession.clear();
-        return false;
-      } else {
-        // Temporary server error, fall back to cached preferences so user isn't kicked out
-        final loaded = await AuthSession.loadFromPreferences();
-        return loaded && AuthSession.isLoggedIn;
-      }
-    } catch (e) {
-      debugPrint('[AuthRepository] Session restore network error: $e. Falling back to cached session.');
-      final loaded = await AuthSession.loadFromPreferences();
-      return loaded && AuthSession.isLoggedIn;
-    }
-  }
-
-  Future<void> logout() async {
-    await AuthSession.clear();
-  }
-
-
   Future<void> signup({
     required String email,
     required String password,
@@ -214,6 +168,58 @@ class AuthRepository {
     } catch (e) {
       throw AuthException('Could not reach the ENOSIS server.');
     }
+  }
+
+  /// Restores session on app startup/refresh.
+  /// Reads persisted token → calls /auth/me → updates AuthSession → returns true if authenticated.
+  /// Falls back to cached SharedPreferences on network error so users aren't kicked out by a
+  /// temporary backend outage.
+  Future<bool> restoreSession() async {
+    try {
+      final savedToken = await AuthSession.getPersistedToken();
+      if (savedToken == null || savedToken.isEmpty) {
+        await AuthSession.clear();
+        return false;
+      }
+
+      AuthSession.token = savedToken;
+      final response = await ApiClient.get('/auth/me', token: savedToken);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        AuthSession.userId = data['id']?.toString() ?? '';
+        AuthSession.fullName = data['full_name']?.toString() ?? '';
+        AuthSession.email = data['email']?.toString() ?? '';
+        AuthSession.role = data['role']?.toString();
+        AuthSession.department = data['department']?.toString();
+        AuthSession.employeeId = data['employee_id']?.toString();
+        AuthSession.designation = data['designation']?.toString() ?? 'Assistant Professor';
+        AuthSession.phone = data['phone']?.toString();
+        AuthSession.officeAddress = data['office_address']?.toString();
+        AuthSession.joiningDate = data['joining_date']?.toString();
+        AuthSession.experience = data['experience']?.toString();
+        AuthSession.canManageTimetable = data['can_manage_timetable'] as bool? ?? false;
+        await AuthSession.saveToPreferences();
+        debugPrint('[AuthRepository] Restored session for ${AuthSession.email} (${AuthSession.role})');
+        return true;
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        debugPrint('[AuthRepository] Persisted token expired or invalid (HTTP ${response.statusCode}). Clearing session.');
+        await AuthSession.clear();
+        return false;
+      } else {
+        // Temporary server error — fall back to cached preferences so user isn't kicked out
+        final loaded = await AuthSession.loadFromPreferences();
+        return loaded && AuthSession.isLoggedIn;
+      }
+    } catch (e) {
+      debugPrint('[AuthRepository] Session restore network error: $e. Falling back to cached session.');
+      final loaded = await AuthSession.loadFromPreferences();
+      return loaded && AuthSession.isLoggedIn;
+    }
+  }
+
+  Future<void> logout() async {
+    await AuthSession.clear();
   }
 
   Future<void> changePassword({required String currentPassword, required String newPassword}) async {

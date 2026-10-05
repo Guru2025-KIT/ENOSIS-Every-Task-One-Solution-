@@ -590,7 +590,7 @@ class _StudentAnalyticsDetailScreenState extends State<StudentAnalyticsDetailScr
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
+                      color: AppColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(Icons.edit_note, color: AppColors.primary, size: 20),
@@ -610,7 +610,7 @@ class _StudentAnalyticsDetailScreenState extends State<StudentAnalyticsDetailScr
                       const SizedBox(height: 6),
                       DropdownButtonFormField<String>(
                         key: const Key('intervention_type_dropdown'),
-                        value: selectedType,
+                        initialValue: selectedType,
                         decoration: InputDecoration(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),

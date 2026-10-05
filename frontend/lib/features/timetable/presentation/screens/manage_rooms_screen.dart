@@ -112,7 +112,7 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
-                        value: selectedType.toLowerCase() == 'lab' ? 'Lab' : 'Classroom',
+                        initialValue: selectedType.toLowerCase() == 'lab' ? 'Lab' : 'Classroom',
                         dropdownColor: const Color(0xFF1E293B),
                         style: const TextStyle(color: Colors.white, fontSize: 13.5),
                         decoration: InputDecoration(
@@ -239,7 +239,7 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Active for Scheduling', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
                         value: isActive,
-                        activeColor: const Color(0xFFF97316),
+                        activeThumbColor: const Color(0xFFF97316),
                         onChanged: (val) => setDialogState(() => isActive = val),
                       ),
                     ],
@@ -457,8 +457,8 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
               borderRadius: BorderRadius.circular(16),
               side: const BorderSide(color: Color(0xFF334155)),
             ),
-            title: Row(
-              children: const [
+            title: const Row(
+              children: [
                 Icon(Icons.check_circle, color: Color(0xFF10B981)),
                 SizedBox(width: 8),
                 Text('Rooms Import Successful', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFFFB923C))),
@@ -766,7 +766,7 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
               color: const Color(0xFF0F172A),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF0F172A).withOpacity(0.08),
+                  color: const Color(0xFF0F172A).withValues(alpha: 0.08),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),

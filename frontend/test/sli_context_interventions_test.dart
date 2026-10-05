@@ -333,7 +333,7 @@ void main() {
             ChangeNotifierProvider(create: (_) => SliEndProvider()),
             ChangeNotifierProvider(create: (_) => SliAnalyticsProvider()),
           ],
-          child: MaterialApp(
+          child: const MaterialApp(
             home: TeachingContextsScreen(stage: 'ACTION'),
           ),
         ),

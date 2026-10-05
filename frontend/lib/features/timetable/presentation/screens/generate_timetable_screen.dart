@@ -281,7 +281,7 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                 border: Border.all(color: const Color(0xFF334155)),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF0F172A).withOpacity(0.16),
+                    color: const Color(0xFF0F172A).withValues(alpha: 0.16),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -376,13 +376,13 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                               shape: BoxShape.circle,
                               gradient: LinearGradient(
                                 colors: [
-                                  const Color(0xFFEA580C).withOpacity(0.8 + 0.2 * _pulseController.value),
-                                  const Color(0xFFF97316).withOpacity(0.8 + 0.2 * (1 - _pulseController.value)),
+                                  const Color(0xFFEA580C).withValues(alpha: 0.8 + 0.2 * _pulseController.value),
+                                  const Color(0xFFF97316).withValues(alpha: 0.8 + 0.2 * (1 - _pulseController.value)),
                                 ],
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFFF97316).withOpacity(0.4 * _pulseController.value),
+                                  color: const Color(0xFFF97316).withValues(alpha: 0.4 * _pulseController.value),
                                   blurRadius: 18 * _pulseController.value + 4,
                                   spreadRadius: 4 * _pulseController.value,
                                 ),

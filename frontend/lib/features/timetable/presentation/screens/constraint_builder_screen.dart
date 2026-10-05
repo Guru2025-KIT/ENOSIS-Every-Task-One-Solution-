@@ -174,7 +174,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
                           children: selectedItems.map((item) {
                             return Chip(
                               label: Text(item, style: const TextStyle(fontSize: 11)),
-                              backgroundColor: AppColors.primary.withOpacity(0.1),
+                              backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                               padding: EdgeInsets.zero,
                               visualDensity: VisualDensity.compact,
                             );
@@ -340,7 +340,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
                   Text('Hard Constraint Rule Type', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: _selectedHardRule,
+                    initialValue: _selectedHardRule,
                     decoration: const InputDecoration(border: OutlineInputBorder()),
                     items: _hardRuleOptions.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
                     onChanged: (val) => setState(() => _selectedHardRule = val!),
@@ -419,7 +419,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
                   Text('Soft Preference Rule Type', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: _selectedSoftRule,
+                    initialValue: _selectedSoftRule,
                     decoration: const InputDecoration(border: OutlineInputBorder()),
                     items: _softRuleOptions.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
                     onChanged: (val) => setState(() => _selectedSoftRule = val!),

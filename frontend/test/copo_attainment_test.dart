@@ -8,7 +8,8 @@ import 'package:enosis/features/copo/presentation/screens/copo_workbench_screen.
 import 'package:enosis/core/theme/app_theme.dart';
 
 void main() {
-  Widget createTestWidget({required Widget child, Size size = const Size(1280, 800)}) {
+  Widget createTestWidget(
+      {required Widget child, Size size = const Size(1280, 800)}) {
     return MaterialApp(
       theme: AppTheme.lightTheme,
       home: MediaQuery(
@@ -67,13 +68,14 @@ void main() {
 
   group('CO-PO Spreadsheet Parsing Tests', () {
     test('parseFileBytes extracts CSV single marks', () {
-      final csvText = 'Sr.No,Roll No,Student Name,Marks\n'
+      const csvText = 'Sr.No,Roll No,Student Name,Marks\n'
           '1,CS001,Aarav Sharma,8.5\n'
           '2,CS002,Aditi Patel,7.0\n'
           '3,CS003,Ananya Iyer,9.0\n';
       final bytes = Uint8List.fromList(utf8.encode(csvText));
 
-      final result = CopoSpreadsheetService.parseFileBytes(bytes, 'ise1_marks.csv');
+      final result =
+          CopoSpreadsheetService.parseFileBytes(bytes, 'ise1_marks.csv');
       expect(result.totalRows, 3);
       expect(result.rows[0].rollNo, 'CS001');
       expect(result.rows[0].singleMark, 8.5);
@@ -82,12 +84,13 @@ void main() {
     });
 
     test('parseFileBytes extracts question-wise marks from CSV', () {
-      final csvText = 'Roll No,Student Name,Q1,Q2,Q3\n'
+      const csvText = 'Roll No,Student Name,Q1,Q2,Q3\n'
           'CS001,Aarav Sharma,4.5,4.0,8.0\n'
           'CS002,Aditi Patel,3.5,4.5,7.0\n';
       final bytes = Uint8List.fromList(utf8.encode(csvText));
 
-      final result = CopoSpreadsheetService.parseFileBytes(bytes, 'mse_marks.csv');
+      final result =
+          CopoSpreadsheetService.parseFileBytes(bytes, 'mse_marks.csv');
       expect(result.totalRows, 2);
       expect(result.rows[0].questionMarks['Q1'], 4.5);
       expect(result.rows[0].questionMarks['Q2'], 4.0);
@@ -95,14 +98,17 @@ void main() {
     });
 
     test('template generators produce valid non-empty CSV text', () {
-      expect(CopoSpreadsheetService.getRollCallCsvTemplate(), contains('Roll No'));
-      expect(CopoSpreadsheetService.getIseMarksCsvTemplate(), contains('Marks'));
-      expect(CopoSpreadsheetService.getQuestionWiseMarksCsvTemplate(), contains('Q1'));
+      expect(
+          CopoSpreadsheetService.getRollCallCsvTemplate(), contains('Roll No'));
+      expect(
+          CopoSpreadsheetService.getIse1MarksCsvTemplate(), contains('Marks'));
+      expect(CopoSpreadsheetService.getMseMarksCsvTemplate(), contains('Q1'));
     });
   });
 
   group('CO-PO Workbench UI Rendering Tests', () {
-    testWidgets('CopoWorkbenchScreen renders with all 6 tabs and hero banner', (WidgetTester tester) async {
+    testWidgets('CopoWorkbenchScreen renders with all 8 tabs and hero banner',
+        (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1920, 1080);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -117,38 +123,44 @@ void main() {
       expect(find.text('CO-PO Attainment Workbench'), findsOneWidget);
       expect(find.text('KITCoEK NEP'), findsOneWidget);
 
-      // Verify all 6 tabs exist
+      // Verify all 8 tabs exist
       expect(find.text('1. Master & Matrix'), findsOneWidget);
       expect(find.text('2. Roll Call'), findsOneWidget);
-      expect(find.text('3. In-Sem (ISE)'), findsOneWidget);
-      expect(find.text('4. Question-wise (MSE/ESE)'), findsOneWidget);
-      expect(find.text('5. Exit Survey'), findsOneWidget);
-      expect(find.text('6. Attainment Report'), findsOneWidget);
+      expect(find.text('3. ISE 1'), findsOneWidget);
+      expect(find.text('4. MSE'), findsOneWidget);
+      expect(find.text('5. ISE 2'), findsOneWidget);
+      expect(find.text('6. ESE'), findsOneWidget);
+      expect(find.text('7. Exit Survey'), findsOneWidget);
+      expect(find.text('8. Attainment Report'), findsOneWidget);
 
       // Verify Master tab content
-      expect(find.text('Course Master Configuration'), findsOneWidget);
-      expect(find.text('CO-PO & PSO Correlation Matrix (Master)'), findsOneWidget);
+      expect(find.text('Step 1: Course Outcomes (CO1 - CO5) Entry'),
+          findsOneWidget);
+      expect(
+          find.text('Step 2: CO-PO & PSO Correlation Matrix'), findsOneWidget);
 
-      // Switch to Tab 3 (In-Sem ISE)
-      await tester.ensureVisible(find.text('3. In-Sem (ISE)'));
-      await tester.tap(find.text('3. In-Sem (ISE)'));
+      // Switch to Tab 3 (ISE 1)
+      await tester.ensureVisible(find.text('3. ISE 1'));
+      await tester.tap(find.text('3. ISE 1'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('ISE 1'), findsWidgets);
       expect(find.text('Attainment Level'), findsWidgets);
 
-      // Switch to Tab 6 (Attainment Report)
-      await tester.ensureVisible(find.text('6. Attainment Report'));
-      await tester.tap(find.text('6. Attainment Report'));
+      // Switch to Tab 8 (Attainment Report)
+      await tester.ensureVisible(find.text('8. Attainment Report'));
+      await tester.tap(find.text('8. Attainment Report'));
       await tester.pumpAndSettle();
 
       expect(find.text('Final Course Outcome (CO) Attainment'), findsOneWidget);
-      expect(find.text('Program Outcomes (PO & PSO) Attainment'), findsOneWidget);
-      expect(find.text('PO1'), findsOneWidget);
-      expect(find.text('PSO2'), findsOneWidget);
+      expect(find.text('Direct Attainment - PO'), findsOneWidget);
+      expect(find.text('PO1'), findsWidgets);
+      expect(find.text('PSO2'), findsWidgets);
     });
 
-    testWidgets('Faculty Year & Course selection flow starts mapping accurately', (WidgetTester tester) async {
+    testWidgets(
+        'Faculty Year & Course selection flow starts mapping accurately',
+        (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1920, 1080);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -179,7 +191,7 @@ void main() {
 
       // Verify transitioned to Workbench
       expect(find.text('CO-PO Attainment Workbench'), findsOneWidget);
-      expect(find.byTooltip('Switch Course / Year'), findsOneWidget);
+      expect(find.text('Switch Course / Year'), findsOneWidget);
     });
   });
 }

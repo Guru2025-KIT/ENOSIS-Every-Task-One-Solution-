@@ -1181,7 +1181,7 @@ class CopoRepository {
     ensureInitialized();
     final currentCfg = customConfig ?? config;
     master.targetAttainment = currentCfg.targetBenchmark;
-    final totalStrength = roster.length > 0 ? roster.length : 30;
+    final totalStrength = roster.isNotEmpty ? roster.length : 30;
 
     // 1. ISE 1 & 2
     final ise1Stats = calculateExamStats(
@@ -1345,7 +1345,7 @@ class CopoRepository {
       final payload = {
         'master': master.toJson(),
         'matrix': {'matrix': matrix},
-        'total_strength': roster.length > 0 ? roster.length : 30,
+        'total_strength': roster.isNotEmpty ? roster.length : 30,
         'ise1': ise1.toJson(),
         'ise2': ise2.toJson(),
         'mse': mse.toJson(),

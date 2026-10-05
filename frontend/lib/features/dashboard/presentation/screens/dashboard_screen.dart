@@ -40,13 +40,16 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   DateTime _selectedDate = DateTime.now();
-  DateTime _calendarMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
+  DateTime _calendarMonth =
+      DateTime(DateTime.now().year, DateTime.now().month, 1);
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<DashboardProvider>().loadDashboard(targetDate: _selectedDate);
+      context
+          .read<DashboardProvider>()
+          .loadDashboard(targetDate: _selectedDate);
     });
   }
 
@@ -59,10 +62,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _formatDate(DateTime date) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
     ];
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const days = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday'
+    ];
     final dayName = days[date.weekday - 1];
     final monthName = months[date.month - 1];
     return '$dayName, ${date.day} $monthName ${date.year}';
@@ -70,8 +91,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _formatShortMonthDay(DateTime date) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
     ];
     return '${months[date.month - 1]} ${date.day}';
   }
@@ -82,17 +113,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (widget.onNavigateTab != null) {
           widget.onNavigateTab!(2); // Switch to CO-PO tab
         } else {
-          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CopoMappingScreen()));
+          Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CopoMappingScreen()));
         }
         break;
       case 'Generate Timetable':
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GenerateTimetableScreen()));
+        Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const GenerateTimetableScreen()));
         break;
       case 'Pending Tasks':
         if (widget.onNavigateTab != null) {
           widget.onNavigateTab!(3); // Switch to To-Do tab
         } else {
-          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyDayScreen()));
+          Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const MyDayScreen()));
         }
         break;
       case 'Reports & Analytics':
@@ -101,7 +135,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         } else {
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => const CopoAttainmentScreen(courseId: 'CS201', semester: 'Sem 4'),
+              builder: (_) => const CopoAttainmentScreen(
+                  courseId: 'CS201', semester: 'Sem 4'),
             ),
           );
         }
@@ -121,7 +156,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final greetingPrefix = _getGreeting();
     final dashboardProvider = context.watch<DashboardProvider>();
     final summary = dashboardProvider.summary;
-    final facultyName = AuthSession.fullName ?? summary?.facultyName ?? 'Rachana Patil';
+    final facultyName =
+        AuthSession.fullName ?? summary?.facultyName ?? 'Rachana Patil';
     final isMobile = Responsive.isMobile(context);
     final isTablet = Responsive.isTablet(context);
 
@@ -144,7 +180,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Flexible(
                       child: Text(
                         '$greetingPrefix, $facultyName',
-                        style: (isMobile ? AppTypography.h3 : AppTypography.h2).copyWith(
+                        style: (isMobile ? AppTypography.h3 : AppTypography.h2)
+                            .copyWith(
                           color: AppColors.primary,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.3,
@@ -177,7 +214,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 border: Border.all(color: AppColors.border),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
+                    color: Colors.black.withValues(alpha: 0.02),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
@@ -186,7 +223,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.calendar_today_outlined, size: 15, color: AppColors.primary),
+                  const Icon(Icons.calendar_today_outlined,
+                      size: 15, color: AppColors.primary),
                   const SizedBox(width: 8),
                   Text(
                     _formatDate(DateTime.now()),
@@ -225,7 +263,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       SummaryMetric(
         title: 'SLI Attention',
-        value: '${(summary != null ? ((summary.sliAttentionStudentsCount) + (summary.sliCriticalStudentsCount)) : 0)}',
+        value:
+            '${(summary != null ? ((summary.sliAttentionStudentsCount) + (summary.sliCriticalStudentsCount)) : 0)}',
         subtitle: summary != null
             ? '${summary.sliCriticalStudentsCount} critical gaps'
             : '0 critical gaps',
@@ -298,7 +337,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.025),
+            color: Colors.black.withValues(alpha: 0.025),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -320,7 +359,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         color: AppColors.primarySoft,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.schedule_outlined, color: AppColors.primary, size: 20),
+                      child: const Icon(Icons.schedule_outlined,
+                          color: AppColors.primary, size: 20),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -339,7 +379,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             summary != null
                                 ? '${summary.classesTodayCount} Sessions · ${summary.classesCompletedCount} Completed'
                                 : 'Daily timetable lectures & labs',
-                            style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                            style: AppTypography.caption
+                                .copyWith(color: AppColors.textSecondary),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
@@ -355,11 +396,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     widget.onNavigateTab!(1); // Go to Timetable
                   } else {
                     Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const TimetableHubScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const TimetableHubScreen()),
                     );
                   }
                 },
-                icon: const Icon(Icons.calendar_today_outlined, size: 14, color: AppColors.secondary),
+                icon: const Icon(Icons.calendar_today_outlined,
+                    size: 14, color: AppColors.secondary),
                 label: Text(
                   'Full Timetable',
                   style: AppTypography.captionBold.copyWith(
@@ -386,11 +429,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.event_available_outlined, size: 40, color: Colors.grey.shade400),
+                  Icon(Icons.event_available_outlined,
+                      size: 40, color: Colors.grey.shade400),
                   const SizedBox(height: 8),
                   Text(
                     'No lectures scheduled for ${_formatDate(_selectedDate)}',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w500),
+                    style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
@@ -416,7 +463,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.025),
+            color: Colors.black.withValues(alpha: 0.025),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -441,7 +488,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       color: AppColors.primarySoft,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.calendar_month_outlined, color: AppColors.primary, size: 20),
+                    child: const Icon(Icons.calendar_month_outlined,
+                        color: AppColors.primary, size: 20),
                   ),
                   const SizedBox(width: 10),
                   Text(
@@ -457,11 +505,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.chevron_left, size: 20, color: AppColors.textSecondary),
+                    icon: const Icon(Icons.chevron_left,
+                        size: 20, color: AppColors.textSecondary),
                     visualDensity: VisualDensity.compact,
                     onPressed: () {
                       setState(() {
-                        _calendarMonth = DateTime(_calendarMonth.year, _calendarMonth.month - 1, 1);
+                        _calendarMonth = DateTime(
+                            _calendarMonth.year, _calendarMonth.month - 1, 1);
                       });
                     },
                   ),
@@ -473,11 +523,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.chevron_right, size: 20, color: AppColors.textSecondary),
+                    icon: const Icon(Icons.chevron_right,
+                        size: 20, color: AppColors.textSecondary),
                     visualDensity: VisualDensity.compact,
                     onPressed: () {
                       setState(() {
-                        _calendarMonth = DateTime(_calendarMonth.year, _calendarMonth.month + 1, 1);
+                        _calendarMonth = DateTime(
+                            _calendarMonth.year, _calendarMonth.month + 1, 1);
                       });
                     },
                   ),
@@ -500,7 +552,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.primarySoft.withOpacity(0.6),
+              color: AppColors.primarySoft.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
@@ -538,7 +590,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.025),
+            color: Colors.black.withValues(alpha: 0.025),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -560,7 +612,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         color: AppColors.primarySoft,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.insights_outlined, color: AppColors.primary, size: 20),
+                      child: const Icon(Icons.insights_outlined,
+                          color: AppColors.primary, size: 20),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -577,7 +630,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                           Text(
                             'Continuous evaluation progress across active subjects',
-                            style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                            style: AppTypography.caption
+                                .copyWith(color: AppColors.textSecondary),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
@@ -594,12 +648,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   } else {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => const CopoAttainmentScreen(courseId: 'CS201', semester: 'Sem 4'),
+                        builder: (_) => const CopoAttainmentScreen(
+                            courseId: 'CS201', semester: 'Sem 4'),
                       ),
                     );
                   }
                 },
-                child: const Text('Full Report', style: TextStyle(color: AppColors.secondary, fontWeight: FontWeight.w600, fontSize: 13)),
+                child: const Text('Full Report',
+                    style: TextStyle(
+                        color: AppColors.secondary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13)),
               ),
             ],
           ),
@@ -613,115 +672,128 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.assessment_outlined, size: 36, color: Colors.grey.shade400),
+                  Icon(Icons.assessment_outlined,
+                      size: 36, color: Colors.grey.shade400),
                   const SizedBox(height: 8),
                   Text(
                     'No Course Outcomes Evaluated Yet',
-                    style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                    style: AppTypography.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Formulate CO-PO mappings in the curriculum planner to view live attainment analytics.',
                     textAlign: TextAlign.center,
-                    style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                    style: AppTypography.caption
+                        .copyWith(color: AppColors.textSecondary),
                   ),
                 ],
               ),
             )
-          else ...() {
-            final seenSubjects = <String>{};
-            final uniqueSlots = scheduleSlots.where((s) => seenSubjects.add(s.subjectName)).toList();
-            return uniqueSlots.map((courseSlot) {
-              final isLab = courseSlot.isLab || courseSlot.subjectName.toLowerCase().contains('lab');
-              final code = courseSlot.subjectCode ??
-                  (courseSlot.subjectName.length > 6
-                      ? courseSlot.subjectName.substring(0, 6).toUpperCase()
-                      : courseSlot.subjectName.toUpperCase());
-              final isCompleted = courseSlot.status == 'COMPLETED';
-              final progressColor = isCompleted
-                  ? const Color(0xFF10B981)
-                  : (isLab ? const Color(0xFF8B5CF6) : const Color(0xFF0284C7));
+          else
+            ...() {
+              final seenSubjects = <String>{};
+              final uniqueSlots = scheduleSlots
+                  .where((s) => seenSubjects.add(s.subjectName))
+                  .toList();
+              return uniqueSlots.map((courseSlot) {
+                final isLab = courseSlot.isLab ||
+                    courseSlot.subjectName.toLowerCase().contains('lab');
+                final code = courseSlot.subjectCode ??
+                    (courseSlot.subjectName.length > 6
+                        ? courseSlot.subjectName.substring(0, 6).toUpperCase()
+                        : courseSlot.subjectName.toUpperCase());
+                final isCompleted = courseSlot.status == 'COMPLETED';
+                final progressColor = isCompleted
+                    ? const Color(0xFF10B981)
+                    : (isLab
+                        ? const Color(0xFF8B5CF6)
+                        : const Color(0xFF0284C7));
 
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primarySoft,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  code,
-                                  style: AppTypography.captionBold.copyWith(
-                                    color: AppColors.primary,
-                                    fontSize: 11,
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primarySoft,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    code,
+                                    style: AppTypography.captionBold.copyWith(
+                                      color: AppColors.primary,
+                                      fontSize: 11,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  courseSlot.subjectName,
-                                  style: AppTypography.bodyMedium.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13.5,
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    courseSlot.subjectName,
+                                    style: AppTypography.bodyMedium.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13.5,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          courseSlot.divisionName,
-                          style: TextStyle(
-                            color: progressColor,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
+                          const SizedBox(width: 8),
+                          Text(
+                            courseSlot.divisionName,
+                            style: TextStyle(
+                              color: progressColor,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: LinearProgressIndicator(
-                        value: isCompleted ? 1.0 : (isLab ? 0.75 : 0.60),
-                        backgroundColor: AppColors.divider,
-                        valueColor: AlwaysStoppedAnimation<Color>(progressColor),
-                        minHeight: 6,
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-              );
-            });
-          }(),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(
+                          value: isCompleted ? 1.0 : (isLab ? 0.75 : 0.60),
+                          backgroundColor: AppColors.divider,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(progressColor),
+                          minHeight: 6,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              });
+            }(),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  AppColors.primary.withOpacity(0.06),
-                  AppColors.secondary.withOpacity(0.08),
+                  AppColors.primary.withValues(alpha: 0.06),
+                  AppColors.secondary.withValues(alpha: 0.08),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.secondary.withOpacity(0.3)),
+              border:
+                  Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
             ),
             child: LayoutBuilder(
               builder: (context, bannerConstraints) {
@@ -738,7 +810,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               color: AppColors.secondary,
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Icon(Icons.auto_stories_rounded, color: Colors.white, size: 20),
+                            child: const Icon(Icons.auto_stories_rounded,
+                                color: Colors.white, size: 20),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -747,12 +820,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               children: [
                                 const Text(
                                   'Guided 6-Stage CO-PO Attainment Wizard',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.textPrimary),
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13.5,
+                                      color: AppColors.textPrimary),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   '1. Matrix ➔ 2. Roll Call ➔ 3. ISE ➔ 4. MSE/ESE ➔ 5. Survey ➔ 6. Attainment',
-                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade700,
+                                      fontWeight: FontWeight.w500),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -767,18 +846,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           backgroundColor: AppColors.secondary,
                           foregroundColor: Colors.white,
                           elevation: 1,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
                         ),
                         icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                        label: const Text('Start Workflow ➔', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        label: const Text('Start Workflow ➔',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 12)),
                         onPressed: () {
                           if (widget.onNavigateTab != null) {
                             widget.onNavigateTab!(2);
                           } else {
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (_) => const CopoAttainmentScreen(courseId: 'CS201', semester: 'Sem 4'),
+                                builder: (_) => const CopoAttainmentScreen(
+                                    courseId: 'CS201', semester: 'Sem 4'),
                               ),
                             );
                           }
@@ -795,7 +879,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         color: AppColors.secondary,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.auto_stories_rounded, color: Colors.white, size: 20),
+                      child: const Icon(Icons.auto_stories_rounded,
+                          color: Colors.white, size: 20),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -804,12 +889,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         children: [
                           const Text(
                             'Guided 6-Stage CO-PO Attainment Wizard',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.textPrimary),
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13.5,
+                                color: AppColors.textPrimary),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             '1. Matrix ➔ 2. Roll Call ➔ 3. ISE ➔ 4. MSE/ESE ➔ 5. Survey ➔ 6. Attainment',
-                            style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade700,
+                                fontWeight: FontWeight.w500),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -822,18 +913,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         backgroundColor: AppColors.secondary,
                         foregroundColor: Colors.white,
                         elevation: 1,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
                       ),
                       icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                      label: const Text('Start Workflow ➔', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      label: const Text('Start Workflow ➔',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 12)),
                       onPressed: () {
                         if (widget.onNavigateTab != null) {
                           widget.onNavigateTab!(2);
                         } else {
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) => const CopoAttainmentScreen(courseId: 'CS201', semester: 'Sem 4'),
+                              builder: (_) => const CopoAttainmentScreen(
+                                  courseId: 'CS201', semester: 'Sem 4'),
                             ),
                           );
                         }
@@ -863,7 +959,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
 
     // ─── 6. "Your Workspace" Actionable Section ─────────────────────────
-    final pendingTasksSubtitle = (summary != null && summary.pendingTasksCount > 0)
+    final pendingTasksSubtitle = (summary != null &&
+            summary.pendingTasksCount > 0)
         ? '${summary.pendingTasksCount} items on your daily faculty checklist'
         : 'Organize your daily faculty checklist';
 
@@ -961,7 +1058,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 flex: 7,
                 child: _EnosisAiBanner(onTap: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const AiAssistantScreen()),
+                    MaterialPageRoute(
+                        builder: (_) => const AiAssistantScreen()),
                   );
                 }),
               ),
@@ -1030,8 +1128,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _getMonthYearLabel(DateTime dt) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December'
     ];
     return '${months[dt.month - 1]} ${dt.year}';
   }
@@ -1053,7 +1161,7 @@ class _SummaryMetricCard extends StatelessWidget {
         border: Border.all(color: AppColors.border, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -1081,7 +1189,7 @@ class _SummaryMetricCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: metric.accentColor.withOpacity(0.08),
+                  color: metric.accentColor.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(metric.icon, color: metric.accentColor, size: 17),
@@ -1132,7 +1240,7 @@ class _WorkspaceActionCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
-        hoverColor: AppColors.primarySoft.withOpacity(0.6),
+        hoverColor: AppColors.primarySoft.withValues(alpha: 0.6),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -1140,7 +1248,7 @@ class _WorkspaceActionCard extends StatelessWidget {
             border: Border.all(color: AppColors.border, width: 1),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.02),
+                color: Colors.black.withValues(alpha: 0.02),
                 blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
@@ -1156,7 +1264,7 @@ class _WorkspaceActionCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: item.accentColor.withOpacity(0.08),
+                      color: item.accentColor.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(item.icon, color: item.accentColor, size: 20),
@@ -1216,7 +1324,8 @@ class _WorkspaceActionCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    const Icon(Icons.chevron_right, size: 13, color: AppColors.primary),
+                    const Icon(Icons.chevron_right,
+                        size: 13, color: AppColors.primary),
                   ],
                 ),
               ),
@@ -1236,9 +1345,8 @@ class _ScheduleSlotTile extends StatelessWidget {
 
   const _ScheduleSlotTile({
     required this.slot,
-    this.onNotifyTap,
-    this.onCourseDetailsTap,
-  });
+  })  : onNotifyTap = null,
+        onCourseDetailsTap = null;
 
   @override
   Widget build(BuildContext context) {
@@ -1261,7 +1369,7 @@ class _ScheduleSlotTile extends StatelessWidget {
         border: Border.all(color: AppColors.border.withValues(alpha: 0.7)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.015),
+            color: Colors.black.withValues(alpha: 0.015),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -1296,7 +1404,8 @@ class _ScheduleSlotTile extends StatelessWidget {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
                       decoration: BoxDecoration(
                         color: statusColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
@@ -1305,7 +1414,9 @@ class _ScheduleSlotTile extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            isLab ? Icons.science_outlined : Icons.menu_book_outlined,
+                            isLab
+                                ? Icons.science_outlined
+                                : Icons.menu_book_outlined,
                             size: 11,
                             color: statusColor,
                           ),
@@ -1323,7 +1434,8 @@ class _ScheduleSlotTile extends StatelessWidget {
                     ),
                     if (isCompleted)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: const Color(0xFF10B981).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(4),
@@ -1351,7 +1463,8 @@ class _ScheduleSlotTile extends StatelessWidget {
                 const SizedBox(height: 3),
                 Row(
                   children: [
-                    const Icon(Icons.groups_outlined, size: 13, color: AppColors.textSecondary),
+                    const Icon(Icons.groups_outlined,
+                        size: 13, color: AppColors.textSecondary),
                     const SizedBox(width: 4),
                     Flexible(
                       child: Text(
@@ -1364,7 +1477,8 @@ class _ScheduleSlotTile extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    const Icon(Icons.meeting_room_outlined, size: 13, color: AppColors.textSecondary),
+                    const Icon(Icons.meeting_room_outlined,
+                        size: 13, color: AppColors.textSecondary),
                     const SizedBox(width: 4),
                     Flexible(
                       child: Text(
@@ -1471,7 +1585,9 @@ class _MiniCalendarGrid extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: isSelected
                         ? AppColors.primary
-                        : (isToday ? AppColors.secondary.withOpacity(0.12) : Colors.transparent),
+                        : (isToday
+                            ? AppColors.secondary.withValues(alpha: 0.12)
+                            : Colors.transparent),
                     borderRadius: BorderRadius.circular(8),
                     border: isToday && !isSelected
                         ? Border.all(color: AppColors.secondary, width: 1.2)
@@ -1484,10 +1600,14 @@ class _MiniCalendarGrid extends StatelessWidget {
                         '$dayNumber',
                         style: TextStyle(
                           fontSize: 12,
-                          fontWeight: (isSelected || isToday) ? FontWeight.bold : FontWeight.w500,
+                          fontWeight: (isSelected || isToday)
+                              ? FontWeight.bold
+                              : FontWeight.w500,
                           color: isSelected
                               ? Colors.white
-                              : (isToday ? AppColors.secondary : AppColors.textPrimary),
+                              : (isToday
+                                  ? AppColors.secondary
+                                  : AppColors.textPrimary),
                         ),
                       ),
                       if (hasEvents && !isSelected) ...[
@@ -1496,7 +1616,9 @@ class _MiniCalendarGrid extends StatelessWidget {
                           width: 4,
                           height: 4,
                           decoration: BoxDecoration(
-                            color: isToday ? AppColors.secondary : AppColors.primary.withOpacity(0.4),
+                            color: isToday
+                                ? AppColors.secondary
+                                : AppColors.primary.withValues(alpha: 0.4),
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -1532,7 +1654,7 @@ class _EnosisAiBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.15),
+            color: AppColors.primary.withValues(alpha: 0.15),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1543,10 +1665,11 @@ class _EnosisAiBanner extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.12),
+              color: Colors.white.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.smart_toy_outlined, color: AppColors.secondary, size: 28),
+            child: const Icon(Icons.smart_toy_outlined,
+                color: AppColors.secondary, size: 28),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -1569,19 +1692,25 @@ class _EnosisAiBanner extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: AppColors.secondary,
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text('PROMPT', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)),
+                      child: const Text('PROMPT',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Instant assistance with syllabus planning, CO-PO formulation & schedule rules.',
-                  style: AppTypography.caption.copyWith(color: Colors.white70, fontSize: 12),
+                  style: AppTypography.caption
+                      .copyWith(color: Colors.white70, fontSize: 12),
                 ),
               ],
             ),
@@ -1599,7 +1728,8 @@ class _EnosisAiBanner extends StatelessWidget {
               ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             ),
-            child: const Text('Ask AI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            child: const Text('Ask AI',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           ),
         ],
       ),
@@ -1621,7 +1751,8 @@ class _RecentActivityCard extends StatelessWidget {
       if (summary!.classesTodayCount > 0) {
         activities.add(
           RecentActivityItem(
-            title: 'Schedule active: ${summary!.classesTodayCount} lectures for ${summary!.dayName}',
+            title:
+                'Schedule active: ${summary!.classesTodayCount} lectures for ${summary!.dayName}',
             timeAgo: 'Today',
             icon: Icons.calendar_today_outlined,
             iconColor: const Color(0xFF0284C7),
@@ -1631,7 +1762,8 @@ class _RecentActivityCard extends StatelessWidget {
       if (summary!.classesCompletedCount > 0) {
         activities.add(
           RecentActivityItem(
-            title: '${summary!.classesCompletedCount} lecture session(s) completed today',
+            title:
+                '${summary!.classesCompletedCount} lecture session(s) completed today',
             timeAgo: 'Today',
             icon: Icons.check_circle_outline,
             iconColor: const Color(0xFF10B981),
@@ -1641,7 +1773,8 @@ class _RecentActivityCard extends StatelessWidget {
       if (summary!.pendingTasksCount > 0) {
         activities.add(
           RecentActivityItem(
-            title: '${summary!.pendingTasksCount} pending task(s) active on your faculty checklist',
+            title:
+                '${summary!.pendingTasksCount} pending task(s) active on your faculty checklist',
             timeAgo: 'Active',
             icon: Icons.task_alt_outlined,
             iconColor: const Color(0xFFF4791E),
@@ -1651,7 +1784,8 @@ class _RecentActivityCard extends StatelessWidget {
       if (summary!.verifiedAchievementsCount > 0) {
         activities.add(
           RecentActivityItem(
-            title: '${summary!.verifiedAchievementsCount} verified career achievement milestone(s)',
+            title:
+                '${summary!.verifiedAchievementsCount} verified career achievement milestone(s)',
             timeAgo: 'Synced',
             icon: Icons.emoji_events_outlined,
             iconColor: const Color(0xFF8B5CF6),
@@ -1668,7 +1802,7 @@ class _RecentActivityCard extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -1696,7 +1830,8 @@ class _RecentActivityCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
                 'No recent activity recorded today. Real-time updates from your timetable and daily tasks will appear here.',
-                style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                style: AppTypography.caption
+                    .copyWith(color: AppColors.textSecondary),
               ),
             )
           else
@@ -1794,7 +1929,7 @@ class _FacultyInsightsSection extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.025),
+            color: Colors.black.withValues(alpha: 0.025),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -1809,15 +1944,17 @@ class _FacultyInsightsSection extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: const Color(0xFF7C3AED).withOpacity(0.1),
+                color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFF7C3AED).withOpacity(0.3)),
+                border: Border.all(
+                    color: const Color(0xFF7C3AED).withValues(alpha: 0.3)),
               ),
               child: const Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
                 spacing: 5,
                 children: [
-                  Icon(Icons.psychology_outlined, color: Color(0xFF7C3AED), size: 14),
+                  Icon(Icons.psychology_outlined,
+                      color: Color(0xFF7C3AED), size: 14),
                   Text(
                     'FACULTY INSIGHTS · ML INTELLIGENCE',
                     style: TextStyle(
@@ -1852,7 +1989,8 @@ class _FacultyInsightsSection extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
                 onPressed: onTap,
-                icon: const Icon(Icons.arrow_forward, size: 14, color: Color(0xFF7C3AED)),
+                icon: const Icon(Icons.arrow_forward,
+                    size: 14, color: Color(0xFF7C3AED)),
                 label: const Text(
                   'Explore Insights',
                   style: TextStyle(
@@ -1862,9 +2000,12 @@ class _FacultyInsightsSection extends StatelessWidget {
                   ),
                 ),
                 style: TextButton.styleFrom(
-                  backgroundColor: const Color(0xFF7C3AED).withOpacity(0.08),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  backgroundColor:
+                      const Color(0xFF7C3AED).withValues(alpha: 0.08),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                 ),
               ),
             ),
@@ -1878,17 +2019,21 @@ class _FacultyInsightsSection extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF7C3AED).withOpacity(0.1),
+                          color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF7C3AED).withOpacity(0.3)),
+                          border: Border.all(
+                              color: const Color(0xFF7C3AED)
+                                  .withValues(alpha: 0.3)),
                         ),
                         child: const Wrap(
                           crossAxisAlignment: WrapCrossAlignment.center,
                           spacing: 5,
                           children: [
-                            Icon(Icons.psychology_outlined, color: Color(0xFF7C3AED), size: 14),
+                            Icon(Icons.psychology_outlined,
+                                color: Color(0xFF7C3AED), size: 14),
                             Text(
                               'FACULTY INSIGHTS · ML INTELLIGENCE',
                               style: TextStyle(
@@ -1924,7 +2069,8 @@ class _FacultyInsightsSection extends StatelessWidget {
                 const SizedBox(width: 12),
                 TextButton.icon(
                   onPressed: onTap,
-                  icon: const Icon(Icons.arrow_forward, size: 14, color: Color(0xFF7C3AED)),
+                  icon: const Icon(Icons.arrow_forward,
+                      size: 14, color: Color(0xFF7C3AED)),
                   label: const Text(
                     'Explore Insights',
                     style: TextStyle(
@@ -1934,9 +2080,12 @@ class _FacultyInsightsSection extends StatelessWidget {
                     ),
                   ),
                   style: TextButton.styleFrom(
-                    backgroundColor: const Color(0xFF7C3AED).withOpacity(0.08),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    backgroundColor:
+                        const Color(0xFF7C3AED).withValues(alpha: 0.08),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
               ],
@@ -1949,18 +2098,20 @@ class _FacultyInsightsSection extends StatelessWidget {
 
           // ML Flow Storytelling Pipeline
           Container(
-            padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 16, vertical: 14),
+            padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 10 : 16, vertical: 14),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
                   const Color(0xFFF8FAFC),
-                  const Color(0xFFF1F5F9).withOpacity(0.8),
+                  const Color(0xFFF1F5F9).withValues(alpha: 0.8),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border.withOpacity(0.6)),
+              border:
+                  Border.all(color: AppColors.border.withValues(alpha: 0.6)),
             ),
             child: isMobile
                 ? Wrap(
@@ -1976,8 +2127,10 @@ class _FacultyInsightsSection extends StatelessWidget {
                         ),
                         if (i < stages.length - 1)
                           const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 2, vertical: 8),
-                            child: Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.textTertiary),
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 2, vertical: 8),
+                            child: Icon(Icons.arrow_forward_rounded,
+                                size: 14, color: AppColors.textTertiary),
                           ),
                       ],
                     ],
@@ -1995,7 +2148,8 @@ class _FacultyInsightsSection extends StatelessWidget {
                         if (i < stages.length - 1)
                           const Padding(
                             padding: EdgeInsets.symmetric(horizontal: 4),
-                            child: Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.textTertiary),
+                            child: Icon(Icons.arrow_forward_rounded,
+                                size: 14, color: AppColors.textTertiary),
                           ),
                       ],
                     ],
@@ -2013,16 +2167,20 @@ class _FacultyInsightsSection extends StatelessWidget {
 
               final String sentimentDesc;
               if (sliCritical > 0) {
-                sentimentDesc = '$sliCritical critical comprehension gap(s) flagged';
+                sentimentDesc =
+                    '$sliCritical critical comprehension gap(s) flagged';
               } else if (sliAttention > 0) {
-                sentimentDesc = '$sliAttention cohort attention indicator(s) monitored';
+                sentimentDesc =
+                    '$sliAttention cohort attention indicator(s) monitored';
               } else {
-                sentimentDesc = 'Continuous student comprehension monitoring active';
+                sentimentDesc =
+                    'Continuous student comprehension monitoring active';
               }
 
               final String gapDesc;
               if (totalGaps > 0) {
-                gapDesc = '$totalGaps student(s) identified for academic reinforcement';
+                gapDesc =
+                    '$totalGaps student(s) identified for academic reinforcement';
               } else {
                 gapDesc = 'No critical comprehension divergence detected';
               }
@@ -2030,9 +2188,11 @@ class _FacultyInsightsSection extends StatelessWidget {
               final String strategyDesc;
               if (summary != null && summary!.todaySchedule.isNotEmpty) {
                 final topSubject = summary!.todaySchedule.first.subjectName;
-                strategyDesc = 'Interactive concept reinforcement for $topSubject';
+                strategyDesc =
+                    'Interactive concept reinforcement for $topSubject';
               } else {
-                strategyDesc = 'Personalized pedagogical strategies adapt with live sessions';
+                strategyDesc =
+                    'Personalized pedagogical strategies adapt with live sessions';
               }
 
               final observations = [
@@ -2113,10 +2273,10 @@ class _PipelineStageChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: accentColor.withOpacity(0.2)),
+        border: Border.all(color: accentColor.withValues(alpha: 0.2)),
         boxShadow: [
           BoxShadow(
-            color: accentColor.withOpacity(0.04),
+            color: accentColor.withValues(alpha: 0.04),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -2162,9 +2322,9 @@ class _ObservationTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
+        color: color.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -2249,5 +2409,3 @@ class RecentActivityItem {
     required this.iconColor,
   });
 }
-
-

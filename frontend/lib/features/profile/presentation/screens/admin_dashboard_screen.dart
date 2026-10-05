@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../../../core/auth/auth_session.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -60,15 +61,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   Future<void> _loadDashboardData() async {
-    if (!AuthSession.isAdmin) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-      return;
-    }
-
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -675,7 +667,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       ),
                       const SizedBox(height: 14),
                       DropdownButtonFormField<String>(
-                        value: dept,
+                        initialValue: dept,
                         decoration: const InputDecoration(labelText: 'Department', prefixIcon: Icon(Icons.apartment), border: OutlineInputBorder()),
                         items: ['Computer Science', 'CSE (AI & ML)', 'Electronics & Telecom', 'Basic Sciences', 'Mechanical Engineering', 'Information Technology']
                             .map((d) => DropdownMenuItem(value: d, child: Text(d, style: const TextStyle(fontSize: 13))))
@@ -684,7 +676,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       ),
                       const SizedBox(height: 14),
                       DropdownButtonFormField<String>(
-                        value: desig,
+                        initialValue: desig,
                         decoration: const InputDecoration(labelText: 'Designation', prefixIcon: Icon(Icons.workspace_premium_outlined), border: OutlineInputBorder()),
                         items: ['Professor & HOD', 'Professor', 'Associate Professor', 'Assistant Professor', 'Adjunct Faculty']
                             .map((d) => DropdownMenuItem(value: d, child: Text(d, style: const TextStyle(fontSize: 13))))
@@ -1164,80 +1156,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (!AuthSession.isAdmin) {
-      return Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.primary,
-          elevation: 1,
-          title: const Text(
-            'Institutional Admin Portal',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: AppCard(
-              padding: const EdgeInsets.all(32),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.primarySoft,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.admin_panel_settings_outlined,
-                        size: 48,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Administrator Access Required',
-                      style: AppTypography.h2.copyWith(fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'The KIT Central Master Data & Governance Console is restricted to institutional administrators (e.g. admin@enosis.edu.in).\n\nYou are currently signed in as a Faculty member (${AuthSession.email ?? "Faculty"}). Faculty workflows including Timetable, CO-PO Workbench, and Career Advancement are available in your main menu.',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textSecondary,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      icon: const Icon(Icons.arrow_back, size: 18),
-                      label: const Text('Back to Dashboard', style: TextStyle(fontWeight: FontWeight.w600)),
-                      onPressed: () {
-                        if (Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop();
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
     final isMobile = Responsive.isMobile(context);
 
     return Scaffold(
@@ -1295,7 +1213,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           indicatorWeight: 3.5,
           tabs: [
             Tab(icon: const Icon(Icons.people_alt_outlined, size: 18), text: '1. Manage Faculty (${_facultyList.length})'),
-            Tab(icon: const Icon(Icons.insights_rounded, size: 18), text: '2. Faculty Performance'),
+            const Tab(icon: Icon(Icons.insights_rounded, size: 18), text: '2. Faculty Performance'),
             const Tab(icon: Icon(Icons.calendar_month_outlined, size: 18), text: '3. Timetable'),
           ],
         ),

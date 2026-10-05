@@ -482,10 +482,10 @@ class _StageTabButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: isActive ? activeColor.withOpacity(0.12) : Colors.transparent,
+          color: isActive ? activeColor.withValues(alpha: 0.12) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isActive ? activeColor.withOpacity(0.4) : Colors.transparent,
+            color: isActive ? activeColor.withValues(alpha: 0.4) : Colors.transparent,
           ),
         ),
         child: Row(
@@ -545,12 +545,12 @@ class _StudentRosterCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isCurrentStageAssessed
-              ? stageColor.withOpacity(0.35)
+              ? stageColor.withValues(alpha: 0.35)
               : AppColors.border,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.01),
+            color: Colors.black.withValues(alpha: 0.01),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -565,7 +565,7 @@ class _StudentRosterCard extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: isCurrentStageAssessed
-                  ? stageColor.withOpacity(0.12)
+                  ? stageColor.withValues(alpha: 0.12)
                   : AppColors.primarySoft,
               borderRadius: BorderRadius.circular(10),
             ),
@@ -758,10 +758,10 @@ class _MiniStatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: isRecorded ? color.withOpacity(0.12) : AppColors.background,
+        color: isRecorded ? color.withValues(alpha: 0.12) : AppColors.background,
         borderRadius: BorderRadius.circular(4),
         border: Border.all(
-          color: isRecorded ? color.withOpacity(0.4) : AppColors.border,
+          color: isRecorded ? color.withValues(alpha: 0.4) : AppColors.border,
         ),
       ),
       child: Text(

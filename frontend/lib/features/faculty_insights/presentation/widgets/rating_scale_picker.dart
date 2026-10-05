@@ -32,7 +32,7 @@ class RatingScalePicker extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: selectedValue != null
-              ? AppColors.primary.withOpacity(0.3)
+              ? AppColors.primary.withValues(alpha: 0.3)
               : AppColors.border,
         ),
       ),
