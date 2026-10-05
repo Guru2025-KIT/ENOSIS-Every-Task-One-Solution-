@@ -40,7 +40,7 @@ class EndTopicAssessmentCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isAssessed
-              ? const Color(0xFF16A34A).withOpacity(0.35)
+              ? const Color(0xFF16A34A).withValues(alpha: 0.35)
               : AppColors.border,
           width: 1.2,
         ),
@@ -55,7 +55,7 @@ class EndTopicAssessmentCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF16A34A).withOpacity(0.12),
+                  color: const Color(0xFF16A34A).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(

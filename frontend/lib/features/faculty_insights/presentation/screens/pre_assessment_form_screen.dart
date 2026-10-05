@@ -441,7 +441,7 @@ class PreAssessmentFormScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: formats.contains(form.preferredLearningFormat)
+                initialValue: formats.contains(form.preferredLearningFormat)
                     ? form.preferredLearningFormat
                     : null,
                 decoration: InputDecoration(
@@ -592,7 +592,7 @@ class PreAssessmentFormScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: careerOptions.contains(form.careerInterest)
+                initialValue: careerOptions.contains(form.careerInterest)
                     ? form.careerInterest
                     : null,
                 decoration: InputDecoration(
@@ -635,7 +635,7 @@ class PreAssessmentFormScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: placementGoals.contains(form.placementGoal)
+                initialValue: placementGoals.contains(form.placementGoal)
                     ? form.placementGoal
                     : null,
                 decoration: InputDecoration(
@@ -793,7 +793,7 @@ class PreAssessmentFormScreen extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.errorLight,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.error.withOpacity(0.4)),
+              border: Border.all(color: AppColors.error.withValues(alpha: 0.4)),
             ),
             child: Row(
               children: [

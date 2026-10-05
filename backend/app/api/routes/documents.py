@@ -83,7 +83,12 @@ async def upload_document(
             target_folder = f"ENOSIS/Faculty/{faculty_tag}/Career_Advancement"
 
     try:
-        result = upload_file(file_bytes, folder=target_folder)
+        result = upload_file(
+          file_bytes,
+          folder=target_folder,
+          filename=filename,
+        )
+        print("CLOUDINARY RESULT:", result)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Upload to Cloudinary failed: {e}")
 

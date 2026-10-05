@@ -195,7 +195,7 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: achievement.categoryOption.color.withOpacity(0.12),
+                color: achievement.categoryOption.color.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(achievement.categoryOption.icon, color: achievement.categoryOption.color, size: 22),
@@ -265,7 +265,7 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.primarySoft.withOpacity(0.5),
+                  color: AppColors.primarySoft.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: AppColors.border),
                 ),
@@ -315,7 +315,7 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.success.withOpacity(0.1),
+                          color: AppColors.success.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Row(
@@ -434,7 +434,7 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                       border: Border.all(color: AppColors.border),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
+                          color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -446,7 +446,7 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: (isAuthError ? AppColors.secondary : AppColors.error).withOpacity(0.1),
+                            color: (isAuthError ? AppColors.secondary : AppColors.error).withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
@@ -548,7 +548,7 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                                     Container(
                                       padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
-                                        color: AppColors.secondary.withOpacity(0.12),
+                                        color: AppColors.secondary.withValues(alpha: 0.12),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: const Icon(
@@ -694,7 +694,7 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                         border: Border.all(color: AppColors.border),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.02),
+                            color: Colors.black.withValues(alpha: 0.02),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
@@ -836,7 +836,7 @@ class _StatCard extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -864,7 +864,7 @@ class _StatCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: data.accentColor.withOpacity(0.08),
+                  color: data.accentColor.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(data.icon, color: data.accentColor, size: 16),
@@ -966,7 +966,7 @@ class _AchievementItemCard extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -980,7 +980,7 @@ class _AchievementItemCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: opt.color.withOpacity(0.1),
+              color: opt.color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(opt.icon, color: opt.color, size: 24),
@@ -1001,7 +1001,7 @@ class _AchievementItemCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: opt.color.withOpacity(0.12),
+                        color: opt.color.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -1142,7 +1142,7 @@ class _EmptyStateView extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: AppColors.primarySoft,
               shape: BoxShape.circle,
             ),
@@ -1216,7 +1216,7 @@ class _AddAchievementDialog extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1414,7 +1414,7 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppColors.secondary.withOpacity(0.12),
+                        color: AppColors.secondary.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(Icons.workspace_premium_outlined, color: AppColors.secondary, size: 22),
@@ -1438,7 +1438,7 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
             Text('Achievement Type *', style: AppTypography.captionBold.copyWith(color: AppColors.primary)),
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
-              value: _selectedCategory,
+              initialValue: _selectedCategory,
               isExpanded: true,
               decoration: InputDecoration(
                 filled: true,
@@ -1602,7 +1602,7 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
                       children: [
                         Container(
                           padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
+                          decoration: const BoxDecoration(
                             color: AppColors.primarySoft,
                             shape: BoxShape.circle,
                           ),
@@ -1647,7 +1647,7 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: AppColors.success.withOpacity(0.12),
+                                color: AppColors.success.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Icon(Icons.verified, color: AppColors.success, size: 20),
@@ -1694,7 +1694,7 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: AppColors.primarySoft.withOpacity(0.5),
+                            color: AppColors.primarySoft.withValues(alpha: 0.5),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(

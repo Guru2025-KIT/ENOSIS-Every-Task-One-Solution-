@@ -419,7 +419,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: selectedType,
+                  initialValue: selectedType,
                   decoration: const InputDecoration(
                     labelText: 'Session Type',
                     border: OutlineInputBorder(),

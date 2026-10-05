@@ -1463,7 +1463,7 @@ class MlTransparencyContentState extends State<MlTransparencyContent> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFF7C3AED).withOpacity(0.1),
+                color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.psychology_outlined, color: Color(0xFF7C3AED), size: 22),
@@ -1511,9 +1511,9 @@ class MlTransparencyContentState extends State<MlTransparencyContent> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.error.withOpacity(0.05),
+        color: AppColors.error.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.error.withOpacity(0.2)),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.2)),
       ),
       child: Column(
         children: [
@@ -1544,13 +1544,13 @@ class MlTransparencyContentState extends State<MlTransparencyContent> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isActive
-              ? const Color(0xFF16A34A).withOpacity(0.08)
-              : const Color(0xFFD97706).withOpacity(0.08),
+              ? const Color(0xFF16A34A).withValues(alpha: 0.08)
+              : const Color(0xFFD97706).withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isActive
-                ? const Color(0xFF16A34A).withOpacity(0.3)
-                : const Color(0xFFD97706).withOpacity(0.3),
+                ? const Color(0xFF16A34A).withValues(alpha: 0.3)
+                : const Color(0xFFD97706).withValues(alpha: 0.3),
           ),
         ),
         child: Row(

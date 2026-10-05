@@ -462,7 +462,7 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.amber.shade50.withOpacity(0.5),
+                        color: Colors.amber.shade50.withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Colors.amber.shade300),
                       ),
@@ -475,7 +475,7 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                               const Text('Break 1 (Morning / Tea Break)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               Switch(
                                 value: _break1Enabled,
-                                activeColor: AppColors.primary,
+                                activeThumbColor: AppColors.primary,
                                 onChanged: (v) => setState(() => _break1Enabled = v),
                               ),
                             ],
@@ -486,7 +486,7 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                               children: [
                                 Expanded(
                                   child: DropdownButtonFormField<int>(
-                                    value: _break1AfterLectures,
+                                    initialValue: _break1AfterLectures,
                                     decoration: const InputDecoration(labelText: 'After Lectures', border: OutlineInputBorder(), isDense: true),
                                     items: List.generate(6, (i) => i + 1)
                                         .map((n) => DropdownMenuItem(value: n, child: Text('After $n slot${n > 1 ? "s" : ""}')))
@@ -497,7 +497,7 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: DropdownButtonFormField<int>(
-                                    value: _break1DurationMinutes,
+                                    initialValue: _break1DurationMinutes,
                                     decoration: const InputDecoration(labelText: 'Duration', border: OutlineInputBorder(), isDense: true),
                                     items: [10, 15, 20, 25, 30]
                                         .map((d) => DropdownMenuItem(value: d, child: Text('$d mins')))
@@ -518,7 +518,7 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.orange.shade50.withOpacity(0.5),
+                        color: Colors.orange.shade50.withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Colors.orange.shade300),
                       ),
@@ -531,7 +531,7 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                               const Text('Break 2 (Lunch Break)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               Switch(
                                 value: _break2Enabled,
-                                activeColor: AppColors.primary,
+                                activeThumbColor: AppColors.primary,
                                 onChanged: (v) => setState(() => _break2Enabled = v),
                               ),
                             ],
@@ -542,7 +542,7 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                               children: [
                                 Expanded(
                                   child: DropdownButtonFormField<int>(
-                                    value: _break2AfterLectures,
+                                    initialValue: _break2AfterLectures,
                                     decoration: const InputDecoration(labelText: 'After Lectures', border: OutlineInputBorder(), isDense: true),
                                     items: List.generate(8, (i) => i + 1)
                                         .map((n) => DropdownMenuItem(value: n, child: Text('After $n slot${n > 1 ? "s" : ""}')))
@@ -553,7 +553,7 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: DropdownButtonFormField<int>(
-                                    value: _break2DurationMinutes,
+                                    initialValue: _break2DurationMinutes,
                                     decoration: const InputDecoration(labelText: 'Duration', border: OutlineInputBorder(), isDense: true),
                                     items: [30, 40, 45, 50, 60]
                                         .map((d) => DropdownMenuItem(value: d, child: Text('$d mins')))
@@ -676,7 +676,7 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                           decoration: BoxDecoration(
                             color: cardColor,
                             borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: textColor.withOpacity(0.3)),
+                            border: Border.all(color: textColor.withValues(alpha: 0.3)),
                           ),
                           child: Row(
                             children: [

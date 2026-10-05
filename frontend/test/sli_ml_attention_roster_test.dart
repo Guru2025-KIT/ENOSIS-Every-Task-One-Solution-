@@ -8,7 +8,7 @@ import 'package:enosis/features/faculty_insights/presentation/screens/class_anal
 void main() {
   group('SLI ML Attention Roster Integration Tests', () {
     test('SliMlPrediction sorting orders students by descending risk probability', () {
-      final p1 = SliMlPrediction(
+      const p1 = SliMlPrediction(
         enrollmentId: 1,
         studentId: 'S1',
         studentName: 'Low Risk Student',
@@ -25,7 +25,7 @@ void main() {
         modelVersion: '1.0.0',
       );
 
-      final p2 = SliMlPrediction(
+      const p2 = SliMlPrediction(
         enrollmentId: 2,
         studentId: 'S2',
         studentName: 'High Risk Student',
@@ -42,7 +42,7 @@ void main() {
         modelVersion: '1.0.0',
       );
 
-      final p3 = SliMlPrediction(
+      const p3 = SliMlPrediction(
         enrollmentId: 3,
         studentId: 'S3',
         studentName: 'Moderate Risk Student',
@@ -59,7 +59,7 @@ void main() {
         modelVersion: '1.0.0',
       );
 
-      final p4 = SliMlPrediction(
+      const p4 = SliMlPrediction(
         enrollmentId: 4,
         studentId: 'S4',
         studentName: 'Pending Student',
@@ -88,7 +88,7 @@ void main() {
     });
 
     test('INSUFFICIENT_DATA status is never classified as High Risk', () {
-      final pred = SliMlPrediction(
+      const pred = SliMlPrediction(
         enrollmentId: 10,
         studentId: 'STU_PENDING',
         studentName: 'Pending Student',
@@ -119,7 +119,7 @@ void main() {
 
     test('Overview ML counts calculate exact HIGH, MODERATE, and INSUFFICIENT_DATA counts', () {
       final predictions = [
-        SliMlPrediction(
+        const SliMlPrediction(
           enrollmentId: 1,
           studentId: 'S1',
           studentName: 'High Risk 1',
@@ -135,7 +135,7 @@ void main() {
           recommendations: [],
           modelVersion: '1.0.0',
         ),
-        SliMlPrediction(
+        const SliMlPrediction(
           enrollmentId: 2,
           studentId: 'S2',
           studentName: 'High Risk 2',
@@ -151,7 +151,7 @@ void main() {
           recommendations: [],
           modelVersion: '1.0.0',
         ),
-        SliMlPrediction(
+        const SliMlPrediction(
           enrollmentId: 3,
           studentId: 'S3',
           studentName: 'Moderate Risk 1',
@@ -167,7 +167,7 @@ void main() {
           recommendations: [],
           modelVersion: '1.0.0',
         ),
-        SliMlPrediction(
+        const SliMlPrediction(
           enrollmentId: 4,
           studentId: 'S4',
           studentName: 'Pending Student',
@@ -259,7 +259,7 @@ void main() {
       });
 
       final predictions = [
-        SliMlPrediction(
+        const SliMlPrediction(
           enrollmentId: 1,
           studentId: 'S1',
           studentName: 'Aarav Sharma',
@@ -275,7 +275,7 @@ void main() {
           recommendations: ['Peer mentoring'],
           modelVersion: '1.0.0',
         ),
-        SliMlPrediction(
+        const SliMlPrediction(
           enrollmentId: 2,
           studentId: 'S2',
           studentName: 'Priya Patel',
@@ -291,7 +291,7 @@ void main() {
           recommendations: ['Remedial session'],
           modelVersion: '1.0.0',
         ),
-        SliMlPrediction(
+        const SliMlPrediction(
           enrollmentId: 3,
           studentId: 'S3',
           studentName: 'Rohan Deshmukh',
@@ -307,7 +307,7 @@ void main() {
           recommendations: ['Extra lab access'],
           modelVersion: '1.0.0',
         ),
-        SliMlPrediction(
+        const SliMlPrediction(
           enrollmentId: 4,
           studentId: 'S4',
           studentName: 'Ananya Verma',

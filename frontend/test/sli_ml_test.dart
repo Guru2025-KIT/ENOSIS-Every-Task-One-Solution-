@@ -181,7 +181,7 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: SingleChildScrollView(
               child: MlRiskCard(prediction: prediction),
@@ -220,7 +220,7 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: SingleChildScrollView(
               child: MlRiskCard(prediction: prediction),

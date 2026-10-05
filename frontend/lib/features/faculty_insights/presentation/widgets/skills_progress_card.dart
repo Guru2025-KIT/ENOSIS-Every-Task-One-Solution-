@@ -167,7 +167,7 @@ class _SkillCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF7C3AED).withOpacity(0.1),
+                  color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Icon(Icons.bolt, color: Color(0xFF7C3AED), size: 18),

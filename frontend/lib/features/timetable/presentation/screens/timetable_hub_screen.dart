@@ -315,7 +315,7 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
                 border: Border.all(color: const Color(0xFF334155)),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF0F172A).withOpacity(0.12),
+                    color: const Color(0xFF0F172A).withValues(alpha: 0.12),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -386,7 +386,7 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFF97316).withOpacity(0.3)),
+        border: Border.all(color: const Color(0xFFF97316).withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

@@ -667,7 +667,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       ),
                       const SizedBox(height: 14),
                       DropdownButtonFormField<String>(
-                        value: dept,
+                        initialValue: dept,
                         decoration: const InputDecoration(labelText: 'Department', prefixIcon: Icon(Icons.apartment), border: OutlineInputBorder()),
                         items: ['Computer Science', 'CSE (AI & ML)', 'Electronics & Telecom', 'Basic Sciences', 'Mechanical Engineering', 'Information Technology']
                             .map((d) => DropdownMenuItem(value: d, child: Text(d, style: const TextStyle(fontSize: 13))))
@@ -676,7 +676,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       ),
                       const SizedBox(height: 14),
                       DropdownButtonFormField<String>(
-                        value: desig,
+                        initialValue: desig,
                         decoration: const InputDecoration(labelText: 'Designation', prefixIcon: Icon(Icons.workspace_premium_outlined), border: OutlineInputBorder()),
                         items: ['Professor & HOD', 'Professor', 'Associate Professor', 'Assistant Professor', 'Adjunct Faculty']
                             .map((d) => DropdownMenuItem(value: d, child: Text(d, style: const TextStyle(fontSize: 13))))
@@ -1213,7 +1213,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           indicatorWeight: 3.5,
           tabs: [
             Tab(icon: const Icon(Icons.people_alt_outlined, size: 18), text: '1. Manage Faculty (${_facultyList.length})'),
-            Tab(icon: const Icon(Icons.insights_rounded, size: 18), text: '2. Faculty Performance'),
+            const Tab(icon: Icon(Icons.insights_rounded, size: 18), text: '2. Faculty Performance'),
             const Tab(icon: Icon(Icons.calendar_month_outlined, size: 18), text: '3. Timetable'),
           ],
         ),

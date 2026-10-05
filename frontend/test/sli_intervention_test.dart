@@ -159,7 +159,7 @@ void main() {
                                   const Text('Intervention Type *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                   DropdownButtonFormField<String>(
                                     key: const Key('intervention_type_dropdown'),
-                                    value: 'Hands-on Lab',
+                                    initialValue: 'Hands-on Lab',
                                     items: const [
                                       DropdownMenuItem(value: 'Hands-on Lab', child: Text('Hands-on Lab')),
                                       DropdownMenuItem(value: '1-on-1 Mentoring', child: Text('1-on-1 Mentoring')),

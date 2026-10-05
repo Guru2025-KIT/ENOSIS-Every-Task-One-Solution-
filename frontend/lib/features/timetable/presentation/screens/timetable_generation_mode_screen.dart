@@ -284,7 +284,7 @@ class _TimetableGenerationModeScreenState extends State<TimetableGenerationModeS
                         children: [
                           Expanded(
                             child: DropdownButtonFormField<int>(
-                              value: tempWorkingDays,
+                              initialValue: tempWorkingDays,
                               decoration: const InputDecoration(labelText: 'Working Days / Week'),
                               items: const [
                                 DropdownMenuItem(value: 5, child: Text('Monday – Friday (5 Days)')),
@@ -296,7 +296,7 @@ class _TimetableGenerationModeScreenState extends State<TimetableGenerationModeS
                           const SizedBox(width: 12),
                           Expanded(
                             child: DropdownButtonFormField<int>(
-                              value: tempPeriodsPerDay,
+                              initialValue: tempPeriodsPerDay,
                               decoration: const InputDecoration(labelText: 'Total Periods / Day'),
                               items: List.generate(8, (index) => index + 5).map((pNum) {
                                 return DropdownMenuItem(value: pNum, child: Text('$pNum Periods / Day'));
@@ -715,9 +715,9 @@ class _TimetableGenerationModeScreenState extends State<TimetableGenerationModeS
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4)),
         ],
       ),
       child: Column(
@@ -1120,7 +1120,7 @@ class _TimetableGenerationModeScreenState extends State<TimetableGenerationModeS
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4)),
         ],
         border: Border.all(color: AppColors.border, width: 0.8),
       ),

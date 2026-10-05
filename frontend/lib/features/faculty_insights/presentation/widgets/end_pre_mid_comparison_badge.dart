@@ -64,7 +64,7 @@ class EndPreMidComparisonBadge extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: const Color(0xFF0284C7).withOpacity(0.12),
+                color: const Color(0xFF0284C7).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
@@ -80,7 +80,7 @@ class EndPreMidComparisonBadge extends StatelessWidget {
             Text(
               'No PRE',
               style: AppTypography.caption.copyWith(
-                color: AppColors.textSecondary.withOpacity(0.7),
+                color: AppColors.textSecondary.withValues(alpha: 0.7),
                 fontStyle: FontStyle.italic,
               ),
             ),
@@ -93,7 +93,7 @@ class EndPreMidComparisonBadge extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: const Color(0xFF7C3AED).withOpacity(0.12),
+                color: const Color(0xFF7C3AED).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
@@ -114,7 +114,7 @@ class EndPreMidComparisonBadge extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: const Color(0xFF16A34A).withOpacity(0.12),
+                color: const Color(0xFF16A34A).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(

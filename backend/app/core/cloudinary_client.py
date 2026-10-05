@@ -29,18 +29,21 @@ def _configure():
     )
 
 
-def upload_file(file_bytes: bytes, *, folder: str = "enosis") -> dict:
-    """
-    Uploads raw file bytes to Cloudinary. Returns Cloudinary's response
-    dict, which includes 'secure_url', 'public_id', 'resource_type',
-    'bytes', etc. — the route handler picks out what it needs from this.
-
-    resource_type="auto" lets Cloudinary detect image vs. PDF/other file
-    vs. video automatically, rather than us guessing from a file extension.
-    """
+def upload_file(file_bytes: bytes, *, folder: str = "enosis", filename: str = "") -> dict:
     _configure()
-    return cloudinary.uploader.upload(file_bytes, folder=folder, resource_type="auto")
 
+    ext = filename.lower().split(".")[-1]
+
+    if ext in {"jpg", "jpeg", "png"}:
+        resource_type = "image"
+    else:
+        resource_type = "raw"
+
+    return cloudinary.uploader.upload(
+        file_bytes,
+        folder=folder,
+        resource_type=resource_type,
+    )
 
 def delete_file(public_id: str, resource_type: str = "image") -> dict:
     _configure()

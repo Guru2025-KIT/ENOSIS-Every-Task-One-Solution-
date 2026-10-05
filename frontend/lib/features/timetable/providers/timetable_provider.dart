@@ -14,7 +14,7 @@ class TimetableProvider extends ChangeNotifier {
   final List<TeachingAssignment> _assignments = [];
   final List<TimetableConstraint> _constraints = [];
   final Map<String, Map<String, List<String>>> _generatedTimetable = {};
-  Map<String, Map<String, List<String>>> _publishedTimetable = {};
+  final Map<String, Map<String, List<String>>> _publishedTimetable = {};
 
   ScheduleConfigModel? _scheduleConfig;
   List<RoomModel> _roomModels = [];

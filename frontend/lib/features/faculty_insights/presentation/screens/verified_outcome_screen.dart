@@ -84,7 +84,7 @@ class _VerifiedOutcomeScreenState extends State<VerifiedOutcomeScreen> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.8),
+                color: Colors.white.withValues(alpha: 0.8),
                 fontSize: 12,
               ),
             ),
@@ -232,7 +232,7 @@ class _VerifiedOutcomeScreenState extends State<VerifiedOutcomeScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.18),
+              color: Colors.white.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(Icons.verified_outlined, color: Colors.white, size: 24),
@@ -253,7 +253,7 @@ class _VerifiedOutcomeScreenState extends State<VerifiedOutcomeScreen> {
                 Text(
                   'End-of-semester summative competency attainment derived from frozen END assessment records.',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.85),
+                    color: Colors.white.withValues(alpha: 0.85),
                     fontSize: isMobile ? 12 : 13,
                   ),
                 ),
@@ -414,7 +414,7 @@ class _VerifiedOutcomeScreenState extends State<VerifiedOutcomeScreen> {
         children: [
           Icon(
             Icons.assignment_outlined,
-            color: AppColors.textSecondary.withOpacity(0.5),
+            color: AppColors.textSecondary.withValues(alpha: 0.5),
             size: 48,
           ),
           const SizedBox(height: 12),
@@ -450,7 +450,7 @@ class _VerifiedOutcomeScreenState extends State<VerifiedOutcomeScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFF7C3AED).withOpacity(0.1),
+              color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(Icons.link_outlined, color: Color(0xFF7C3AED), size: 20),
@@ -471,7 +471,7 @@ class _VerifiedOutcomeScreenState extends State<VerifiedOutcomeScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: AppColors.textSecondary.withOpacity(0.1),
+                    color: AppColors.textSecondary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: const Text(
