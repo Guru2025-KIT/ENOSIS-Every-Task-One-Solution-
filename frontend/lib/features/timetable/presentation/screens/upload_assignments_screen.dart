@@ -101,18 +101,13 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
 
     for (String seg in segments) {
       String year = '';
-      if (RegExp(r'F\s*Y').hasMatch(seg)) {
-        year = 'FY';
-      } else if (RegExp(r'S\s*Y').hasMatch(seg)) {
-        year = 'SY';
-      } else if (RegExp(r'T\s*Y').hasMatch(seg)) {
-        year = 'TY';
-      } else if (RegExp(r'B\s*TECH').hasMatch(seg) || RegExp(r'FINAL\s*YEAR').hasMatch(seg)) {
-        year = 'BTECH';
-      }
+      if (RegExp(r'F\s*Y').hasMatch(seg)) year = 'FY';
+      else if (RegExp(r'S\s*Y').hasMatch(seg)) year = 'SY';
+      else if (RegExp(r'T\s*Y').hasMatch(seg)) year = 'TY';
+      else if (RegExp(r'B\s*TECH').hasMatch(seg) || RegExp(r'FINAL\s*YEAR').hasMatch(seg)) year = 'BTECH';
 
       if (year.isEmpty && lastYear != null) {
-        year = lastYear;
+        year = lastYear!;
       } else if (year.isNotEmpty) {
         lastYear = year;
       }
@@ -132,7 +127,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
       }
 
       if (depts.isEmpty && lastDept != null) {
-        depts.add(lastDept);
+        depts.add(lastDept!);
       } else if (depts.isNotEmpty) {
         lastDept = depts.join('-');
       }
@@ -161,7 +156,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
     });
 
     try {
-      final file = await FilePicker.pickFile(
+      final PlatformFile? file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: ['xlsx'],
       );
@@ -204,19 +199,12 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
         Map<String, int> colMap = {};
         for (int i = 0; i < rows[headerRowIdx].length; i++) {
           String header = _getCellValue(rows[headerRowIdx], i).toLowerCase();
-          if (header.contains('faculty')) {
-            colMap['faculty'] = i;
-          } else if (header.contains('class') || header.contains('div')) {
-            colMap['class'] = i;
-          } else if (header.contains('code') && !header.contains('name')) {
-            colMap['code'] = i;
-          } else if (header.contains('course') || header.contains('name')) {
-            colMap['name'] = i;
-          } else if (header.contains('theory')) {
-            colMap['theory'] = i;
-          } else if (header.contains('pract')) {
-            colMap['prac'] = i;
-          }
+          if (header.contains('faculty')) colMap['faculty'] = i;
+          else if (header.contains('class') || header.contains('div')) colMap['class'] = i;
+          else if (header.contains('code') && !header.contains('name')) colMap['code'] = i;
+          else if (header.contains('course') || header.contains('name')) colMap['name'] = i;
+          else if (header.contains('theory')) colMap['theory'] = i;
+          else if (header.contains('pract')) colMap['prac'] = i;
         }
 
         int facultyCol = colMap['faculty'] ?? 1;
@@ -515,12 +503,12 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final assignments = context.watch<TimetableProvider>().assignments;
+    final _assignments = context.watch<TimetableProvider>().assignments;
 
-    List<TeachingAssignment> filteredAssignments = assignments;
+    List<TeachingAssignment> filteredAssignments = _assignments;
     if (_searchQuery.trim().isNotEmpty) {
       final q = _searchQuery.toLowerCase().trim();
-      filteredAssignments = assignments.where((a) {
+      filteredAssignments = _assignments.where((a) {
         return a.facultyName.toLowerCase().contains(q) ||
             a.subjectName.toLowerCase().contains(q) ||
             a.className.toLowerCase().contains(q);
@@ -542,7 +530,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
             icon: const Icon(Icons.add_task),
             onPressed: _showManualAddAssignmentDialog,
           ),
-          if (assignments.isNotEmpty)
+          if (_assignments.isNotEmpty)
             IconButton(
               tooltip: 'Re-upload Excel',
               icon: const Icon(Icons.upload_file),
@@ -605,7 +593,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFFF97316)))
-                : assignments.isEmpty
+                : _assignments.isEmpty
                     ? _buildEmptyState()
                     : _buildLoadedState(filteredAssignments),
           ),
@@ -663,9 +651,9 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
               decoration: BoxDecoration(
                 color: AppColors.errorLight,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.error.withValues(alpha: 0.4)),
+                border: Border.all(color: AppColors.error.withOpacity(0.4)),
               ),
-              child: Text(_errorMessage, style: const TextStyle(color: AppColors.error)),
+              child: Text(_errorMessage, style: TextStyle(color: AppColors.error)),
             ),
           ],
         ],
@@ -730,7 +718,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
                     DataCell(Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
+                        color: AppColors.primary.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(item.className, style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold))
@@ -739,7 +727,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: isLab ? Colors.purple.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
+                          color: isLab ? Colors.purple.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(item.batch, style: TextStyle(fontSize: 12, color: isLab ? Colors.purple : Colors.grey, fontWeight: FontWeight.bold)),

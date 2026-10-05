@@ -461,7 +461,6 @@ def seed_all_faculty_profiles():
     except Exception as e:
         db.rollback()
         print(f"  [WARN] Admin seeding failed: {e}")
->>>>>>> Stashed changes
     finally:
         db.close()
 

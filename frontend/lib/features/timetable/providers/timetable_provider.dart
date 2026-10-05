@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../data/timetable_repository.dart';
 import '../models/teaching_assignment.dart';
@@ -24,6 +24,8 @@ class TimetableProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _generationError;
   List<String> _conflictingConstraints = [];
+  // Working days sent to the backend solver (matches schedule config day_names)
+  List<String> _workingDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   // Getters
   List<TimeSlot> get timeSlots => _timeSlots;
@@ -39,6 +41,7 @@ class TimetableProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get generationError => _generationError;
   List<String> get conflictingConstraints => _conflictingConstraints;
+  List<String> get workingDays => _workingDays;
 
   List<String> get facultyNames => _assignments.map((a) => a.facultyName).toSet().toList()..sort();
   List<String> get subjectNames => _assignments.map((a) => a.subjectName).toSet().toList()..sort();
@@ -66,6 +69,8 @@ class TimetableProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  void setWorkingDays(List<String> days) { _workingDays = List<String>.from(days); notifyListeners(); }
 
   void setTimeSlots(List<TimeSlot> slots) {
     _timeSlots = List.from(slots);
@@ -466,7 +471,11 @@ class TimetableProvider extends ChangeNotifier {
         'time_limit_seconds': 30,
       };
 
-      final response = await ApiClient.postJson('/timetable/generate', payload, timeoutSeconds: 45);
+      final response = await ApiClient.postJson(
+        '/timetable/generate',
+        payload,
+        timeout: const Duration(seconds: 120),
+      );
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       final status = body['status'] as String? ?? 'UNKNOWN';
 
@@ -488,6 +497,8 @@ class TimetableProvider extends ChangeNotifier {
         _generationError = null;
         _conflictingConstraints = [];
       } else {
+        // ── 4b. INFEASIBLE / UNKNOWN ──────────────────────────────────────
+        _generatedTimetable.clear(); // #6: prevent stale data showing after failure
         final conflicts = body['conflictingConstraints'];
         if (conflicts is List) {
           _conflictingConstraints = conflicts.map((e) => e.toString()).toList();

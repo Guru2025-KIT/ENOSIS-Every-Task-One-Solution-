@@ -89,19 +89,22 @@ class ApiClient {
   }
 
   /// Helper to send an HTTP request trying candidate base URLs if connection fails.
-  /// [timeoutSeconds] defaults to 7 (original behavior). Callers may pass a
-  /// higher value for long-running operations like timetable generation.
+  /// [timeout] or [timeoutSeconds] overrides the default 7-second per-attempt timeout.
   static Future<http.Response> _sendWithFallback(
     Future<http.Response> Function(String base) requestFn, {
+    Duration? timeout,
     int timeoutSeconds = 7,
   }) async {
+    final effectiveTimeout = timeout ?? Duration(seconds: timeoutSeconds);
     final candidates = candidateBaseUrls;
     Object? lastError;
 
     for (final base in candidates) {
       try {
-        final perCandidateTimeout = (_activeBaseUrl == null && candidates.length > 1) ? 3 : timeoutSeconds;
-        final response = await requestFn(base).timeout(Duration(seconds: perCandidateTimeout));
+        final perCandidateTimeout = (_activeBaseUrl == null && candidates.length > 1)
+            ? const Duration(seconds: 3)
+            : effectiveTimeout;
+        final response = await requestFn(base).timeout(perCandidateTimeout);
         _activeBaseUrl = base;
         return response;
       } catch (e) {
@@ -123,10 +126,12 @@ class ApiClient {
   }
 
   /// POST with a JSON body — used by most endpoints (e.g. signup).
+  /// [timeout] or [timeoutSeconds] overrides the default 7-second timeout (useful for long-running endpoints).
   static Future<http.Response> postJson(
     String path,
     Map<String, dynamic> body, {
     String? token,
+    Duration? timeout,
     int timeoutSeconds = 7,
   }) {
     final effectiveToken = _resolveToken(token);
@@ -139,7 +144,7 @@ class ApiClient {
         },
         body: jsonEncode(body),
       );
-    }, timeoutSeconds: timeoutSeconds);
+    }, timeout: timeout, timeoutSeconds: timeoutSeconds);
   }
 
   /// POST with form-encoded fields — used specifically by /auth/login,
