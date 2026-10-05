@@ -51,6 +51,7 @@ SAMPLE_CONSTRAINTS = [
 # at the exact same day+slot in the generated timetables for A, B, and C.
 SAMPLE_COMBINED_GROUPS = [
     ["SY-AIML-A", "SY-AIML-B", "SY-AIML-C"],
+    ["TY-AIML-A", "TY-AIML-B"],
 ]
 
 # This is a CORRECT sample output — every check below should PASS on it.

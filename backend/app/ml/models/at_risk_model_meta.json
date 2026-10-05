@@ -1,12 +1,12 @@
 {
   "model_name": "LogisticRegression",
-  "trained_at": "2026-10-02T13:20:18.467841+00:00",
-  "total_samples": 106,
-  "train_samples": 79,
-  "validation_samples": 27,
+  "trained_at": "2026-10-03T02:39:16.396141+00:00",
+  "total_samples": 104,
+  "train_samples": 78,
+  "validation_samples": 26,
   "class_distribution": {
-    "at_risk": 37,
-    "on_track": 69
+    "at_risk": 36,
+    "on_track": 68
   },
   "metrics": {
     "accuracy": 1.0,
@@ -65,14 +65,14 @@
     "has_critical_drop"
   ],
   "top_feature_importances": {
-    "mid_problem_solving": 0.4543,
-    "mid_overall_confidence": 0.4347,
-    "mid_skill_application_mean": 0.4258,
-    "mid_skill_confidence_mean": 0.424,
-    "min_mid_skill_score": 0.4087,
-    "mid_barrier_frequency": 0.4013,
-    "mid_barrier_count": 0.3153,
-    "mid_skill_difficulty_mean": 0.3048
+    "mid_overall_confidence": 0.4627,
+    "mid_problem_solving": 0.4342,
+    "min_mid_skill_score": 0.3851,
+    "mid_skill_confidence_mean": 0.3836,
+    "mid_barrier_frequency": 0.3802,
+    "mid_skill_application_mean": 0.3706,
+    "mid_skill_difficulty_mean": 0.3296,
+    "mid_barrier_count": 0.3284
   },
   "is_calibration_dataset": true
 }

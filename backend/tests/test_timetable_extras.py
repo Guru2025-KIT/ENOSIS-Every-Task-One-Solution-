@@ -5,6 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.db.base import SessionLocal
+from app.models.user import User
 from app.models.academic import RoomType
 from app.schemas.timetable import (
     TimetableGenerationRequest,
@@ -121,14 +123,23 @@ def test_schedule_config_endpoint(admin_token):
 def test_constraints_crud_endpoints(admin_token):
     headers = _auth_headers(admin_token)
     
+    # Ensure fac-temp-id user exists in DB
+    db = SessionLocal()
+    if not db.query(User).filter(User.id == "fac-temp-id").first():
+        db.add(User(id="fac-temp-id", email="fac-temp@test.com", full_name="Dr. Smith", hashed_password="pw"))
+        db.commit()
+    db.close()
+
     # 1. Create constraint
     payload = {
-        "constraint_type": "faculty_unavailability",
+        "constraint_type": "faculty_unavailable",
         "priority": "hard",
-        "payload": {"faculty_id": "fac-temp-id", "day": 1, "slot": 3},
-        "description": "Dr. Smith unavailable Tue Slot 4"
+        "payload": {"faculty_id": "fac-temp-id", "day": 1, "slot": 4},
+        "description": "Dr. Smith unavailable Tue Slot 5"
     }
     response = client.post("/timetable/constraints", json=payload, headers=headers)
+    if response.status_code != 201:
+        print("DEBUG RESPONSE FAIL:", response.json())
     assert response.status_code == 201
     c_id = response.json()["id"]
     assert response.json()["priority"] == "hard"

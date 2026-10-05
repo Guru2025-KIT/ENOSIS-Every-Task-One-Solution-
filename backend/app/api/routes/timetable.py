@@ -1607,7 +1607,7 @@ def publish_timetable(
     db.commit()
 
     return {
-        "status": "success",
+        "status": "published",
         "message": f"Successfully published timetable with {total_saved} scheduled sessions!",
         "batch_id": batch_id,
         "total_entries": total_saved,

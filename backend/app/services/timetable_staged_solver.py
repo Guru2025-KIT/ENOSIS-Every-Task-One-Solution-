@@ -804,11 +804,6 @@ class StagedTimetableSolver:
         # 1. Verify zero free periods for every division
         available_periods = len(self.teaching_slots) * self.working_days
         for div in self.divisions:
-            scheduled_count = sum(
-                1 for s in self.occupancy.placements.values()
-                for sess in [self.occupancy.sessions_by_id.get(list(self.occupancy.placements.keys())[0])]
-                if div.id in (self.occupancy.sessions_by_id[sid].division_ids if sid in self.occupancy.sessions_by_id else [])
-            )
             # Count actual slots occupied for division
             div_slots_occupied = sum(1 for (k_div, d, s) in self.occupancy.division_slots if k_div == div.id)
             if div_slots_occupied < available_periods:

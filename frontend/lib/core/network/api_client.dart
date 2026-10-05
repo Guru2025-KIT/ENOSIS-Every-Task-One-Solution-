@@ -29,11 +29,11 @@ class ApiClient {
 
     if (kIsWeb) {
       final host = Uri.base.host;
-      if (host.isNotEmpty && host != 'localhost' && host != '127.0.0.1') {
+      if (host.isNotEmpty) {
         list.add('http://$host:8000');
       }
-      list.add('http://127.0.0.1:8000');
       list.add('http://localhost:8000');
+      list.add('http://127.0.0.1:8000');
     } else if (defaultTargetPlatform == TargetPlatform.android) {
       // Physical device Wi-Fi IP (Current PC IP), followed by emulator loopback
       list.add('http://10.199.8.143:8000');
@@ -43,8 +43,8 @@ class ApiClient {
       list.add('http://localhost:8000');
       list.add('http://127.0.0.1:8000');
     } else {
-      list.add('http://127.0.0.1:8000');
       list.add('http://localhost:8000');
+      list.add('http://127.0.0.1:8000');
     }
 
     // Return deduplicated list preserving order
@@ -100,7 +100,8 @@ class ApiClient {
 
     for (final base in candidates) {
       try {
-        final response = await requestFn(base).timeout(Duration(seconds: timeoutSeconds));
+        final perCandidateTimeout = (_activeBaseUrl == null && candidates.length > 1) ? 3 : timeoutSeconds;
+        final response = await requestFn(base).timeout(Duration(seconds: perCandidateTimeout));
         _activeBaseUrl = base;
         return response;
       } catch (e) {

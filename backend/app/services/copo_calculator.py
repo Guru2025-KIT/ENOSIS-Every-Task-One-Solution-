@@ -37,22 +37,27 @@ class CopoCalculator:
     """
 
     @staticmethod
-    def map_percentage_to_level(percentage: float) -> Tuple[int, str]:
+    def map_percentage_to_level(
+        percentage: float,
+        level3_cutoff: float = 80.0,
+        level2_cutoff: float = 60.0,
+        level1_cutoff: float = 40.0,
+    ) -> Tuple[int, str]:
         """
-        40/60/80 Rule:
-        3 = 81-100% of students
-        2 = 61-80%
-        1 = 40-60%
-        0 = below 40%
+        Dynamic percentage to level mapping (default 40/60/80):
+        3 = >= level3_cutoff %
+        2 = >= level2_cutoff %
+        1 = >= level1_cutoff %
+        0 = below level1_cutoff %
         """
-        if percentage >= 80.5:
-            return 3, "Level 3: 81-100% students achieved threshold"
-        elif percentage >= 60.5:
-            return 2, "Level 2: 61-80% students achieved threshold"
-        elif percentage >= 39.5:
-            return 1, "Level 1: 40-60% students achieved threshold"
+        if percentage >= (level3_cutoff + 0.5):
+            return 3, f"Level 3: >= {int(level3_cutoff)}% students achieved threshold"
+        elif percentage >= (level2_cutoff + 0.5):
+            return 2, f"Level 2: {int(level2_cutoff)}-{int(level3_cutoff)}% students achieved threshold"
+        elif percentage >= (level1_cutoff - 0.5):
+            return 1, f"Level 1: {int(level1_cutoff)}-{int(level2_cutoff)}% students achieved threshold"
         else:
-            return 0, "Level 0: Below 40% students achieved threshold"
+            return 0, f"Level 0: Below {int(level1_cutoff)}% students achieved threshold"
 
     @classmethod
     def calculate_single_exam_stats(
@@ -60,28 +65,37 @@ class CopoCalculator:
         scores: List[Optional[float]],
         max_marks: float,
         total_strength: int,
+        passing_pct: float = 50.0,
+        level3_cutoff: float = 80.0,
+        level2_cutoff: float = 60.0,
+        level1_cutoff: float = 40.0,
     ) -> ExamKpiStats:
         valid_scores = [s for s in scores if s is not None and s >= 0]
         attempted = len(valid_scores)
         strength = max(total_strength, attempted, 1)
         attempted_pct = round((attempted * 100.0) / strength, 2)
 
-        thresh_50 = 0.5 * max_marks
+        thresh_pass = (passing_pct / 100.0) * max_marks
         thresh_55 = 0.55 * max_marks
 
-        c50 = sum(1 for s in valid_scores if s >= thresh_50)
+        c_pass = sum(1 for s in valid_scores if s >= thresh_pass)
         c55 = sum(1 for s in valid_scores if s >= thresh_55)
 
-        pct_50 = round((c50 * 100.0) / attempted, 2) if attempted > 0 else 0.0
+        pct_pass = round((c_pass * 100.0) / attempted, 2) if attempted > 0 else 0.0
         pct_55 = round((c55 * 100.0) / attempted, 2) if attempted > 0 else 0.0
 
-        level, desc = cls.map_percentage_to_level(pct_50)
+        level, desc = cls.map_percentage_to_level(
+            pct_pass,
+            level3_cutoff=level3_cutoff,
+            level2_cutoff=level2_cutoff,
+            level1_cutoff=level1_cutoff,
+        )
 
         return ExamKpiStats(
             attempted_count=attempted,
             attempted_percentage=attempted_pct,
-            scoring_50_count=c50,
-            scoring_50_percentage=pct_50,
+            scoring_50_count=c_pass,
+            scoring_50_percentage=pct_pass,
             scoring_55_count=c55,
             scoring_55_percentage=pct_55,
             attainment_level=level,
@@ -91,21 +105,41 @@ class CopoCalculator:
     @classmethod
     def calculate_report(cls, req: CopoCalculationRequest) -> CopoAttainmentReport:
         strength = max(req.total_strength, 1)
+        pass_pct = req.master.passing_threshold_percent
+        l3 = req.master.level3_cutoff_percent
+        l2 = req.master.level2_cutoff_percent
+        l1 = req.master.level1_cutoff_percent
+
+        # Normalize weights
+        dw = req.master.direct_weight
+        iw = req.master.indirect_weight
+        total_w = dw + iw
+        if total_w > 0:
+            direct_weight = dw / total_w if dw > 1.0 or iw > 1.0 else dw
+            indirect_weight = iw / total_w if dw > 1.0 or iw > 1.0 else iw
+        else:
+            direct_weight, indirect_weight = 0.9, 0.1
 
         # 1. ISE 1 Stats
         ise1_marks = [s.marks for s in req.ise1.scores]
-        ise1_stats = cls.calculate_single_exam_stats(ise1_marks, req.ise1.max_marks, strength)
+        ise1_stats = cls.calculate_single_exam_stats(
+            ise1_marks, req.ise1.max_marks, strength, pass_pct, l3, l2, l1
+        )
 
         # 2. ISE 2 Stats
         ise2_marks = [s.marks for s in req.ise2.scores]
-        ise2_stats = cls.calculate_single_exam_stats(ise2_marks, req.ise2.max_marks, strength)
+        ise2_stats = cls.calculate_single_exam_stats(
+            ise2_marks, req.ise2.max_marks, strength, pass_pct, l3, l2, l1
+        )
 
         # 3. MSE Question-wise & CO-wise
         mse_q_stats: List[QuestionStatItem] = []
         mse_co_levels_map: Dict[str, List[int]] = {}
         for q in req.mse.questions:
             q_scores = [s.scores.get(q.question_id) for s in req.mse.student_scores]
-            stat = cls.calculate_single_exam_stats(q_scores, q.max_marks, strength)
+            stat = cls.calculate_single_exam_stats(
+                q_scores, q.max_marks, strength, pass_pct, l3, l2, l1
+            )
             mse_q_stats.append(QuestionStatItem(
                 question_id=q.question_id,
                 co_tag=q.co_tag,
@@ -124,7 +158,9 @@ class CopoCalculator:
         ese_co_levels_map: Dict[str, List[int]] = {}
         for q in req.ese.questions:
             q_scores = [s.scores.get(q.question_id) for s in req.ese.student_scores]
-            stat = cls.calculate_single_exam_stats(q_scores, q.max_marks, strength)
+            stat = cls.calculate_single_exam_stats(
+                q_scores, q.max_marks, strength, pass_pct, l3, l2, l1
+            )
             ese_q_stats.append(QuestionStatItem(
                 question_id=q.question_id,
                 co_tag=q.co_tag,
@@ -153,8 +189,8 @@ class CopoCalculator:
         co_breakdowns: List[CoAttainmentBreakdown] = []
 
         for co in co_list:
-            ise1_lvl = ise1_stats.attainment_level if req.ise1.mapped_co == co else None
-            ise2_lvl = ise2_stats.attainment_level if req.ise2.mapped_co == co else None
+            ise1_lvl = ise1_stats.attainment_level if (co in req.ise1.mapped_cos or req.ise1.mapped_co == co) else None
+            ise2_lvl = ise2_stats.attainment_level if (co in req.ise2.mapped_cos or req.ise2.mapped_co == co) else None
             mse_lvl = mse_co_levels.get(co)
             ese_lvl = ese_co_levels.get(co)
 
@@ -163,7 +199,7 @@ class CopoCalculator:
             direct = round(sum(available_levels) / len(available_levels), 2) if available_levels else 0.0
 
             indirect = survey_map.get(co, 2.50)
-            final_val = round((0.9 * direct) + (0.1 * indirect), 2)
+            final_val = round((direct_weight * direct) + (indirect_weight * indirect), 2)
             is_att = final_val >= req.master.target_attainment
 
             co_breakdowns.append(CoAttainmentBreakdown(

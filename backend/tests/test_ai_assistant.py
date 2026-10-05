@@ -20,9 +20,10 @@ def _auth_headers(token: str) -> dict:
 
 
 def test_chat_returns_503_when_not_configured(faculty_user):
-    """Real current behavior — no GROQ_API_KEY is set."""
+    """Behavior when no GROQ_API_KEY is configured."""
     _, token = faculty_user
-    response = client.post("/ai/chat", json={"message": "Hello"}, headers=_auth_headers(token))
+    with patch("app.api.routes.ai_assistant.is_configured", return_value=False):
+        response = client.post("/ai/chat", json={"message": "Hello"}, headers=_auth_headers(token))
     assert response.status_code == 503
     assert "isn't configured" in response.json()["detail"].lower()
 

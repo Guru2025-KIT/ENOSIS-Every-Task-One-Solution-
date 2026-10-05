@@ -1,6 +1,6 @@
 import secrets
 import string
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -26,19 +26,31 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def signup(payload: UserCreate, db: Session = Depends(get_db)):
     """
     Creates a new faculty account. Rejects duplicate emails.
-    The password is hashed (see core/security.py) before it ever touches
-    the database — we never store or log the plaintext password.
+    Trims inputs and handles nulls cleanly to prevent database constraint errors.
     """
-    existing = db.query(User).filter(User.email == payload.email).first()
+    clean_email = payload.email.strip().lower()
+    existing = db.query(User).filter(func.lower(User.email) == clean_email).first()
     if existing:
         raise HTTPException(status_code=400, detail="An account with this email already exists")
 
+    emp_id = payload.employee_id.strip() if payload.employee_id and payload.employee_id.strip() else None
+    if emp_id:
+        existing_emp = db.query(User).filter(User.employee_id == emp_id).first()
+        if existing_emp:
+            raise HTTPException(status_code=400, detail=f"Employee ID '{emp_id}' is already registered to another account")
+
+    dept = payload.department.strip() if payload.department and payload.department.strip() else None
+    desig = payload.designation.strip() if payload.designation and payload.designation.strip() else None
+    phone = payload.phone.strip() if payload.phone and payload.phone.strip() else None
+
     user = User(
-        email=payload.email,
+        email=clean_email,
         hashed_password=hash_password(payload.password),
-        full_name=payload.full_name,
-        employee_id=payload.employee_id,
-        department=payload.department,
+        full_name=payload.full_name.strip(),
+        employee_id=emp_id,
+        department=dept,
+        designation=desig,
+        phone=phone,
     )
     db.add(user)
     db.commit()
@@ -47,18 +59,50 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+async def login(
+    request: Request,
+    db: Session = Depends(get_db)
+):
     """
-    Standard OAuth2 password flow login.
-    Note: form_data.username is the user's EMAIL.
+    Supports BOTH standard OAuth2 form-data AND JSON requests for login.
+    Case-insensitive, whitespace-trimmed email lookup for maximum reliability.
     """
-    clean_username = form_data.username.strip().lower()
-    user = db.query(User).filter(func.lower(User.email) == clean_username).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    username = ""
+    password = ""
+
+    content_type = request.headers.get("content-type", "").lower()
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            username = str(body.get("username") or body.get("email") or "").strip()
+            password = str(body.get("password") or "")
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON format in request body")
+    else:
+        try:
+            form = await request.form()
+            username = str(form.get("username") or form.get("email") or "").strip()
+            password = str(form.get("password") or "")
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid form data in request body")
+
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Both email and password are required")
+
+    clean_email = username.lower()
+    user = db.query(User).filter(func.lower(User.email) == clean_email).first()
+
+    if not user or not verify_password(password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is deactivated. Please contact administrator.",
         )
 
     access_token = create_access_token(subject=user.id)

@@ -429,6 +429,39 @@ def seed_all_faculty_profiles():
     except Exception as e:
         db.rollback()
         print(f"  [WARN] Faculty profile seed notice: {e}")
+=======
+        # Check if any admin already exists
+        existing_admin = db.query(User).filter(User.role == UserRole.ADMIN).first()
+        if existing_admin:
+            print(f"  [OK] Admin user already exists: {existing_admin.email}")
+            return
+
+        # Check if a user with the admin email exists but isn't admin yet
+        user = db.query(User).filter(User.email == DEFAULT_ADMIN_EMAIL).first()
+        if user:
+            user.role = UserRole.ADMIN
+            db.commit()
+            print(f"  [OK] Promoted existing user '{user.email}' to ADMIN role.")
+            return
+
+        # Create a new admin user
+        admin_user = User(
+            email=DEFAULT_ADMIN_EMAIL,
+            hashed_password=hash_password(DEFAULT_ADMIN_PASSWORD),
+            full_name=DEFAULT_ADMIN_NAME,
+            role=UserRole.ADMIN,
+            department="Administration",
+            employee_id="ADMIN-001",
+            is_active=True,
+            can_manage_timetable=True,
+        )
+        db.add(admin_user)
+        db.commit()
+        print(f"  [OK] Created admin user: {DEFAULT_ADMIN_EMAIL} (password: {DEFAULT_ADMIN_PASSWORD})")
+    except Exception as e:
+        db.rollback()
+        print(f"  [WARN] Admin seeding failed: {e}")
+>>>>>>> Stashed changes
     finally:
         db.close()
 

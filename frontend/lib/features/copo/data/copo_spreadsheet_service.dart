@@ -1,17 +1,22 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
+import 'dart:html' as html;
 import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
+import 'copo_repository.dart';
 
 class ParsedStudentRow {
   final String rollNo;
   final String name;
+  final String? prn;
   final double? singleMark;
   final Map<String, double?> questionMarks;
 
   ParsedStudentRow({
     required this.rollNo,
     required this.name,
+    this.prn,
     this.singleMark,
     required this.questionMarks,
   });
@@ -87,6 +92,7 @@ class CopoSpreadsheetService {
     int headerIdx = 0;
     int rollCol = -1;
     int nameCol = -1;
+    int prnCol = -1;
     int markCol = -1;
     final Map<String, int> questionCols = {};
 
@@ -94,14 +100,20 @@ class CopoSpreadsheetService {
       final row = rawRows[i].map((s) => s.toLowerCase()).toList();
       for (int c = 0; c < row.length; c++) {
         final val = row[c];
-        if (val.contains('roll') || val.contains('prn') || val.contains('r.no')) {
+        if (val.contains('roll') || val.contains('r.no') || val.contains('rollno')) {
           rollCol = c;
+        } else if (val.contains('prn') || val.contains('p.r.n') || val.contains('reg')) {
+          prnCol = c;
         } else if (val.contains('name') || val.contains('student')) {
           nameCol = c;
         } else if (val.contains('mark') || val.contains('total') || val.contains('score')) {
           markCol = c;
-        } else if (val.startsWith('q') && (val.length <= 5 || val.contains('question'))) {
-          questionCols[rawRows[i][c].trim()] = c;
+        } else if (val.startsWith('q') && (val.length <= 15 || val.contains('question'))) {
+          String rawHeader = rawRows[i][c].trim();
+          if (rawHeader.contains('(')) {
+            rawHeader = rawHeader.split('(')[0].trim();
+          }
+          questionCols[rawHeader] = c;
         }
       }
       if (rollCol != -1) {
@@ -129,6 +141,7 @@ class CopoSpreadsheetService {
       }
 
       final name = (nameCol != -1 && nameCol < row.length) ? row[nameCol].trim() : '';
+      final prn = (prnCol != -1 && prnCol < row.length) ? row[prnCol].trim() : null;
 
       double? singleMark;
       if (markCol != -1 && markCol < row.length) {
@@ -145,6 +158,7 @@ class CopoSpreadsheetService {
       parsedStudents.add(ParsedStudentRow(
         rollNo: roll,
         name: name,
+        prn: prn,
         singleMark: singleMark,
         questionMarks: qScores,
       ));
@@ -158,31 +172,77 @@ class CopoSpreadsheetService {
     );
   }
 
+  /// Download trigger helper for Web and Desktop
+  static void downloadCsvFile(String filename, String content) {
+    if (kIsWeb) {
+      final bytes = utf8.encode(content);
+      final blob = html.Blob([bytes], 'text/csv');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', filename)
+        ..click();
+      html.Url.revokeObjectUrl(url);
+    }
+  }
+
   /// Template CSV generation strings for download
   static String getRollCallCsvTemplate() {
     return 'Sr.No,Roll No,Student Name,PRN\n'
-        '1,CS001,Aarav Sharma,20240101\n'
-        '2,CS002,Aditi Patel,20240102\n'
-        '3,CS003,Ananya Iyer,20240103\n'
-        '4,CS004,Aryan Verma,20240104\n'
-        '5,CS005,Bhavya Deshmukh,20240105\n';
+        '1,CS001,Student One,20240101\n'
+        '2,CS002,Student Two,20240102\n'
+        '3,CS003,Student Three,20240103\n';
   }
 
-  static String getIseMarksCsvTemplate() {
-    return 'Roll No,Student Name,Marks (Out of 10)\n'
-        'CS001,Aarav Sharma,8.5\n'
-        'CS002,Aditi Patel,7.0\n'
-        'CS003,Ananya Iyer,9.0\n'
-        'CS004,Aryan Verma,6.5\n'
-        'CS005,Bhavya Deshmukh,8.0\n';
+  static String getIseCsvTemplate(String examType, List<StudentRosterItem> roster) {
+    final buffer = StringBuffer();
+    buffer.writeln('Sr.No,Roll No,Student Name,PRN,Marks (Out of 10)');
+    if (roster.isNotEmpty) {
+      for (final s in roster) {
+        buffer.writeln('${s.srNo},${s.rollNo},${s.name},${s.prn ?? '24250${s.rollNo}'},7.5');
+      }
+    } else {
+      buffer.writeln('1,CS001,Student 1,20240101,7.5');
+      buffer.writeln('2,CS002,Student 2,20240102,8.0');
+    }
+    return buffer.toString();
   }
 
-  static String getQuestionWiseMarksCsvTemplate() {
-    return 'Roll No,Student Name,Q1,Q2,Q3,Q4\n'
-        'CS001,Aarav Sharma,4.5,4.0,8.5,7.5\n'
-        'CS002,Aditi Patel,3.5,4.5,7.0,8.0\n'
-        'CS003,Ananya Iyer,5.0,4.0,9.0,8.5\n'
-        'CS004,Aryan Verma,4.0,3.5,6.5,7.0\n'
-        'CS005,Bhavya Deshmukh,4.5,4.0,8.0,8.5\n';
+  static String getIse1MarksCsvTemplate() => getIseCsvTemplate('ISE1', []);
+  static String getIse2MarksCsvTemplate() => getIseCsvTemplate('ISE2', []);
+
+  static String getQuestionWiseCsvTemplate(List<QuestionConfig> questions, List<StudentRosterItem> roster) {
+    final buffer = StringBuffer();
+    final qHeaders = questions.isNotEmpty
+        ? questions.map((q) => '${q.questionId} (${q.coTag})').join(',')
+        : 'Q1 (CO1),Q2 (CO2)';
+    buffer.writeln('Sr.No,Roll No,Student Name,PRN,$qHeaders');
+    if (roster.isNotEmpty) {
+      for (final s in roster) {
+        final dummyMarks = (questions.isNotEmpty ? questions : [
+          QuestionConfig(questionId: 'Q1', coTag: 'CO1', maxMarks: 5.0),
+          QuestionConfig(questionId: 'Q2', coTag: 'CO2', maxMarks: 5.0),
+        ]).map((q) => (q.maxMarks * 0.7).toStringAsFixed(1)).join(',');
+        buffer.writeln('${s.srNo},${s.rollNo},${s.name},${s.prn ?? '24250${s.rollNo}'},$dummyMarks');
+      }
+    } else {
+      buffer.writeln('1,CS001,Student 1,20240101,3.5,3.5');
+      buffer.writeln('2,CS002,Student 2,20240102,4.0,4.0');
+    }
+    return buffer.toString();
   }
+
+  static String getMseMarksCsvTemplate() => getQuestionWiseCsvTemplate([
+    QuestionConfig(questionId: 'Q1', coTag: 'CO1', maxMarks: 5.0),
+    QuestionConfig(questionId: 'Q2', coTag: 'CO2', maxMarks: 5.0),
+    QuestionConfig(questionId: 'Q3', coTag: 'CO3', maxMarks: 10.0),
+    QuestionConfig(questionId: 'Q4', coTag: 'CO4', maxMarks: 10.0),
+  ], []);
+
+  static String getEseMarksCsvTemplate() => getQuestionWiseCsvTemplate([
+    QuestionConfig(questionId: 'Q1', coTag: 'CO1', maxMarks: 10.0),
+    QuestionConfig(questionId: 'Q2', coTag: 'CO2', maxMarks: 10.0),
+    QuestionConfig(questionId: 'Q3', coTag: 'CO3', maxMarks: 10.0),
+    QuestionConfig(questionId: 'Q4', coTag: 'CO4', maxMarks: 10.0),
+    QuestionConfig(questionId: 'Q5', coTag: 'CO5', maxMarks: 20.0),
+  ], []);
 }
