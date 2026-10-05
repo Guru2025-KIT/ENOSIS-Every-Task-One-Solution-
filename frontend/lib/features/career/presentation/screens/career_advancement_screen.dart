@@ -2,11 +2,13 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:universal_html/html.dart' as html;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../auth/presentation/screens/login_screen.dart';
 import '../../data/achievement_repository.dart';
 
 /// Screen for Faculty Career Advancement.
@@ -49,6 +51,52 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
     setState(() {
       _future = _repository.fetchMyAchievements();
     });
+  }
+
+  Future<void> _openDocument(String? urlString) async {
+    if (urlString == null || urlString.trim().isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No document URL attached to this achievement.')),
+      );
+      return;
+    }
+
+    final trimmed = urlString.trim();
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Storage path reference: $trimmed')),
+      );
+      return;
+    }
+
+    try {
+      if (kIsWeb) {
+        html.window.open(trimmed, '_blank');
+      } else {
+        final uri = Uri.parse(trimmed);
+        final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (!launched) {
+          await launchUrl(uri, mode: LaunchMode.platformDefault);
+        }
+      }
+    } catch (e) {
+      try {
+        if (kIsWeb) {
+          html.window.open(trimmed, '_blank');
+        } else {
+          final uri = Uri.parse(trimmed);
+          await launchUrl(uri, mode: LaunchMode.platformDefault);
+        }
+      } catch (err) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not open document: $err')),
+          );
+        }
+      }
+    }
   }
 
   Future<void> _deleteAchievement(AchievementModel achievement) async {
@@ -304,18 +352,7 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
               ),
               icon: const Icon(Icons.open_in_new, size: 16),
               label: const Text('Open Document'),
-              onPressed: () async {
-                final uri = Uri.parse(achievement.filePath!);
-                if (await canLaunchUrl(uri)) {
-                  await launchUrl(uri, mode: LaunchMode.externalApplication);
-                } else {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Could not open document URL.')),
-                    );
-                  }
-                }
-              },
+              onPressed: () => _openDocument(achievement.filePath),
             ),
         ],
       ),
@@ -360,7 +397,111 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
           future: _future,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(color: AppColors.primary),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Loading your career achievements...',
+                        style: AppTypography.bodySecondary.copyWith(color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            if (snapshot.hasError) {
+              final errorStr = snapshot.error.toString();
+              final isAuthError = errorStr.toLowerCase().contains('session') ||
+                  errorStr.toLowerCase().contains('auth') ||
+                  errorStr.toLowerCase().contains('sign in') ||
+                  errorStr.toLowerCase().contains('credentials');
+
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.border),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: (isAuthError ? AppColors.secondary : AppColors.error).withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            isAuthError ? Icons.lock_outline : Icons.cloud_off_outlined,
+                            size: 40,
+                            color: isAuthError ? AppColors.secondary : AppColors.error,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          isAuthError ? 'Authentication Required' : 'Unable to Load Achievements',
+                          style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          errorStr,
+                          style: AppTypography.bodySecondary.copyWith(color: AppColors.textSecondary),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 20),
+                        if (isAuthError)
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                                (route) => false,
+                              );
+                            },
+                            icon: const Icon(Icons.login, size: 18),
+                            label: const Text('Go to Sign In'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                          )
+                        else
+                          ElevatedButton.icon(
+                            onPressed: _refresh,
+                            icon: const Icon(Icons.refresh, size: 18),
+                            label: const Text('Try Again'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
             }
 
             final allAchievements = snapshot.data ?? [];

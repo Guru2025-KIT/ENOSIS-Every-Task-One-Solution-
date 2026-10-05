@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import '../../../../core/auth/auth_session.dart';
 import '../../../../core/institution/institution_repository.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../core/widgets/enosis_wordmark.dart';
 import '../../../../core/widgets/loading_indicator.dart';
+import '../../../dashboard/presentation/screens/main_shell.dart';
+import '../../data/auth_repository.dart';
 import 'login_screen.dart';
 
 /// Screen 1 — Splash Screen.
@@ -29,21 +32,30 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _prepareAndNavigate() async {
-    // Run the minimum splash delay and the college-name fetch together,
-    // so a slow/unreachable backend doesn't make the splash screen linger.
-    await Future.wait([
-      Future.delayed(const Duration(seconds: 3)),
-      InstitutionRepository().loadCollegeName(),
-    ]);
+    // Run splash delay, institution fetch, and auth session restoration concurrently
+    final timerFuture = Future.delayed(const Duration(milliseconds: 1600));
+    final collegeFuture = InstitutionRepository().loadCollegeName();
+    final sessionFuture = AuthRepository().restoreSession();
+
+    final bool sessionRestored = await sessionFuture;
+    await timerFuture;
+    await collegeFuture;
 
     if (!mounted) return;
     final currentRoute = ModalRoute.of(context);
     if (currentRoute != null && !currentRoute.isCurrent) {
       return;
     }
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-    );
+
+    if (sessionRestored && AuthSession.isLoggedIn) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainShell()),
+      );
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+    }
   }
 
   @override

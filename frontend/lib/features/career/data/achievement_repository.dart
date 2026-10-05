@@ -291,12 +291,8 @@ class AchievementRepository {
 
   /// Fetches all achievements for the current logged-in faculty from backend.
   Future<List<AchievementModel>> fetchMyAchievements() async {
-    if (AuthSession.token != null) {
-      // When authenticated, ALWAYS remove sample/demo data first.
-      // Sample items (ach_001, ach_002...) only exist locally and don't
-      // exist in the backend database. Leaving them in the store while
-      // authenticated causes DELETE requests to fail because the backend
-      // cannot find these IDs for the current user's account.
+    if (AuthSession.token != null && AuthSession.token!.isNotEmpty) {
+      // Authenticated mode: remove mock/demo sample items
       _localStore.removeWhere((item) => item.id.startsWith('ach_0'));
 
       try {
@@ -306,15 +302,20 @@ class AchievementRepository {
           final remoteList = data.map((e) => AchievementModel.fromJson(e as Map<String, dynamic>)).toList();
           _localStore.clear();
           _localStore.addAll(remoteList);
+        } else if (response.statusCode == 401 || response.statusCode == 403) {
+          throw AchievementException('Your login session has expired. Please sign in again.');
         } else {
-          final err = jsonDecode(response.body);
-          throw AchievementException(err['detail'] ?? 'Failed to load achievements.');
+          String errorMsg = 'Failed to load achievements from server.';
+          try {
+            final err = jsonDecode(response.body);
+            errorMsg = err['detail'] ?? errorMsg;
+          } catch (_) {}
+          throw AchievementException(errorMsg);
         }
       } catch (e) {
         if (e is AchievementException) rethrow;
-        // Network/offline fallback: local store is already cleaned of sample
-        // data above, so the user sees an empty list rather than fake items
-        // they cannot actually delete from the backend.
+        debugPrint('[AchievementRepository] Error fetching achievements: $e');
+        throw AchievementException('Could not connect to ENOSIS server. Please check your connection and retry.');
       }
     }
 

@@ -1,6 +1,7 @@
 import sys
 import os
 
+# pyrefly: ignore [missing-import]
 from sqlalchemy import text, inspect
 from app.db.base import engine, SessionLocal, Base
 import app.models.academic
@@ -232,9 +233,25 @@ def sync_database_schema():
                 if col_name not in task_cols:
                     conn.execute(text(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_type};"))
 
-        # 12. task_reminders (created automatically by Base.metadata.create_all if not existing)
-        if "task_reminders" not in inspector.get_table_names():
-            app.models.todo.TaskReminder.__table__.create(bind=conn)
+        # 13. achievements
+        if "achievements" in inspector.get_table_names():
+            ach_cols = {col["name"] for col in inspector.get_columns("achievements")}
+            if "updated_at" not in ach_cols:
+                conn.execute(text("ALTER TABLE achievements ADD COLUMN updated_at DATETIME NULL;"))
+            if "document_id" not in ach_cols:
+                conn.execute(text("ALTER TABLE achievements ADD COLUMN document_id VARCHAR(36) NULL;"))
+            if "organization" not in ach_cols:
+                conn.execute(text("ALTER TABLE achievements ADD COLUMN organization VARCHAR(255) NULL;"))
+            if "description" not in ach_cols:
+                conn.execute(text("ALTER TABLE achievements ADD COLUMN description TEXT NULL;"))
+
+        # 14. documents
+        if "documents" in inspector.get_table_names():
+            doc_cols = {col["name"] for col in inspector.get_columns("documents")}
+            if "file_size_bytes" not in doc_cols:
+                conn.execute(text("ALTER TABLE documents ADD COLUMN file_size_bytes INTEGER NULL;"))
+            if "resource_type" not in doc_cols:
+                conn.execute(text("ALTER TABLE documents ADD COLUMN resource_type VARCHAR(20) NOT NULL DEFAULT 'image';"))
 
         # 13. schedule_config
         if "schedule_config" in inspector.get_table_names():
