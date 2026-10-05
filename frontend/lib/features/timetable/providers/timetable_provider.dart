@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../models/teaching_assignment.dart';
@@ -17,6 +17,8 @@ class TimetableProvider extends ChangeNotifier {
   bool _isGenerating = false;
   String? _generationError;
   List<String> _conflictingConstraints = [];
+  // Working days sent to the backend solver (matches schedule config day_names)
+  List<String> _workingDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   List<TimeSlot> get timeSlots => _timeSlots;
   List<TeachingAssignment> get assignments => _assignments;
@@ -25,6 +27,7 @@ class TimetableProvider extends ChangeNotifier {
   bool get isGenerating => _isGenerating;
   String? get generationError => _generationError;
   List<String> get conflictingConstraints => _conflictingConstraints;
+  List<String> get workingDays => _workingDays;
 
   List<String> get facultyNames => _assignments.map((a) => a.facultyName).toSet().toList()..sort();
   List<String> get subjectNames => _assignments.map((a) => a.subjectName).toSet().toList()..sort();
@@ -32,6 +35,7 @@ class TimetableProvider extends ChangeNotifier {
 
   void setTimeSlots(List<TimeSlot> slots) { _timeSlots.clear(); _timeSlots.addAll(slots); notifyListeners(); }
   void setAssignments(List<TeachingAssignment> assignments) { _assignments.clear(); _assignments.addAll(assignments); notifyListeners(); }
+  void setWorkingDays(List<String> days) { _workingDays = List<String>.from(days); notifyListeners(); }
   void addConstraint(TimetableConstraint constraint) { _constraints.add(constraint); notifyListeners(); }
   void removeConstraint(String id) { _constraints.removeWhere((c) => c.id == id); notifyListeners(); }
 
@@ -207,11 +211,16 @@ class TimetableProvider extends ChangeNotifier {
         'time_slots': timeSlotsPayload,
         'constraints': constraintsPayload,
         'combined_groups': combinedGroups,
+        'working_days': _workingDays,
         'time_limit_seconds': 30,
       };
 
       // ── 3. Call the endpoint ──────────────────────────────────────────────
-      final response = await ApiClient.postJson('/timetable/generate', payload);
+      final response = await ApiClient.postJson(
+        '/timetable/generate',
+        payload,
+        timeout: const Duration(seconds: 120),
+      );
       final body = jsonDecode(response.body) as Map<String, dynamic>;
 
       final status = body['status'] as String? ?? 'UNKNOWN';
@@ -233,6 +242,7 @@ class TimetableProvider extends ChangeNotifier {
         _conflictingConstraints = [];
       } else {
         // ── 4b. INFEASIBLE / UNKNOWN ──────────────────────────────────────
+        _generatedTimetable.clear(); // #6: prevent stale data showing after failure
         final conflicts = body['conflictingConstraints'];
         if (conflicts is List) {
           _conflictingConstraints = conflicts.map((e) => e.toString()).toList();

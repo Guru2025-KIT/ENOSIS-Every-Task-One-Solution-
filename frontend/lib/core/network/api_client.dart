@@ -78,15 +78,17 @@ class ApiClient {
   static Uri _uri(String base, String path) => Uri.parse('$base$path');
 
   /// Helper to send an HTTP request trying candidate base URLs if connection fails.
+  /// [timeout] overrides the default 7-second per-attempt timeout.
   static Future<http.Response> _sendWithFallback(
-    Future<http.Response> Function(String base) requestFn,
-  ) async {
+    Future<http.Response> Function(String base) requestFn, {
+    Duration timeout = const Duration(seconds: 7),
+  }) async {
     final candidates = candidateBaseUrls;
     Object? lastError;
 
     for (final base in candidates) {
       try {
-        final response = await requestFn(base).timeout(const Duration(seconds: 7));
+        final response = await requestFn(base).timeout(timeout);
         _activeBaseUrl = base;
         return response;
       } catch (e) {
@@ -102,10 +104,12 @@ class ApiClient {
   }
 
   /// POST with a JSON body — used by most endpoints (e.g. signup).
+  /// [timeout] overrides the default 7-second timeout (useful for long-running endpoints).
   static Future<http.Response> postJson(
     String path,
     Map<String, dynamic> body, {
     String? token,
+    Duration timeout = const Duration(seconds: 7),
   }) {
     return _sendWithFallback((base) {
       return http.post(
@@ -116,7 +120,7 @@ class ApiClient {
         },
         body: jsonEncode(body),
       );
-    });
+    }, timeout: timeout);
   }
 
   /// POST with form-encoded fields — used specifically by /auth/login,

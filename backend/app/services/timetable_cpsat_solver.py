@@ -352,15 +352,17 @@ class TimetableCpSatSolver:
                     block_idx += 1
 
                 if remainder > 0:
+                    # #4: A 1-slot "Lab" session is invalid (labs need 2 consecutive slots).
+                    # Schedule the odd remainder as a standalone Theory-style period instead.
                     sessions.append(SolverSession(
                         session_id=f"lab_{idx}_blk_{block_idx}_rem",
                         faculty=a.faculty,
                         subject=a.subject,
                         subject_code=a.subject_code,
-                        type="Lab",
+                        type="Theory",
                         batch=a.batch if a.batch else "Batch 1",
                         classes=[a.class_name],
-                        duration=remainder,
+                        duration=1,
                         session_index=block_idx
                     ))
 
@@ -374,6 +376,7 @@ class TimetableCpSatSolver:
         available_days: List[str],
         strict: bool,
         start_time: float,
+        time_limit: Optional[float] = None,  # #3: allow per-pass time budget
     ) -> Optional[SolverResult]:
         """
         Builds and solves CP-SAT model.
@@ -548,8 +551,9 @@ class TimetableCpSatSolver:
 
         for (c_name, subj, day), v_list in subject_day_class_vars.items():
             if len(v_list) > 1:
-                if strict:
-                    model.AddAtMostOne(v_list)
+                # #5: Apply spread constraint in BOTH strict and relaxed modes.
+                # Placing the same subject twice on the same day is always a quality defect.
+                model.AddAtMostOne(v_list)
 
         # ── Objective Function ────────────────────────────────────────────────
         objective_rewards = []
@@ -610,7 +614,8 @@ class TimetableCpSatSolver:
 
         # ── Solve ─────────────────────────────────────────────────────────────
         solver = cp_model.CpSolver()
-        solver.parameters.max_time_in_seconds = self.time_limit_seconds
+        # #3: Use per-pass budget if provided, otherwise fall back to full limit
+        solver.parameters.max_time_in_seconds = time_limit if time_limit is not None else float(self.time_limit_seconds)
         solver.parameters.num_search_workers = 4
 
         solver_status = solver.Solve(model)
@@ -714,7 +719,9 @@ class TimetableCpSatSolver:
                 message="Assignment list is empty."
             )
 
-        # ── PASS 1: Try strict mode with all constraints enforced ───────────
+        # ── PASS 1: Strict mode — 60% of total budget ──────────────────────
+        # #3: Splitting budget keeps total solving time within time_limit_seconds.
+        pass1_limit = max(5.0, self.time_limit_seconds * 0.6)
         res = self._solve_model(
             sessions=sessions,
             active_constraints=active_constraints,
@@ -722,10 +729,13 @@ class TimetableCpSatSolver:
             available_days=available_days,
             strict=True,
             start_time=start_time,
+            time_limit=pass1_limit,
         )
 
-        # ── PASS 2: If strict is infeasible, solve with Soft Relaxation ─────
+        # ── PASS 2: Soft relaxation — remaining budget ───────────────────────
         if res is None:
+            elapsed = time.monotonic() - start_time
+            pass2_limit = max(5.0, self.time_limit_seconds - elapsed)
             res = self._solve_model(
                 sessions=sessions,
                 active_constraints=active_constraints,
@@ -733,6 +743,7 @@ class TimetableCpSatSolver:
                 available_days=available_days,
                 strict=False,
                 start_time=start_time,
+                time_limit=pass2_limit,
             )
 
         if res is None or res.status not in ("OPTIMAL", "FEASIBLE"):

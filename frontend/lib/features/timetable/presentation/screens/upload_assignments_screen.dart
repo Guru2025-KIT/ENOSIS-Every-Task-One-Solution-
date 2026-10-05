@@ -1,5 +1,5 @@
 import 'dart:typed_data';
-import 'dart:html' as html;
+import 'package:universal_html/html.dart' as html;
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
@@ -156,21 +156,19 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
     });
 
     try {
-      final FilePickerResult? result = await FilePicker.platform.pickFiles(
+      final PlatformFile? file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: ['xlsx'],
-        withData: true,
       );
 
-      if (result == null || result.files.isEmpty) {
+      if (file == null) {
         if (mounted) setState(() => _isLoading = false);
         return;
       }
 
-      final file = result.files.single;
-      final bytes = file.bytes;
+      final bytes = await file.readAsBytes();
 
-      if (bytes == null || bytes.isEmpty) {
+      if (bytes.isEmpty) {
         if (mounted) {
           setState(() {
             _isLoading = false;
