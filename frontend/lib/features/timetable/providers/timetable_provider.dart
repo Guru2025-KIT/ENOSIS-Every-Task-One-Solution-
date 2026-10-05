@@ -77,6 +77,63 @@ class TimetableProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+    void addManualSlot(TimeSlot slot) {
+    _timeSlots.add(slot);
+    _recomputeTimeSlots();
+  }
+
+  void removeManualSlot(int lectureNumber) {
+    _timeSlots.removeWhere((s) => s.lectureNumber == lectureNumber);
+    _recomputeTimeSlots();
+  }
+
+  void _recomputeTimeSlots() {
+    // Sort slots chronologically based on start time
+    _timeSlots.sort((a, b) {
+      int aMins = _parseTimeToMins(a.startTime);
+      int bMins = _parseTimeToMins(b.startTime);
+      return aMins.compareTo(bMins);
+    });
+    
+    // Re-number the lecture slots (ignoring breaks)
+    int lecNum = 1;
+    final newList = <TimeSlot>[];
+    for (var s in _timeSlots) {
+      if (s.isBreak) {
+        newList.add(TimeSlot(
+          lectureNumber: 0,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          isBreak: true,
+        ));
+      } else {
+        newList.add(TimeSlot(
+          lectureNumber: lecNum,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          isBreak: false,
+        ));
+        lecNum++;
+      }
+    }
+    _timeSlots = newList;
+    notifyListeners();
+  }
+
+  // Helper to parse "09:00 AM" to minutes for sorting
+  int _parseTimeToMins(String timeStr) {
+    try {
+      final parts = timeStr.split(' ');
+      final timeParts = parts[0].split(':');
+      int h = int.parse(timeParts[0]);
+      int m = int.parse(timeParts[1]);
+      if (parts[1] == 'PM' && h != 12) h += 12;
+      return h * 60 + m;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   void setAssignments(List<TeachingAssignment> assignments) {
     _assignments.clear();
     _assignments.addAll(assignments);
@@ -113,54 +170,59 @@ class TimetableProvider extends ChangeNotifier {
     
     final parts = cfg.startTime.split(':');
     int startMins = (int.tryParse(parts[0]) ?? 9) * 60 + (parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0);
+    
+    final endParts = cfg.endTime.split(':');
+    int endMins = (int.tryParse(endParts[0]) ?? 17) * 60 + (endParts.length > 1 ? (int.tryParse(endParts[1]) ?? 0) : 0);
+
     int currentMins = startMins;
-
     int lectureNum = 1;
-    int currentPeriod = 1;
-    final breakSlotIndices = <int>[];
 
-    while (currentPeriod <= cfg.periodsPerDay) {
-      // Check if Break 1 applies right here (after break1AfterLectures)
+    // ✅ AUTO-CALCULATE: Loop until we reach the college end time (e.g., 5:00 PM)
+    while (currentMins < endMins) {
+      // Check Break 1
       if (cfg.break1Enabled && lectureNum == cfg.break1AfterLectures + 1 && slots.isNotEmpty && !slots.last.isBreak) {
-        int endMins = currentMins + cfg.break1DurationMinutes;
+        int bEndMins = currentMins + cfg.break1DurationMinutes;
+        if (bEndMins > endMins) bEndMins = endMins;
         slots.add(TimeSlot(
           lectureNumber: 0,
           startTime: _formatMins(currentMins),
-          endTime: _formatMins(endMins),
+          endTime: _formatMins(bEndMins),
           isBreak: true,
         ));
-        breakSlotIndices.add(currentPeriod);
-        currentMins = endMins;
-        currentPeriod++;
-        if (currentPeriod > cfg.periodsPerDay) break;
+        currentMins = bEndMins;
+        if (currentMins >= endMins) break;
       }
 
-      // Check if Break 2 applies right here (after break2AfterLectures)
+      // Check Break 2 (Lunch)
       if (cfg.break2Enabled && lectureNum == cfg.break2AfterLectures + 1 && slots.isNotEmpty && !slots.last.isBreak) {
-        int endMins = currentMins + cfg.break2DurationMinutes;
+        int bEndMins = currentMins + cfg.break2DurationMinutes;
+        if (bEndMins > endMins) bEndMins = endMins;
         slots.add(TimeSlot(
           lectureNumber: 0,
           startTime: _formatMins(currentMins),
-          endTime: _formatMins(endMins),
+          endTime: _formatMins(bEndMins),
           isBreak: true,
         ));
-        breakSlotIndices.add(currentPeriod);
-        currentMins = endMins;
-        currentPeriod++;
-        if (currentPeriod > cfg.periodsPerDay) break;
+        currentMins = bEndMins;
+        if (currentMins >= endMins) break;
       }
 
       // Regular lecture slot
-      int endMins = currentMins + cfg.lectureDurationMinutes;
+      int lecEndMins = currentMins + cfg.lectureDurationMinutes;
+      if (lecEndMins > endMins) lecEndMins = endMins; // Truncate to exact end time
+      
       slots.add(TimeSlot(
         lectureNumber: lectureNum,
         startTime: _formatMins(currentMins),
-        endTime: _formatMins(endMins),
+        endTime: _formatMins(lecEndMins),
         isBreak: false,
       ));
-      currentMins = endMins;
+      
+      currentMins = lecEndMins;
       lectureNum++;
-      currentPeriod++;
+      
+      // Safety break to prevent infinite loops if duration is 0
+      if (cfg.lectureDurationMinutes <= 0) break;
     }
 
     _timeSlots = slots;
@@ -290,6 +352,26 @@ class TimetableProvider extends ChangeNotifier {
       }
     }
     return true;
+  }
+
+    // ✅ NEW: Division & Batch Structure Configuration
+  // Map<Year, List<DivisionInfo>>
+  Map<String, List<Map<String, dynamic>>> _divisionStructure = {
+    'SY': [{'division': 'A', 'batches': 2}, {'division': 'B', 'batches': 2}, {'division': 'C', 'batches': 2}],
+    'TY': [{'division': 'A', 'batches': 2}, {'division': 'B', 'batches': 2}, {'division': 'DS', 'batches': 1}],
+    'BTECH': [{'division': 'A', 'batches': 2}, {'division': 'B', 'batches': 2}, {'division': 'DS', 'batches': 2}],
+  };
+  Map<String, List<Map<String, dynamic>>> get divisionStructure => _divisionStructure;
+
+  void updateDivisionBatches(String year, String division, int batches) {
+    final divList = _divisionStructure[year];
+    if (divList != null) {
+      final idx = divList.indexWhere((d) => d['division'] == division);
+      if (idx != -1) {
+        _divisionStructure[year]![idx]['batches'] = batches;
+        notifyListeners();
+      }
+    }
   }
 
   // Natural Language Rule Parsing
@@ -469,6 +551,8 @@ class TimetableProvider extends ChangeNotifier {
         'lecture_duration_minutes': _scheduleConfig?.lectureDurationMinutes ?? 60,
         'lab_duration_minutes': _scheduleConfig?.labDurationMinutes ?? 120,
         'time_limit_seconds': 30,
+        // ✅ SEND THE DIVISION STRUCTURE TO THE BACKEND
+        'division_structure': _divisionStructure, 
       };
 
       final response = await ApiClient.postJson(
@@ -516,20 +600,33 @@ class TimetableProvider extends ChangeNotifier {
     }
   }
 
-  String _resolveIntent(TimetableConstraint con) {
-    if (con.category.startsWith('fixed|')) return 'fixed';
-    if (con.category.startsWith('blacklist|')) return 'blacklist';
-    if (con.category.startsWith('whitelist|')) return 'whitelist';
-    if (con.category.startsWith('fill|')) return 'fill';
-    if (con.category.startsWith('holiday|')) return 'holiday';
-    if (con.category.startsWith('parallel|')) return 'parallel';
-    if (con.category.startsWith('NLP|')) {
-      final parts = con.category.split('|');
-      if (parts.length >= 2) return parts[1];
-    }
+   String _resolveIntent(TimetableConstraint con) {
     final cat = con.category.toLowerCase();
+    
+    // ✅ Handle the new Hard/Soft structured categories from the UI
+    if (cat.contains('fixed session') || cat.contains('lab continuity')) return 'fixed';
+    if (cat.contains('combined') || cat.contains('joint session')) return 'parallel';
+    if (cat.contains('replacement') || cat.contains('substitute free')) return 'fill';
+    
+    // Handle explicit prefixes (if any)
+    if (cat.startsWith('fixed|')) return 'fixed';
+    if (cat.startsWith('blacklist|')) return 'blacklist';
+    if (cat.startsWith('whitelist|')) return 'whitelist';
+    if (cat.startsWith('fill|')) return 'fill';
+    if (cat.startsWith('holiday|')) return 'holiday';
+    if (cat.startsWith('parallel|')) return 'parallel';
+    
+    // Handle NLP rules
+    if (cat.startsWith('nlp|')) {
+      final parts = con.category.split('|');
+      if (parts.length >= 2) return parts[1].toLowerCase();
+    }
+    
+    // Fallbacks for old formats
     if (cat.contains('holiday')) return 'holiday';
-    if (cat.contains('fixed') || cat.contains('filled')) return 'fixed';
+    if (cat.contains('unavailable') || cat.contains('block')) return 'blacklist';
+    if (cat.contains('preferred') || cat.contains('avoid')) return 'whitelist'; // Treat soft preferences as whitelist/avoid
+    
     return 'blacklist';
   }
 

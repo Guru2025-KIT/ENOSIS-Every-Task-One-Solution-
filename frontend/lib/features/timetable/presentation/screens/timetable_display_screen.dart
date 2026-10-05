@@ -295,7 +295,8 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
 
                             String subj = cellData.isNotEmpty ? cellData[0] : 'Free';
                             String fac = cellData.length > 1 ? cellData[1] : '';
-                            String extra = cellData.length > 2 ? cellData[2] : '';
+                            String room = cellData.length > 2 ? cellData[2] : '';
+                            String batch = cellData.length > 3 ? cellData[3] : '';
 
                             if (subj == 'Free' || subj == '-') {
                               return DataCell(
@@ -314,13 +315,13 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
                               );
                             }
 
-                            bool isLab = subj.toLowerCase().contains('lab') || extra.toLowerCase().contains('batch');
+                            bool isLab = subj.toLowerCase().contains('lab') || batch.isNotEmpty;
 
                             return DataCell(
                               Container(
                                 width: 140,
                                 height: 76,
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: isLab ? const Color(0xFFFFF7ED) : const Color(0xFFF8FAFC),
                                   borderRadius: BorderRadius.circular(8),
@@ -334,36 +335,24 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Text(
-                                      subj,
+                                      '$subj ($fac)',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w800,
-                                        fontSize: 11.5,
+                                        fontSize: 11.0,
                                         color: isLab ? const Color(0xFFC2410C) : const Color(0xFF0F172A),
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
-                                    const SizedBox(height: 2),
-                                    if (fac.isNotEmpty)
+                                    if (batch.isNotEmpty || room.isNotEmpty) ...[
+                                      const SizedBox(height: 4),
                                       Text(
-                                        fac,
-                                        style: const TextStyle(fontSize: 10, color: Color(0xFF475569), fontWeight: FontWeight.w500),
+                                        batch.isNotEmpty ? '$batch $room' : room,
+                                        style: const TextStyle(fontSize: 9.5, color: Color(0xFF475569), fontWeight: FontWeight.w600),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                    const SizedBox(height: 3),
-                                    if (extra.isNotEmpty)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                        decoration: BoxDecoration(
-                                          color: isLab ? const Color(0xFFEA580C) : const Color(0xFF0F172A),
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          extra,
-                                          style: const TextStyle(fontSize: 8.5, color: Colors.white, fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
+                                    ],
                                   ],
                                 ),
                               ),

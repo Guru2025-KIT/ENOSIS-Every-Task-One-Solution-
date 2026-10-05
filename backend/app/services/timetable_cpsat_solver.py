@@ -710,7 +710,7 @@ class TimetableCpSatSolver:
                     sess_was_placed = True
                     scheduled_count += 1
                     batch_info = "All" if sess.type == "Theory" else (sess.batch if sess.batch else "Batch 1")
-                    room_name = getattr(sess, 'room_name', '') or ("LAB-1" if sess.type == "Lab" else "CR-101")
+                    room_name = getattr(sess, 'room_name', '') 
                     for c_name in sess.classes:
                         for s in opt.slots:
                             key = f"{opt.day}_{s}"

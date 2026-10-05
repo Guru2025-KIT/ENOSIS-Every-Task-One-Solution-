@@ -24,7 +24,8 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    // ✅ Changed length to 3 to accommodate the new Division Structure tab
+    _tabController = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<TimetableProvider>().loadRooms();
     });
@@ -281,7 +282,6 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                         isActive: isActive,
                       );
                     }
-
 
                     if (mounted) {
                       Navigator.pop(context);
@@ -597,7 +597,7 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                     gradient: LinearGradient(
                       colors: isLab
                           ? [const Color(0xFFEA580C), const Color(0xFFC2410C)]
-                          : [const Color(0xFFF97316), const Color(0xFFEA580C)],
+                          : [const Color(0xFFF97316), const Color(0xFFEA580C)], 
                     ),
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -655,7 +655,6 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
-
                     ],
                   ),
                 ),
@@ -701,6 +700,87 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
           ),
         );
       },
+    );
+  }
+
+  // ✅ NEW WIDGET: Division & Batch Structure Configuration
+  Widget _buildDivisionStructureTab() {
+    final provider = context.watch<TimetableProvider>();
+    final structure = provider.divisionStructure;
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(
+          elevation: 2,
+          color: const Color(0xFF0F172A),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF334155))),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.groups_2_outlined, color: Color(0xFFF97316)),
+                    const SizedBox(width: 8),
+                    Text('Division & Lab Batch Structure', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.white)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Define how many lab batches each division has. The solver will automatically split lab hours equally among these batches.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                ),
+                const SizedBox(height: 24),
+                ...structure.entries.map((entry) {
+                  final year = entry.key;
+                  final divisions = entry.value;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Text(year, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFFF97316))),
+                      ),
+                      Wrap(
+                        spacing: 24,
+                        runSpacing: 16,
+                        children: divisions.map((divInfo) {
+                          final divName = divInfo['division'] as String;
+                          final batches = divInfo['batches'] as int;
+                          
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('Div $divName:', style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white)),
+                              const SizedBox(width: 12),
+                              DropdownButton<int>(
+                                dropdownColor: const Color(0xFF1E293B),
+                                value: batches,
+                                style: const TextStyle(color: Colors.white, fontSize: 14),
+                                items: [1, 2, 3, 4].map((b) {
+                                  return DropdownMenuItem(value: b, child: Text('$b Batch${b > 1 ? "es" : ""}'));
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    provider.updateDivisionBatches(year, divName, val);
+                                  }
+                                },
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                      const Divider(color: Color(0xFF334155), height: 32),
+                    ],
+                  );
+                }).toList(),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -753,6 +833,11 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
               icon: const Icon(Icons.science, size: 20),
               text: 'Laboratories (${labs.length})',
             ),
+            // ✅ NEW TAB ADDED HERE
+            const Tab(
+              icon: Icon(Icons.groups_2_outlined, size: 20),
+              text: 'Divisions & Batches',
+            ),
           ],
         ),
       ),
@@ -788,7 +873,7 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                 const SizedBox(width: 10),
                 const Expanded(
                   child: Text(
-                    'Register available lecture halls and lab rooms. The solver allocates them based on capacity and course type.',
+                    'Register available lecture halls, lab rooms, and division structures. The solver allocates them based on capacity and course type.',
                     style: TextStyle(
                       fontSize: 12,
                       color: Color(0xFFCBD5E1),
@@ -818,6 +903,7 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
               children: [
                 _buildRoomList(rooms, 'Classroom'),
                 _buildRoomList(rooms, 'Lab'),
+                _buildDivisionStructureTab(), // ✅ ADDED HERE
               ],
             ),
           ),
