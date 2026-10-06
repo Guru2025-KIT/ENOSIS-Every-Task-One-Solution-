@@ -19,6 +19,8 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
 
   String _selectedHardRule = 'Faculty Unavailable (Block Slot)';
   final List<String> _hardRuleOptions = [
+    'Fixed Institutional Slot (TPO/Guest)',
+    'Parallel Elective (MDM/OE)',
     'Faculty Unavailable (Block Slot)',
     'Room Unavailable (Block Room)',
     'Division Unavailable (Block Class)',
@@ -199,10 +201,19 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
     }
 
     String category = isHard ? 'hard|$_selectedHardRule' : 'soft|$_selectedSoftRule';
+    String intentCode = 'blacklist'; // Default for unavailable/avoid rules
+
+    // Map UI string to code intent so Python solver knows what to do
+    if (_selectedHardRule == 'Fixed Institutional Slot (TPO/Guest)') intentCode = 'fixed';
+    if (_selectedHardRule == 'Parallel Elective (MDM/OE)') intentCode = 'parallel';
+    if (_selectedHardRule == 'Fixed Session (Force Slot)') intentCode = 'fixed';
+    if (_selectedHardRule == 'Lab Continuity (Force Consecutive)') intentCode = 'fixed';
+    if (_selectedHardRule == 'Replacement Rule (Substitute Free)') intentCode = 'fill';
 
     final newConstraint = TimetableConstraint(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      category: category,
+      // Prefix category with intentCode so provider can parse it easily
+      category: '$intentCode|$_selectedHardRule', 
       facultyNames: List.from(_selectedFaculties),
       subjectNames: List.from(_selectedSubjects),
       classNames: List.from(_selectedClasses),

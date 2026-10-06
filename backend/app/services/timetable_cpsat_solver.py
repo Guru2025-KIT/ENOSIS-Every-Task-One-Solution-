@@ -21,7 +21,7 @@ class Assignment:
     weekly_hours: int = 3
     subject_code: str = ""
     joint_group_id: Optional[str] = None
-    parallel_group_id: Optional[str] = None # ✅ NEW: For MDM/OE parallel electives
+    parallel_group_id: Optional[str] = None
 
 @dataclass
 class TimeSlot:
@@ -53,7 +53,7 @@ class SolverSession:
     classes: List[str]
     duration: int
     session_index: int
-    parallel_group_id: Optional[str] = None # ✅ NEW
+    parallel_group_id: Optional[str] = None
 
 @dataclass
 class SessionOption:
@@ -84,7 +84,7 @@ class TimetableCpSatSolver:
         time_limit_seconds: int = 30,
         lecture_duration_minutes: int = 60,
         lab_duration_minutes: int = 120,
-        rooms: Optional[List[Dict[str, Any]]] = None, # ✅ NEW: Accept rooms
+        rooms: Optional[List[Dict[str, Any]]] = None,
     ):
         import math
         self.assignments = assignments
@@ -98,7 +98,6 @@ class TimetableCpSatSolver:
         self.lab_slots_per_session = max(1, math.ceil(self.lab_duration_minutes / self.lecture_duration_minutes))
         self.fill_rules: List[Dict[str, Any]] = []
         
-        # ✅ Store Rooms
         self.rooms = rooms or []
         self.classrooms = [r for r in self.rooms if r.get('type', '').lower() != 'lab']
         self.labs = [r for r in self.rooms if r.get('type', '').lower() == 'lab']
@@ -197,7 +196,7 @@ class TimetableCpSatSolver:
     def _build_sessions(self) -> List[SolverSession]:
         sessions: List[SolverSession] = []
         joint_theory_groups: Dict[str, List[Assignment]] = defaultdict(list)
-        parallel_groups: Dict[str, List[Assignment]] = defaultdict(list) # ✅ NEW
+        parallel_groups: Dict[str, List[Assignment]] = defaultdict(list)
         individual_assignments: List[Assignment] = []
 
         def get_parent_key(c_name: str) -> str:
@@ -208,7 +207,6 @@ class TimetableCpSatSolver:
 
         for a in self.assignments:
             if a.type.lower() == "theory":
-                # Check for Parallel Elective Constraint (MDM)
                 parallel_id = None
                 for con in self.constraints:
                     if con.intent == "parallel" and con.subject_names:
@@ -220,7 +218,6 @@ class TimetableCpSatSolver:
                     parallel_groups[parallel_id].append(a)
                     continue
 
-                # Check for standard joint groups (OE, B.Tech Honors)
                 constraint_joint = None
                 for con in self.constraints:
                     if con.subject_names and any(self._string_match(sn, a.subject) for sn in con.subject_names):
@@ -242,7 +239,6 @@ class TimetableCpSatSolver:
             else:
                 individual_assignments.append(a)
 
-        # Process joint theory groups
         for key, group in joint_theory_groups.items():
             first = group[0]
             all_classes = set()
@@ -258,7 +254,6 @@ class TimetableCpSatSolver:
                     classes=sorted(list(all_classes)), duration=1, session_index=h
                 ))
 
-        # ✅ Process Parallel Electives (MDM) - Keep separate, but link them
         for p_id, group in parallel_groups.items():
             for idx, a in enumerate(group):
                 for h in range(a.weekly_hours):
@@ -266,10 +261,9 @@ class TimetableCpSatSolver:
                         session_id=f"{p_id}_{idx}_sess_{h}", faculty=a.faculty, subject=a.subject,
                         subject_code=a.subject_code, type="Theory", batch="-",
                         classes=[a.class_name], duration=1, session_index=h,
-                        parallel_group_id=p_id # ✅ Link them
+                        parallel_group_id=p_id
                     ))
 
-        # Process individual assignments
         for idx, a in enumerate(individual_assignments):
             if a.type.lower() == "theory":
                 classes = self.group_lookup[a.class_name] if (
@@ -301,7 +295,7 @@ class TimetableCpSatSolver:
                 if remainder > 0:
                     sessions.append(SolverSession(
                         session_id=f"lab_{idx}_blk_{block_idx}_rem", faculty=a.faculty, subject=a.subject,
-                        subject_code=a.subject_code, type="Theory", # Schedule as 1hr theory
+                        subject_code=a.subject_code, type="Theory",
                         batch=a.batch if a.batch else "Batch 1", classes=[a.class_name],
                         duration=1, session_index=block_idx
                     ))
@@ -364,7 +358,6 @@ class TimetableCpSatSolver:
                                 if strict:
                                     is_valid = False; break
                                 else:
-                                    # ✅ FIX: Faculty Unavailable is a HARD constraint even in Soft Relaxation
                                     if "unavailable" in con.category.lower():
                                         is_valid = False; break
                                     opt_penalty += 10000
@@ -413,7 +406,6 @@ class TimetableCpSatSolver:
                 sched_vars.append(is_sched)
                 model.Add(sum(row) == is_sched)
 
-        # Faculty Exclusion
         faculty_slot_vars: Dict[Tuple[str, str, int], List[cp_model.IntVar]] = defaultdict(list)
         for i, (sess, opts) in enumerate(zip(sessions, session_options)):
             for j, opt in enumerate(opts):
@@ -423,7 +415,6 @@ class TimetableCpSatSolver:
         for (fac, day, slot), v_list in faculty_slot_vars.items():
             if len(v_list) > 1: model.AddAtMostOne(v_list)
 
-        # Class Exclusion (Allows Parallel Batches)
         class_theory_vars: Dict[Tuple[str, str, int], List[cp_model.IntVar]] = defaultdict(list)
         class_batch_vars: Dict[Tuple[str, str, int, str], List[cp_model.IntVar]] = defaultdict(list)
         all_class_batches: Dict[str, Set[str]] = defaultdict(set)
@@ -455,7 +446,6 @@ class TimetableCpSatSolver:
                     all_vars_for_batch = t_vars + b_vars
                     if len(all_vars_for_batch) > 1: model.AddAtMostOne(all_vars_for_batch)
 
-        # Spread Constraint
         subject_day_class_vars: Dict[Tuple[str, str, str], List[cp_model.IntVar]] = defaultdict(list)
         for i, (sess, opts) in enumerate(zip(sessions, session_options)):
             if sess.type != "Theory": continue
@@ -467,7 +457,6 @@ class TimetableCpSatSolver:
         for (c_name, subj, day), v_list in subject_day_class_vars.items():
             if len(v_list) > 1: model.AddAtMostOne(v_list)
 
-        # ✅ Parallel Elective Enforcement (MDM/OE)
         parallel_groups = defaultdict(list)
         for i, sess in enumerate(sessions):
             if sess.parallel_group_id: parallel_groups[sess.parallel_group_id].append(i)
@@ -480,11 +469,9 @@ class TimetableCpSatSolver:
                     idx2 = s_indices[j]
                     for opt1_idx, opt1 in enumerate(session_options[idx1]):
                         for opt2_idx, opt2 in enumerate(session_options[idx2]):
-                            # If they don't share the exact same day and start slot, they cannot be chosen together
                             if not (opt1.day == opt2.day and opt1.start_slot == opt2.start_slot):
                                 model.AddBoolOr([choice_vars[idx1][opt1_idx].Not(), choice_vars[idx2][opt2_idx].Not()])
 
-        # Multi-Day Load Balancing
         class_day_total_vars: Dict[Tuple[str, str], List[cp_model.IntVar]] = defaultdict(list)
         for i, (sess, opts) in enumerate(zip(sessions, session_options)):
             for j, opt in enumerate(opts):
@@ -498,11 +485,10 @@ class TimetableCpSatSolver:
                 target_daily = math.ceil(total_class_sess / num_avail_days)
                 max_daily_allowed = max(2, target_daily + 1)
                 for day in available_days:
-                    day_v_list = class_day_total_vars[(c_name, day)] # ✅ Fixed syntax error
+                    day_v_list = class_day_total_vars[(c_name, day)]
                     if len(day_v_list) > max_daily_allowed:
                         if strict: model.Add(sum(day_v_list) <= max_daily_allowed)
 
-        # Objective Function
         objective_rewards = []
         objective_penalty_terms = []
 
@@ -516,7 +502,6 @@ class TimetableCpSatSolver:
                 objective_rewards.append(var * weight)
                 if opt.penalty > 0: objective_penalty_terms.append(var * opt.penalty)
 
-        # Fixed Subject Slot Enforcement
         for con in active_constraints:
             if con.intent != "fixed" or not con.slot_numbers: continue
 
@@ -548,7 +533,6 @@ class TimetableCpSatSolver:
 
         model.Maximize(sum(objective_rewards) - sum(objective_penalty_terms))
 
-        # Solve
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = time_limit if time_limit is not None else float(self.time_limit_seconds)
         solver.parameters.num_search_workers = 4
@@ -558,14 +542,13 @@ class TimetableCpSatSolver:
 
         if solver_status not in (cp_model.OPTIMAL, cp_model.FEASIBLE): return None
 
-        # Extract Timetable
         all_classes = set()
         for a in self.assignments:
             if a.class_name in self.group_lookup and a.class_name not in self.group_lookup[a.class_name]: all_classes.update(self.group_lookup[a.class_name])
             else: all_classes.add(a.class_name)
         for group in self.combined_groups: all_classes.update(group)
 
-        timetable: Dict[str, Dict[str, List[List[str]]]] = {c: {} for c in all_classes} # ✅ Temporarily hold list of lists
+        timetable: Dict[str, Dict[str, List[List[str]]]] = {c: {} for c in all_classes}
         detailed: Dict[str, Dict[str, Any]] = {c: {} for c in all_classes}
 
         for c_name in all_classes:
@@ -586,8 +569,7 @@ class TimetableCpSatSolver:
         unscheduled_notices = []
         scheduled_count = 0
 
-        # ✅ Room Assignment Post-Processing Maps
-        room_usage = defaultdict(set) # (day, slot) -> set of room names
+        room_usage = defaultdict(set)
 
         for i, (sess, opts) in enumerate(zip(sessions, session_options)):
             sess_was_placed = False
@@ -597,7 +579,6 @@ class TimetableCpSatSolver:
                     scheduled_count += 1
                     batch_info = "All" if sess.type == "Theory" else (sess.batch if sess.batch else "Batch 1")
                     
-                    # ✅ Dynamic Room Assignment
                     assigned_room = ""
                     if self.rooms:
                         available_pool = self.labs if sess.type == "Lab" else self.classrooms
@@ -624,7 +605,6 @@ class TimetableCpSatSolver:
             if not sess_was_placed and not strict:
                 unscheduled_notices.append(f"1 hr of {sess.subject} ({sess.faculty} for {', '.join(sess.classes)}) could not fit into the available week slots")
 
-        # ✅ Flatten timetable back to List[str] using " | " for parallel sessions
         final_timetable: Dict[str, Dict[str, List[str]]] = {c: {} for c in all_classes}
         for c_name, slots_dict in timetable.items():
             for key, entries in slots_dict.items():
@@ -633,7 +613,6 @@ class TimetableCpSatSolver:
                 elif len(entries) == 1:
                     final_timetable[c_name][key] = entries[0]
                 else:
-                    # Join parallel sessions (e.g., MDM Finance | MDM Bio)
                     subj = " | ".join([e[0] for e in entries])
                     fac = " | ".join([e[1] for e in entries])
                     room = " | ".join([e[2] for e in entries if e[2]])
@@ -720,7 +699,7 @@ def solve_from_dicts(
     time_limit_seconds: int = 30,
     lecture_duration_minutes: int = 60,
     lab_duration_minutes: int = 120,
-    rooms: Optional[List[Dict[str, Any]]] = None, # ✅ Accept rooms
+    rooms: Optional[List[Dict[str, Any]]] = None,
 ) -> SolverResult:
     
     assignments = [
@@ -769,6 +748,6 @@ def solve_from_dicts(
         assignments=assignments, time_slots=time_slots, constraints=constraints,
         combined_groups=combined_groups, working_days=working_days,
         time_limit_seconds=time_limit_seconds, lecture_duration_minutes=lecture_duration_minutes,
-        lab_duration_minutes=lab_duration_minutes, rooms=rooms, # ✅ Pass rooms
+        lab_duration_minutes=lab_duration_minutes, rooms=rooms,
     )
     return solver.solve()

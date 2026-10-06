@@ -934,14 +934,15 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
         border: Border.all(color: borderColor, width: 1.2),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: List.generate(subjs.length, (i) {
           String s = subjs[i].trim();
           String cleanS = _cleanSubjectName(s);
-          String f = i < facs.length ? facs[i].trim() : '';
+          List<String> facList = (i < facs.length ? facs[i] : '').split('/').map((f) => f.trim()).toList();
+          String f = facList.join('\n');
           String r = i < rooms.length ? rooms[i].trim() : '';
           String b = i < batches.length ? batches[i].trim() : '';
-          String chipText = b.isNotEmpty ? (r.isNotEmpty ? '$b · $r' : b) : r;
+          String chipText = b.isNotEmpty ? (r.isNotEmpty ? '$b\n$r' : b) : r;
 
           return Expanded(
             child: Container(
@@ -985,7 +986,7 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                             height: 1.1,
                           ),
                           textAlign: TextAlign.center,
-                          maxLines: 1,
+                          maxLines: 3,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
@@ -1004,9 +1005,10 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                               fontSize: subjs.length > 1 ? 7.5 : 8.5,
                               fontWeight: FontWeight.bold,
                               color: txtColor,
+                              height: 1.2,
                             ),
                             textAlign: TextAlign.center,
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),

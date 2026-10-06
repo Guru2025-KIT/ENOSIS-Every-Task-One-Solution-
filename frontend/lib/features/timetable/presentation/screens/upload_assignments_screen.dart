@@ -156,7 +156,8 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
     });
 
     try {
-      final PlatformFile? file = await FilePicker.pickFile(
+      // ✅ FIX: Using FilePicker.pickFile as used in manage_rooms_screen.dart
+      final file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: ['xlsx'],
       );
@@ -234,6 +235,8 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
 
           if (faculty.isEmpty && rawClass.isEmpty && rawName.isEmpty) continue;
           if (rawClass.toLowerCase().contains('total') || rawName.toLowerCase().contains('total')) continue;
+          // Skip Project Phase as it cannot be scheduled as a regular lecture
+          if (rawName.toLowerCase().contains('project phase')) continue;
 
           List<String> classNames = _extractClasses(rawClass);
           int pracHours = int.tryParse(pracStr) ?? 0;
@@ -244,6 +247,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
         break;
       }
 
+      // PASS 2: Build dynamic division map and expand combined classes
       Map<String, Set<String>> deptDivisions = {};
       for (var row in rawRows) {
         for (var cName in row.classNames) {
@@ -255,7 +259,9 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
         }
       }
 
-            final List<TeachingAssignment> parsedAssignments = [];
+      final List<TeachingAssignment> parsedAssignments = [];
+      final provider = context.read<TimetableProvider>();
+
       for (var row in rawRows) {
         List<String> finalClassNames = [];
         
@@ -271,29 +277,39 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
           }
         }
 
-        // ✅ DETECT JOINT CLASSES: If there are multiple classes for the same row, they are joint!
+        // ✅ DETECT JOINT CLASSES
         bool isJoint = finalClassNames.length > 1 && row.theoryHours > 0;
         String jointId = isJoint ? 'joint_${DateTime.now().millisecondsSinceEpoch}_${row.faculty.hashCode}' : '';
 
         for (String className in finalClassNames) {
           if (row.pracHours > 0) {
-            if (row.pracHours >= 4) {
-              int batch1Hours = row.pracHours ~/ 2;
-              int batch2Hours = row.pracHours - batch1Hours;
-              
-              parsedAssignments.add(TeachingAssignment(
-                facultyName: row.faculty, subjectName: row.rawName, subjectCode: row.rawCode,
-                className: className, batch: 'Batch 1', weeklyHours: batch1Hours, type: 'Lab',
-              ));
-              parsedAssignments.add(TeachingAssignment(
-                facultyName: row.faculty, subjectName: row.rawName, subjectCode: row.rawCode,
-                className: className, batch: 'Batch 2', weeklyHours: batch2Hours, type: 'Lab',
-              ));
-            } else {
-              parsedAssignments.add(TeachingAssignment(
-                facultyName: row.faculty, subjectName: row.rawName, subjectCode: row.rawCode,
-                className: className, batch: 'Single Batch', weeklyHours: row.pracHours, type: 'Lab',
-              ));
+            // ✅ Dynamic Batch Splitting
+            int numBatches = 2; // Default fallback
+            try {
+              var parts = className.split('-');
+              if (parts.length >= 3) {
+                String year = parts[0]; 
+                String div = parts[2];  
+                var divInfo = provider.divisionStructure[year]?.firstWhere((d) => d['division'] == div);
+                if (divInfo != null) {
+                  numBatches = divInfo['batches'] as int;
+                }
+              }
+            } catch (_) {}
+
+            int baseHours = row.pracHours ~/ numBatches;
+            int remainder = row.pracHours % numBatches;
+
+            for (int b = 0; b < numBatches; b++) {
+              int h = baseHours + (b < remainder ? 1 : 0);
+              if (h > 0) {
+                parsedAssignments.add(TeachingAssignment(
+                  facultyName: row.faculty, subjectName: row.rawName, subjectCode: row.rawCode,
+                  className: className, 
+                  batch: 'Batch ${b+1}',
+                  weeklyHours: h, type: 'Lab',
+                ));
+              }
             }
           }
 
@@ -301,7 +317,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
             parsedAssignments.add(TeachingAssignment(
               facultyName: row.faculty, subjectName: row.rawName, subjectCode: row.rawCode,
               className: className, batch: '-', weeklyHours: row.theoryHours, type: 'Theory',
-              jointGroupId: jointId, // ✅ PASS JOINT ID HERE
+              jointGroupId: jointId,
             ));
           }
         }
@@ -326,7 +342,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Loaded ${parsedAssignments.length} assignments! Joint classes linked.'),
+          content: Text('Loaded ${parsedAssignments.length} assignments dynamically!'),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
         ),
@@ -340,7 +356,6 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
       }
     }
   }
-
   void _showManualAddAssignmentDialog() {
     final facCtrl = TextEditingController();
     final subCtrl = TextEditingController();

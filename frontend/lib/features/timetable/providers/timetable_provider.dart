@@ -354,25 +354,40 @@ class TimetableProvider extends ChangeNotifier {
     return true;
   }
 
-    // ✅ NEW: Division & Batch Structure Configuration with Aliases
+    // ✅ Dynamic Division & Batch Structure Configuration
   Map<String, List<Map<String, dynamic>>> _divisionStructure = {
     'SY': [
       {'division': 'A', 'batches': 2, 'aliases': ['A1, A2', 'A3, A4']},
       {'division': 'B', 'batches': 2, 'aliases': ['B1, B2', 'B3, B4']},
-      {'division': 'C', 'batches': 2, 'aliases': ['C1, C2', 'C3, C4']},
     ],
     'TY': [
       {'division': 'A', 'batches': 2, 'aliases': ['A1, A2', 'A3, A4']},
       {'division': 'B', 'batches': 2, 'aliases': ['B1, B2', 'B3, B4']},
-      {'division': 'DS', 'batches': 1, 'aliases': ['All']},
-    ],
-    'BTECH': [
-      {'division': 'A', 'batches': 2, 'aliases': ['A1, A2', 'A3, A4']},
-      {'division': 'B', 'batches': 2, 'aliases': ['B1, B2', 'B3, B4']},
-      {'division': 'DS', 'batches': 2, 'aliases': ['D1, D2', 'D3, D4']},
     ],
   };
   Map<String, List<Map<String, dynamic>>> get divisionStructure => _divisionStructure;
+
+  void addDivision(String year, String divisionName) {
+    if (!_divisionStructure.containsKey(year)) {
+      _divisionStructure[year] = [];
+    }
+    if (_divisionStructure[year]!.every((d) => d['division'] != divisionName)) {
+      _divisionStructure[year]!.add({
+        'division': divisionName,
+        'batches': 1,
+        'aliases': ['All']
+      });
+      notifyListeners();
+    }
+  }
+
+  void removeDivision(String year, String divisionName) {
+    _divisionStructure[year]?.removeWhere((d) => d['division'] == divisionName);
+    if (_divisionStructure[year]?.isEmpty ?? false) {
+      _divisionStructure.remove(year);
+    }
+    notifyListeners();
+  }
 
   void updateDivisionBatches(String year, String division, int batches) {
     final divList = _divisionStructure[year];
@@ -380,7 +395,6 @@ class TimetableProvider extends ChangeNotifier {
       final idx = divList.indexWhere((d) => d['division'] == division);
       if (idx != -1) {
         _divisionStructure[year]![idx]['batches'] = batches;
-        // Auto-adjust aliases list size
         List<dynamic> currentAliases = _divisionStructure[year]![idx]['aliases'];
         if (currentAliases.length < batches) {
           for (int i = currentAliases.length; i < batches; i++) {
@@ -408,18 +422,17 @@ class TimetableProvider extends ChangeNotifier {
     }
   }
 
-  // ✅ Helper to fetch alias for UI display
   String getBatchAlias(String className, String batchName) {
     if (batchName.isEmpty || batchName == 'All' || batchName == '-') return '';
     try {
       var parts = className.split('-');
       if (parts.length >= 3) {
-        String year = parts[0]; // e.g., SY
-        String div = parts[2];  // e.g., A
+        String year = parts[0]; 
+        String div = parts[2];  
         var divInfo = _divisionStructure[year]?.firstWhere((d) => d['division'] == div);
         if (divInfo != null) {
           int idx = int.tryParse(batchName.replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
-          idx--; // Convert to 0-indexed
+          idx--; 
           var aliases = divInfo['aliases'] as List<dynamic>;
           if (idx >= 0 && idx < aliases.length) {
             return aliases[idx];
@@ -427,7 +440,7 @@ class TimetableProvider extends ChangeNotifier {
         }
       }
     } catch (_) {}
-    return batchName; // Fallback to original name
+    return batchName; 
   }
   // Natural Language Rule Parsing
   bool _stringMatches(String a, String b) {

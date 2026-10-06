@@ -24,8 +24,13 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
   @override
   void initState() {
     super.initState();
-    // ✅ Changed length to 3 to accommodate the new Division Structure tab
     _tabController = TabController(length: 3, vsync: this);
+    // ✅ Listen to tab changes to hide/show the FAB
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) {
+        setState(() {}); 
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<TimetableProvider>().loadRooms();
     });
@@ -148,7 +153,7 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                           fillColor: const Color(0xFF1E293B),
                           isDense: true,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                          labelText: 'Seating Capacity',
+                          labelText: 'Seating capacity',
                           labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5),
                           floatingLabelStyle: const TextStyle(color: Color(0xFFFB923C), fontSize: 13, fontWeight: FontWeight.bold),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
@@ -614,9 +619,12 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                     children: [
                       Row(
                         children: [
-                          Text(
-                            r.name,
-                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Colors.white),
+                          Flexible(
+                            child: Text(
+                              r.name,
+                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Colors.white),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                           const SizedBox(width: 8),
                           Container(
@@ -639,9 +647,12 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                           ),
                           if (r.building != null && r.building!.isNotEmpty) ...[
                             const SizedBox(width: 6),
-                            Text(
-                              '• ${r.building}',
-                              style: const TextStyle(fontSize: 12, color: Color(0xFFFB923C)),
+                            Flexible(
+                              child: Text(
+                                '• ${r.building}',
+                                style: const TextStyle(fontSize: 12, color: Color(0xFFFB923C)),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ],
                         ],
@@ -703,115 +714,223 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
     );
   }
 
+  // ✅ FIX: Redesigned Division Structure Tab to eliminate overflows completely
   Widget _buildDivisionStructureTab() {
     final provider = context.watch<TimetableProvider>();
     final structure = provider.divisionStructure;
+    final years = structure.keys.toList();
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Card(
-          elevation: 2,
-          color: const Color(0xFF0F172A),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF334155))),
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+    return StatefulBuilder(
+      builder: (context, setDialogState) {
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Card(
+              elevation: 2,
+              color: const Color(0xFF0F172A),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF334155))),
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.groups_2_outlined, color: Color(0xFFF97316)),
-                    const SizedBox(width: 8),
-                    Text('Division & Lab Batch Structure', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.white)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Define how many lab batches each division has. You can also alias them (e.g., "Batch 1" = "A1, A2"). The solver will use this to split lab hours.',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-                ),
-                const SizedBox(height: 24),
-                ...structure.entries.map((entry) {
-                  final year = entry.key;
-                  final divisions = entry.value;
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8.0),
-                        child: Text(year, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFFF97316))),
-                      ),
-                      ...divisions.map((divInfo) {
-                        final divName = divInfo['division'] as String;
-                        final batches = divInfo['batches'] as int;
-                        List<dynamic> aliases = divInfo['aliases'] as List<dynamic>;
-                        
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 16.0),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                    Row(
+                      children: [
+                        const Icon(Icons.groups_2_outlined, color: Color(0xFFF97316)),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'Division & Lab Batch Structure',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.white),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Define divisions and how many lab batches each has. The solver will automatically split lab hours equally among these batches.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                    ),
+                    const SizedBox(height: 24),
+                    ...years.map((year) {
+                      final divisions = structure[year]!;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              SizedBox(
-                                width: 80,
-                                child: Text('Div $divName:', style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white, height: 2.5)),
-                              ),
-                              Expanded(
-                                child: Column(
-                                  children: [
-                                DropdownButton<int>(
-                                  dropdownColor: const Color(0xFF1E293B),
-                                  value: batches,
-                                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                                  items: [1, 2, 3, 4].map((b) {
-                                    return DropdownMenuItem(value: b, child: Text('$b Batch${b > 1 ? "es" : ""}'));
-                                  }).toList(),
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      provider.updateDivisionBatches(year, divName, val);
-                                    }
-                                  },
-                                ),
-                                const SizedBox(height: 8),
-                                // Alias Text Fields
-                                Wrap(
-                                  spacing: 12,
-                                  runSpacing: 8,
-                                  children: List.generate(batches, (i) {
-                                    return SizedBox(
-                                      width: 100,
-                                      child: TextField(
-                                        style: const TextStyle(color: Colors.white, fontSize: 12),
-                                        decoration: InputDecoration(
-                                          labelText: 'Batch ${i+1}',
-                                          labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
-                                          isDense: true,
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
-                                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
-                                        ),
-                                        controller: TextEditingController(text: aliases.length > i ? aliases[i] : ''),
-                                        onChanged: (val) => provider.updateBatchAlias(year, divName, i, val),
-                                      ),
-                                    );
-                                  }),
-                                )
-                              ],
-                                ),
+                              Text(year, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFFF97316))),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.add_circle_outline, color: Colors.green, size: 20),
+                                    tooltip: 'Add Division to $year',
+                                    onPressed: () {
+                                      showDialog(
+                                        context: context,
+                                        builder: (ctx) {
+                                          final divCtrl = TextEditingController();
+                                          return AlertDialog(
+                                            title: Text('Add Division to $year'),
+                                            content: TextField(
+                                              controller: divCtrl,
+                                              decoration: const InputDecoration(hintText: 'e.g., C or DS'),
+                                            ),
+                                            actions: [
+                                              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                                              ElevatedButton(
+                                                onPressed: () {
+                                                  if (divCtrl.text.trim().isNotEmpty) {
+                                                    provider.addDivision(year, divCtrl.text.trim().toUpperCase());
+                                                    Navigator.pop(ctx);
+                                                  }
+                                                },
+                                                child: const Text('Add'),
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      );
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_forever, color: Colors.red, size: 20),
+                                    tooltip: 'Remove Year $year',
+                                    onPressed: () {
+                                      provider.removeDivision(year, ''); 
+                                    },
+                                  ),
+                                ],
                               )
                             ],
                           ),
-                        );
-                      }).toList(),
-                      const Divider(color: Color(0xFF334155), height: 32),
-                    ],
-                  );
-                }).toList(),
-              ],
+                          ...divisions.map((divInfo) {
+                            final divName = divInfo['division'] as String;
+                            final batches = divInfo['batches'] as int;
+                            List<dynamic> aliases = divInfo['aliases'] as List<dynamic>;
+                            
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Text('Div $divName:', style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 14)),
+                                          IconButton(
+                                            icon: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 18),
+                                            tooltip: 'Remove Div $divName',
+                                            onPressed: () => provider.removeDivision(year, divName),
+                                            visualDensity: VisualDensity.compact,
+                                          ),
+                                        ],
+                                      ),
+                                      DropdownButton<int>(
+                                        dropdownColor: const Color(0xFF1E293B),
+                                        value: batches,
+                                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                                        items: [1, 2, 3, 4].map((b) {
+                                          return DropdownMenuItem(value: b, child: Text('$b Batch${b > 1 ? "es" : ""}'));
+                                        }).toList(),
+                                        onChanged: (val) {
+                                          if (val != null) {
+                                            provider.updateDivisionBatches(year, divName, val);
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 12,
+                                    runSpacing: 8,
+                                    children: List.generate(batches, (i) {
+                                      return SizedBox(
+                                        width: 100,
+                                        child: TextField(
+                                          style: const TextStyle(color: Colors.black, fontSize: 12),
+                                          decoration: InputDecoration(
+                                            labelText: 'Batch ${i+1}',
+                                            labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                                            filled: true,
+                                            fillColor: Colors.white,
+                                            isDense: true,
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                          ),
+                                          controller: TextEditingController(text: aliases.length > i ? aliases[i] : ''),
+                                          onChanged: (val) => provider.updateBatchAlias(year, divName, i, val),
+                                        ),
+                                      );
+                                    }),
+                                  )
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          const Divider(color: Color(0xFF334155), height: 32),
+                        ],
+                      );
+                    }).toList(),
+                    
+                    // Add New Year Button
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Add New Year', style: TextStyle(fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1E293B),
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Color(0xFF334155)),
+                        ),
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) {
+                              final yearCtrl = TextEditingController();
+                              final divCtrl = TextEditingController();
+                              return AlertDialog(
+                                title: const Text('Add New Year & Division'),
+                                content: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    TextField(controller: yearCtrl, decoration: const InputDecoration(hintText: 'Year (e.g., FY, SY, TY, BTECH)')),
+                                    const SizedBox(height: 8),
+                                    TextField(controller: divCtrl, decoration: const InputDecoration(hintText: 'Division (e.g., A, B, C, DS)')),
+                                  ],
+                                ),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      if (yearCtrl.text.trim().isNotEmpty && divCtrl.text.trim().isNotEmpty) {
+                                        provider.addDivision(yearCtrl.text.trim().toUpperCase(), divCtrl.text.trim().toUpperCase());
+                                        Navigator.pop(ctx);
+                                      }
+                                    },
+                                    child: const Text('Add'),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    )
+                  ],
+                ),
+              ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 
@@ -864,7 +983,6 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
               icon: const Icon(Icons.science, size: 20),
               text: 'Laboratories (${labs.length})',
             ),
-            // ✅ NEW TAB ADDED HERE
             const Tab(
               icon: Icon(Icons.groups_2_outlined, size: 20),
               text: 'Divisions & Batches',
@@ -874,7 +992,6 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
       ),
       body: Column(
         children: [
-          // ── STEP 3 GUIDANCE BANNER (DARK CARD WITH ORANGE HIGHLIGHTS) ────
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -927,26 +1044,28 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
             ),
           ),
 
-          // ── TAB VIEWS ───────────────────────────────────────────────────
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
                 _buildRoomList(rooms, 'Classroom'),
                 _buildRoomList(rooms, 'Lab'),
-                _buildDivisionStructureTab(), // ✅ ADDED HERE
+                _buildDivisionStructureTab(),
               ],
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFFF97316),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Room / Lab', style: TextStyle(fontWeight: FontWeight.bold)),
-        onPressed: () => _showAddEditRoomDialog(),
-      ),
+      // ✅ FIX: Hide FAB when on the Division Structure tab to prevent overlap
+      floatingActionButton: _tabController.index == 2
+          ? null
+          : FloatingActionButton.extended(
+              backgroundColor: const Color(0xFFF97316),
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Room / Lab', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () => _showAddEditRoomDialog(),
+            ),
     );
   }
 }
