@@ -1,4 +1,12 @@
+import mimetypes
+import os
+from typing import Literal, Optional
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote
+from urllib.request import urlopen
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -17,9 +25,6 @@ _NOT_CONFIGURED_DETAIL = (
 )
 
 
-import os
-from typing import Optional
-
 ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".doc", ".docx"}
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 
@@ -36,6 +41,70 @@ CATEGORY_FOLDERS = {
     "course": "Courses",
     "other": "Other",
 }
+
+
+def _fetch_storage_file(url: str) -> bytes:
+    """Fetch the stored object without decoding or transforming its bytes."""
+    with urlopen(url, timeout=30) as response:
+        return response.read()
+
+
+def _content_disposition(disposition: Literal["inline", "attachment"], filename: str) -> str:
+    filename = filename.replace("\\", "/").rsplit("/", 1)[-1]
+    filename = "".join(char for char in filename if ord(char) >= 32 and ord(char) != 127)
+    filename = filename or "document"
+    ascii_filename = filename.encode("ascii", "replace").decode("ascii")
+    ascii_filename = ascii_filename.replace("\\", "_").replace('"', "_")
+    return (
+        f'{disposition}; filename="{ascii_filename}"; '
+        f"filename*=UTF-8''{quote(filename, safe='')}"
+    )
+
+
+def _document_content_response(document: Document, disposition: Literal["inline", "attachment"]) -> Response:
+    try:
+        file_bytes = _fetch_storage_file(document.url)
+    except (HTTPError, URLError, TimeoutError, OSError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not retrieve the document from storage.",
+        ) from exc
+
+    if not file_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Document storage returned an empty file.",
+        )
+
+    content_type = mimetypes.guess_type(document.file_name)[0] or "application/octet-stream"
+    if os.path.splitext(document.file_name)[1].lower() == ".pdf":
+        if b"%PDF-" not in file_bytes[:1024]:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Document storage did not return a valid PDF file.",
+            )
+        content_type = "application/pdf"
+
+    return Response(
+        content=file_bytes,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": _content_disposition(disposition, document.file_name),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+        },
+    )
+
+
+def _get_owned_document(document_id: str, db: Session, current_user: User) -> Document:
+    document = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.owner_id == current_user.id)
+        .first()
+    )
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    return document
 
 
 @router.post("/upload", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
@@ -111,11 +180,31 @@ def list_my_documents(db: Session = Depends(get_db), current_user: User = Depend
     return db.query(Document).filter(Document.owner_id == current_user.id).all()
 
 
+@router.get("/{document_id}/content")
+def view_document(
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the original stored file with inline disposition for viewing."""
+    document = _get_owned_document(document_id, db, current_user)
+    return _document_content_response(document, "inline")
+
+
+@router.get("/{document_id}/download")
+def download_document(
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the original stored file as a download using its original name."""
+    document = _get_owned_document(document_id, db, current_user)
+    return _document_content_response(document, "attachment")
+
+
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(document_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    document = db.query(Document).filter(Document.id == document_id, Document.owner_id == current_user.id).first()
-    if document is None:
-        raise HTTPException(status_code=404, detail="Document not found")
+    document = _get_owned_document(document_id, db, current_user)
 
     if is_configured():
         try:

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
@@ -34,6 +36,7 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
   String _selectedFilter = 'all';
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  final Set<String> _documentObjectUrls = {};
 
   @override
   void initState() {
@@ -44,6 +47,10 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    for (final url in _documentObjectUrls) {
+      html.Url.revokeObjectUrl(url);
+    }
+    _documentObjectUrls.clear();
     super.dispose();
   }
 
@@ -53,48 +60,106 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
     });
   }
 
-  Future<void> _openDocument(String? urlString) async {
-    if (urlString == null || urlString.trim().isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No document URL attached to this achievement.')),
-      );
-      return;
+  String _documentFileName(AchievementModel achievement) {
+    final name = (achievement.fileName ?? 'document').replaceAll('\\', '/');
+    return name.split('/').last;
+  }
+
+  Future<(Uint8List, String)> _fetchDocumentBytes(
+    AchievementModel achievement, {
+    required bool download,
+  }) async {
+    final documentId = achievement.documentId;
+    if (documentId == null || documentId.isEmpty) {
+      throw Exception('This achievement has no uploaded document record.');
     }
 
-    final trimmed = urlString.trim();
-    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Storage path reference: $trimmed')),
-      );
-      return;
+    final action = download ? 'download' : 'content';
+    final response = await ApiClient.get(
+      '/documents/$documentId/$action',
+    );
+    if (response.statusCode != 200) {
+      var detail = 'Document request failed (${response.statusCode}).';
+      try {
+        final error = jsonDecode(response.body);
+        if (error is Map<String, dynamic> && error['detail'] is String) {
+          detail = error['detail'] as String;
+        }
+      } on FormatException {
+        // Keep the HTTP status message when the response isn't JSON.
+      }
+      throw Exception(detail);
     }
+
+    final contentType =
+        response.headers['content-type']?.split(';').first.trim();
+    if (contentType == null || contentType.isEmpty) {
+      throw Exception('The document server did not specify a content type.');
+    }
+    if ((achievement.fileName ?? '').toLowerCase().endsWith('.pdf') &&
+        contentType != 'application/pdf') {
+      throw Exception('The document server did not return a PDF.');
+    }
+    return (response.bodyBytes, contentType);
+  }
+
+  Future<void> _viewDocument(AchievementModel achievement) async {
+    final html.WindowBase? viewerWindow =
+        kIsWeb ? html.window.open('about:blank', '_blank') : null;
 
     try {
+      final (bytes, responseMimeType) =
+          await _fetchDocumentBytes(achievement, download: false);
+
       if (kIsWeb) {
-        html.window.open(trimmed, '_blank');
-      } else {
-        final uri = Uri.parse(trimmed);
-        final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-        if (!launched) {
-          await launchUrl(uri, mode: LaunchMode.platformDefault);
+        if (viewerWindow == null) {
+          throw Exception('The browser blocked the document viewer window.');
         }
+        final blob = html.Blob([bytes], responseMimeType);
+        final objectUrl = html.Url.createObjectUrlFromBlob(blob);
+        _documentObjectUrls.add(objectUrl);
+        viewerWindow.location.href = objectUrl;
+        return;
       }
-    } catch (e) {
-      try {
-        if (kIsWeb) {
-          html.window.open(trimmed, '_blank');
-        } else {
-          final uri = Uri.parse(trimmed);
-          await launchUrl(uri, mode: LaunchMode.platformDefault);
-        }
-      } catch (err) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not open document: $err')),
-          );
-        }
+
+      final savedUri = await FilePicker.saveFile(
+        fileName: _documentFileName(achievement),
+        bytes: bytes,
+        mimeType: responseMimeType,
+      );
+      if (savedUri == null) return;
+      final opened = await launchUrl(
+        savedUri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened) {
+        throw Exception(
+            'The saved document could not be opened by a PDF viewer.');
+      }
+    } catch (error) {
+      viewerWindow?.close();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open document: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _downloadDocument(AchievementModel achievement) async {
+    try {
+      final (bytes, mimeType) =
+          await _fetchDocumentBytes(achievement, download: true);
+      await FilePicker.saveFile(
+        fileName: _documentFileName(achievement),
+        bytes: bytes,
+        mimeType: mimeType,
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not download document: $error')),
+        );
       }
     }
   }
