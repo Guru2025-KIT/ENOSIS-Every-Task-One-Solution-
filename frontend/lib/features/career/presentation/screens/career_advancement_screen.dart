@@ -27,7 +27,8 @@ class CareerAdvancementScreen extends StatefulWidget {
   const CareerAdvancementScreen({super.key});
 
   @override
-  State<CareerAdvancementScreen> createState() => _CareerAdvancementScreenState();
+  State<CareerAdvancementScreen> createState() =>
+      _CareerAdvancementScreenState();
 }
 
 class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
@@ -177,7 +178,8 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -263,15 +265,21 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                 color: achievement.categoryOption.color.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(achievement.categoryOption.icon, color: achievement.categoryOption.color, size: 22),
+              child: Icon(achievement.categoryOption.icon,
+                  color: achievement.categoryOption.color, size: 22),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(achievement.categoryOption.label, style: AppTypography.captionBold.copyWith(color: achievement.categoryOption.color)),
-                  Text(achievement.title, style: AppTypography.h3.copyWith(fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(achievement.categoryOption.label,
+                      style: AppTypography.captionBold
+                          .copyWith(color: achievement.categoryOption.color)),
+                  Text(achievement.title,
+                      style: AppTypography.h3.copyWith(fontSize: 16),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
@@ -283,16 +291,19 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (achievement.organization != null && achievement.organization!.isNotEmpty) ...[
+              if (achievement.organization != null &&
+                  achievement.organization!.isNotEmpty) ...[
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.apartment_outlined, size: 16, color: AppColors.textSecondary),
+                    const Icon(Icons.apartment_outlined,
+                        size: 16, color: AppColors.textSecondary),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Issuing Organization: ${achievement.organization}',
-                        style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w600),
+                        style: AppTypography.bodySmall
+                            .copyWith(fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
@@ -302,7 +313,8 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
               if (achievement.dateAchieved != null) ...[
                 Row(
                   children: [
-                    const Icon(Icons.event_outlined, size: 16, color: AppColors.textSecondary),
+                    const Icon(Icons.event_outlined,
+                        size: 16, color: AppColors.textSecondary),
                     const SizedBox(width: 8),
                     Text(
                       'Date: ${_formatDate(achievement.dateAchieved!)}',
@@ -312,7 +324,8 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                 ),
                 const SizedBox(height: 12),
               ],
-              if (achievement.description != null && achievement.description!.isNotEmpty) ...[
+              if (achievement.description != null &&
+                  achievement.description!.isNotEmpty) ...[
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -322,7 +335,8 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                   ),
                   child: Text(
                     achievement.description!,
-                    style: AppTypography.bodySmall.copyWith(color: AppColors.textPrimary),
+                    style: AppTypography.bodySmall
+                        .copyWith(color: AppColors.textPrimary),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -339,30 +353,35 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.folder_zip_outlined, color: AppColors.primary, size: 18),
+                        const Icon(Icons.folder_zip_outlined,
+                            color: AppColors.primary, size: 18),
                         const SizedBox(width: 8),
                         Text(
                           'Document Reference',
-                          style: AppTypography.captionBold.copyWith(color: AppColors.primary),
+                          style: AppTypography.captionBold
+                              .copyWith(color: AppColors.primary),
                         ),
                       ],
                     ),
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Icon(Icons.attach_file, size: 15, color: AppColors.secondary),
+                        const Icon(Icons.attach_file,
+                            size: 15, color: AppColors.secondary),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             achievement.fileName ?? 'certificate_document.pdf',
-                            style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600, fontSize: 13),
+                            style: AppTypography.bodyMedium.copyWith(
+                                fontWeight: FontWeight.w600, fontSize: 13),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         if (achievement.fileSize != null)
                           Text(
                             achievement.fileSize!,
-                            style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+                            style: AppTypography.caption
+                                .copyWith(color: AppColors.textTertiary),
                           ),
                       ],
                     ),
@@ -378,19 +397,22 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                     if (achievement.hasCloudinaryUrl) ...[
                       const SizedBox(height: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: AppColors.success.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.cloud_done_outlined, size: 14, color: AppColors.success),
+                            const Icon(Icons.cloud_done_outlined,
+                                size: 14, color: AppColors.success),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
                                 'Cloudinary Secured Document Storage',
-                                style: AppTypography.captionBold.copyWith(color: AppColors.success, fontSize: 11),
+                                style: AppTypography.captionBold.copyWith(
+                                    color: AppColors.success, fontSize: 11),
                               ),
                             ),
                           ],
@@ -408,17 +430,24 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Close'),
           ),
-          if (achievement.hasCloudinaryUrl)
+          if (achievement.documentId != null) ...[
+            TextButton.icon(
+              onPressed: () => _downloadDocument(achievement),
+              icon: const Icon(Icons.download_outlined, size: 16),
+              label: const Text('Download'),
+            ),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.secondary,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
               ),
-              icon: const Icon(Icons.open_in_new, size: 16),
-              label: const Text('Open Document'),
-              onPressed: () => _openDocument(achievement.filePath),
+              icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
+              label: const Text('View Document'),
+              onPressed: () => _viewDocument(achievement),
             ),
+          ],
         ],
       ),
     );
@@ -426,8 +455,18 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
 
   String _formatDate(DateTime date) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
     ];
     return '${date.day.toString().padLeft(2, '0')} ${months[date.month - 1]} ${date.year}';
   }
@@ -472,7 +511,8 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                       const SizedBox(height: 16),
                       Text(
                         'Loading your career achievements...',
-                        style: AppTypography.bodySecondary.copyWith(color: AppColors.textSecondary),
+                        style: AppTypography.bodySecondary
+                            .copyWith(color: AppColors.textSecondary),
                       ),
                     ],
                   ),
@@ -511,25 +551,36 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: (isAuthError ? AppColors.secondary : AppColors.error).withValues(alpha: 0.1),
+                            color: (isAuthError
+                                    ? AppColors.secondary
+                                    : AppColors.error)
+                                .withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
-                            isAuthError ? Icons.lock_outline : Icons.cloud_off_outlined,
+                            isAuthError
+                                ? Icons.lock_outline
+                                : Icons.cloud_off_outlined,
                             size: 40,
-                            color: isAuthError ? AppColors.secondary : AppColors.error,
+                            color: isAuthError
+                                ? AppColors.secondary
+                                : AppColors.error,
                           ),
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          isAuthError ? 'Authentication Required' : 'Unable to Load Achievements',
-                          style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold),
+                          isAuthError
+                              ? 'Authentication Required'
+                              : 'Unable to Load Achievements',
+                          style: AppTypography.h3
+                              .copyWith(fontWeight: FontWeight.bold),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 8),
                         Text(
                           errorStr,
-                          style: AppTypography.bodySecondary.copyWith(color: AppColors.textSecondary),
+                          style: AppTypography.bodySecondary
+                              .copyWith(color: AppColors.textSecondary),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 20),
@@ -537,7 +588,8 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                           ElevatedButton.icon(
                             onPressed: () {
                               Navigator.of(context).pushAndRemoveUntil(
-                                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                                MaterialPageRoute(
+                                    builder: (_) => const LoginScreen()),
                                 (route) => false,
                               );
                             },
@@ -546,8 +598,10 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
                             ),
                           )
                         else
@@ -558,8 +612,10 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
                             ),
                           ),
                       ],
@@ -573,7 +629,8 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
 
             // Apply filter & search
             final filteredAchievements = allAchievements.where((item) {
-              final matchesFilter = _selectedFilter == 'all' || item.achievementType == _selectedFilter;
+              final matchesFilter = _selectedFilter == 'all' ||
+                  item.achievementType == _selectedFilter;
               final q = _searchQuery.toLowerCase().trim();
               final matchesSearch = q.isEmpty ||
                   item.title.toLowerCase().contains(q) ||
@@ -583,9 +640,23 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
             }).toList();
 
             // Compute summary metrics
-            final certsCount = allAchievements.where((a) => a.achievementType == 'certification' || a.achievementType == 'course').length;
-            final fdpCount = allAchievements.where((a) => a.achievementType == 'fdp' || a.achievementType == 'workshop' || a.achievementType == 'webinar').length;
-            final pubCount = allAchievements.where((a) => a.achievementType == 'publication' || a.achievementType == 'research' || a.achievementType == 'conference').length;
+            final certsCount = allAchievements
+                .where((a) =>
+                    a.achievementType == 'certification' ||
+                    a.achievementType == 'course')
+                .length;
+            final fdpCount = allAchievements
+                .where((a) =>
+                    a.achievementType == 'fdp' ||
+                    a.achievementType == 'workshop' ||
+                    a.achievementType == 'webinar')
+                .length;
+            final pubCount = allAchievements
+                .where((a) =>
+                    a.achievementType == 'publication' ||
+                    a.achievementType == 'research' ||
+                    a.achievementType == 'conference')
+                .length;
 
             return SingleChildScrollView(
               padding: EdgeInsets.symmetric(
@@ -599,7 +670,8 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                   children: [
                     // ─── Header Section (Title + Subtitle + Primary CTA) ────
                     Container(
-                      padding: EdgeInsets.symmetric(vertical: isMobile ? 8 : 12),
+                      padding:
+                          EdgeInsets.symmetric(vertical: isMobile ? 8 : 12),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         crossAxisAlignment: CrossAxisAlignment.center,
@@ -613,7 +685,8 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                                     Container(
                                       padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
-                                        color: AppColors.secondary.withValues(alpha: 0.12),
+                                        color: AppColors.secondary
+                                            .withValues(alpha: 0.12),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: const Icon(
@@ -626,7 +699,10 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                                     Expanded(
                                       child: Text(
                                         'Career Advancement',
-                                        style: (isMobile ? AppTypography.h3 : AppTypography.h1).copyWith(
+                                        style: (isMobile
+                                                ? AppTypography.h3
+                                                : AppTypography.h1)
+                                            .copyWith(
                                           color: AppColors.primary,
                                           fontWeight: FontWeight.w800,
                                         ),
@@ -652,7 +728,8 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                             icon: const Icon(Icons.add, size: 18),
                             label: Text(
                               isMobile ? 'Add' : '+ Add Achievement',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 13.5),
                             ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.secondary,
@@ -711,34 +788,39 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                           return GridView.builder(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
-                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
                               crossAxisCount: 2,
                               crossAxisSpacing: 10,
                               mainAxisSpacing: 10,
                               childAspectRatio: 1.4,
                             ),
                             itemCount: statItems.length,
-                            itemBuilder: (context, index) => _StatCard(data: statItems[index]),
+                            itemBuilder: (context, index) =>
+                                _StatCard(data: statItems[index]),
                           );
                         } else if (isTablet) {
                           return GridView.builder(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
-                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
                               crossAxisCount: 2,
                               crossAxisSpacing: 14,
                               mainAxisSpacing: 14,
                               childAspectRatio: 2.3,
                             ),
                             itemCount: statItems.length,
-                            itemBuilder: (context, index) => _StatCard(data: statItems[index]),
+                            itemBuilder: (context, index) =>
+                                _StatCard(data: statItems[index]),
                           );
                         } else {
                           return Row(
                             children: statItems
                                 .map((item) => Expanded(
                                       child: Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6),
                                         child: _StatCard(data: item),
                                       ),
                                     ))
@@ -773,9 +855,12 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                             controller: _searchController,
                             onChanged: (v) => setState(() => _searchQuery = v),
                             decoration: InputDecoration(
-                              hintText: 'Search achievements by title, organization or topic...',
-                              hintStyle: AppTypography.caption.copyWith(color: AppColors.textTertiary),
-                              prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary, size: 20),
+                              hintText:
+                                  'Search achievements by title, organization or topic...',
+                              hintStyle: AppTypography.caption
+                                  .copyWith(color: AppColors.textTertiary),
+                              prefixIcon: const Icon(Icons.search,
+                                  color: AppColors.textSecondary, size: 20),
                               suffixIcon: _searchQuery.isNotEmpty
                                   ? IconButton(
                                       icon: const Icon(Icons.clear, size: 18),
@@ -787,14 +872,17 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                                   : null,
                               filled: true,
                               fillColor: AppColors.background,
-                              contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 10, horizontal: 14),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
-                                borderSide: const BorderSide(color: AppColors.border),
+                                borderSide:
+                                    const BorderSide(color: AppColors.border),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
-                                borderSide: const BorderSide(color: AppColors.border),
+                                borderSide:
+                                    const BorderSide(color: AppColors.border),
                               ),
                             ),
                           ),
@@ -807,14 +895,20 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                                 _FilterPill(
                                   label: 'All (${allAchievements.length})',
                                   isSelected: _selectedFilter == 'all',
-                                  onTap: () => setState(() => _selectedFilter = 'all'),
+                                  onTap: () =>
+                                      setState(() => _selectedFilter = 'all'),
                                 ),
                                 ...achievementTypeOptions.map((opt) {
-                                  final count = allAchievements.where((a) => a.achievementType == opt.key).length;
+                                  final count = allAchievements
+                                      .where(
+                                          (a) => a.achievementType == opt.key)
+                                      .length;
                                   return _FilterPill(
-                                    label: '${opt.shortLabel}${count > 0 ? ' ($count)' : ''}',
+                                    label:
+                                        '${opt.shortLabel}${count > 0 ? ' ($count)' : ''}',
                                     isSelected: _selectedFilter == opt.key,
-                                    onTap: () => setState(() => _selectedFilter = opt.key),
+                                    onTap: () => setState(
+                                        () => _selectedFilter = opt.key),
                                   );
                                 }),
                               ],
@@ -829,7 +923,8 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                     // ─── Achievement List / Empty State ─────────────────────
                     if (filteredAchievements.isEmpty) ...[
                       _EmptyStateView(
-                        isFiltered: _searchQuery.isNotEmpty || _selectedFilter != 'all',
+                        isFiltered:
+                            _searchQuery.isNotEmpty || _selectedFilter != 'all',
                         onAddTap: _openAddDialog,
                         onResetFilter: () {
                           _searchController.clear();
@@ -849,7 +944,8 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
                           final achievement = filteredAchievements[index];
                           return _AchievementItemCard(
                             achievement: achievement,
-                            onViewDocument: () => _viewDocumentModal(achievement),
+                            onViewDocument: () =>
+                                _viewDocumentModal(achievement),
                             onDelete: () => _deleteAchievement(achievement),
                             formatDate: _formatDate,
                           );
@@ -1064,7 +1160,8 @@ class _AchievementItemCard extends StatelessWidget {
                   runSpacing: 4,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: opt.color.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
@@ -1101,11 +1198,13 @@ class _AchievementItemCard extends StatelessWidget {
                 ),
 
                 // Organization
-                if (achievement.organization != null && achievement.organization!.isNotEmpty) ...[
+                if (achievement.organization != null &&
+                    achievement.organization!.isNotEmpty) ...[
                   const SizedBox(height: 3),
                   Row(
                     children: [
-                      const Icon(Icons.apartment_outlined, size: 14, color: AppColors.textSecondary),
+                      const Icon(Icons.apartment_outlined,
+                          size: 14, color: AppColors.textSecondary),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
@@ -1122,11 +1221,13 @@ class _AchievementItemCard extends StatelessWidget {
                 ],
 
                 // Description (truncated snippet if provided)
-                if (achievement.description != null && achievement.description!.isNotEmpty) ...[
+                if (achievement.description != null &&
+                    achievement.description!.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Text(
                     achievement.description!,
-                    style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                    style: AppTypography.caption
+                        .copyWith(color: AppColors.textSecondary),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1142,18 +1243,23 @@ class _AchievementItemCard extends StatelessWidget {
                       onTap: onViewDocument,
                       borderRadius: BorderRadius.circular(6),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 2, horizontal: 4),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              achievement.fileName != null ? Icons.attach_file : Icons.info_outline,
+                              achievement.fileName != null
+                                  ? Icons.attach_file
+                                  : Icons.info_outline,
                               size: 15,
                               color: AppColors.secondary,
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              achievement.fileName != null ? 'View Document →' : 'View Details →',
+                              achievement.fileName != null
+                                  ? 'View Document →'
+                                  : 'View Details →',
                               style: AppTypography.captionBold.copyWith(
                                 color: AppColors.secondary,
                                 fontSize: 12,
@@ -1164,7 +1270,8 @@ class _AchievementItemCard extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.textTertiary),
+                      icon: const Icon(Icons.delete_outline,
+                          size: 18, color: AppColors.textTertiary),
                       tooltip: 'Remove',
                       visualDensity: VisualDensity.compact,
                       onPressed: onDelete,
@@ -1219,7 +1326,9 @@ class _EmptyStateView extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            isFiltered ? 'No matching achievements found' : 'No achievements added yet',
+            isFiltered
+                ? 'No matching achievements found'
+                : 'No achievements added yet',
             style: AppTypography.h3.copyWith(
               color: AppColors.primary,
               fontWeight: FontWeight.bold,
@@ -1246,7 +1355,8 @@ class _EmptyStateView extends StatelessWidget {
               onPressed: onResetFilter,
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: AppColors.primary),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
               child: const Text('Clear Filters'),
             )
@@ -1254,12 +1364,15 @@ class _EmptyStateView extends StatelessWidget {
             ElevatedButton.icon(
               onPressed: onAddTap,
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('+ Add Achievement', style: TextStyle(fontWeight: FontWeight.bold)),
+              label: const Text('+ Add Achievement',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.secondary,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
             ),
         ],
@@ -1380,7 +1493,8 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
         if (bytes.length > 10 * 1024 * 1024) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('File size exceeds the 10MB maximum limit.')),
+            const SnackBar(
+                content: Text('File size exceeds the 10MB maximum limit.')),
           );
           return;
         }
@@ -1454,8 +1568,18 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
   String _formatDateDisplay(DateTime? d) {
     if (d == null) return 'Select date';
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
     ];
     return '${d.day.toString().padLeft(2, '0')} ${months[d.month - 1]} ${d.year}';
   }
@@ -1482,10 +1606,13 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
                         color: AppColors.secondary.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.workspace_premium_outlined, color: AppColors.secondary, size: 22),
+                      child: const Icon(Icons.workspace_premium_outlined,
+                          color: AppColors.secondary, size: 22),
                     ),
                     const SizedBox(width: 12),
-                    Text('Add Achievement', style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
+                    Text('Add Achievement',
+                        style: AppTypography.h3
+                            .copyWith(fontWeight: FontWeight.bold)),
                   ],
                 ),
                 IconButton(
@@ -1500,7 +1627,9 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
             const SizedBox(height: 20),
 
             // 1. Achievement Type Dropdown (10 required types)
-            Text('Achievement Type *', style: AppTypography.captionBold.copyWith(color: AppColors.primary)),
+            Text('Achievement Type *',
+                style: AppTypography.captionBold
+                    .copyWith(color: AppColors.primary)),
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
               initialValue: _selectedCategory,
@@ -1508,7 +1637,8 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
               decoration: InputDecoration(
                 filled: true,
                 fillColor: AppColors.background,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: const BorderSide(color: AppColors.border),
@@ -1528,7 +1658,8 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
                       Expanded(
                         child: Text(
                           opt.label,
-                          style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                          style: AppTypography.bodyMedium
+                              .copyWith(fontWeight: FontWeight.w600),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -1544,17 +1675,24 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
             const SizedBox(height: 16),
 
             // 2. Title / Name
-            Text('Title / Name *', style: AppTypography.captionBold.copyWith(color: AppColors.primary)),
+            Text('Title / Name *',
+                style: AppTypography.captionBold
+                    .copyWith(color: AppColors.primary)),
             const SizedBox(height: 6),
             TextFormField(
               controller: _titleController,
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter the achievement title' : null,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Please enter the achievement title'
+                  : null,
               decoration: InputDecoration(
-                hintText: 'e.g. AWS Certified Solutions Architect, FDP on AI/ML',
-                hintStyle: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+                hintText:
+                    'e.g. AWS Certified Solutions Architect, FDP on AI/ML',
+                hintStyle: AppTypography.caption
+                    .copyWith(color: AppColors.textTertiary),
                 filled: true,
                 fillColor: AppColors.background,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: const BorderSide(color: AppColors.border),
@@ -1569,16 +1707,21 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
             const SizedBox(height: 16),
 
             // 3. Organization / Issuing Institution
-            Text('Organization / Issuing Institution', style: AppTypography.captionBold.copyWith(color: AppColors.primary)),
+            Text('Organization / Issuing Institution',
+                style: AppTypography.captionBold
+                    .copyWith(color: AppColors.primary)),
             const SizedBox(height: 6),
             TextFormField(
               controller: _organizationController,
               decoration: InputDecoration(
-                hintText: 'e.g. Amazon Web Services, IIT Bombay, IEEE, Coursera',
-                hintStyle: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+                hintText:
+                    'e.g. Amazon Web Services, IIT Bombay, IEEE, Coursera',
+                hintStyle: AppTypography.caption
+                    .copyWith(color: AppColors.textTertiary),
                 filled: true,
                 fillColor: AppColors.background,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: const BorderSide(color: AppColors.border),
@@ -1593,13 +1736,16 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
             const SizedBox(height: 16),
 
             // 4. Date
-            Text('Date of Achievement', style: AppTypography.captionBold.copyWith(color: AppColors.primary)),
+            Text('Date of Achievement',
+                style: AppTypography.captionBold
+                    .copyWith(color: AppColors.primary)),
             const SizedBox(height: 6),
             InkWell(
               onTap: _pickDate,
               borderRadius: BorderRadius.circular(10),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
                   color: AppColors.background,
                   borderRadius: BorderRadius.circular(10),
@@ -1610,15 +1756,18 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.calendar_today_outlined, size: 18, color: AppColors.secondary),
+                        const Icon(Icons.calendar_today_outlined,
+                            size: 18, color: AppColors.secondary),
                         const SizedBox(width: 10),
                         Text(
                           _formatDateDisplay(_dateAchieved),
-                          style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                          style: AppTypography.bodyMedium
+                              .copyWith(fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
-                    const Icon(Icons.arrow_drop_down, color: AppColors.textSecondary),
+                    const Icon(Icons.arrow_drop_down,
+                        color: AppColors.textSecondary),
                   ],
                 ),
               ),
@@ -1627,17 +1776,22 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
             const SizedBox(height: 16),
 
             // 5. Description
-            Text('Description / Abstract (Optional)', style: AppTypography.captionBold.copyWith(color: AppColors.primary)),
+            Text('Description / Abstract (Optional)',
+                style: AppTypography.captionBold
+                    .copyWith(color: AppColors.primary)),
             const SizedBox(height: 6),
             TextFormField(
               controller: _descriptionController,
               maxLines: 3,
               decoration: InputDecoration(
-                hintText: 'Add notes about topics covered, skills learned, or recognition details...',
-                hintStyle: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+                hintText:
+                    'Add notes about topics covered, skills learned, or recognition details...',
+                hintStyle: AppTypography.caption
+                    .copyWith(color: AppColors.textTertiary),
                 filled: true,
                 fillColor: AppColors.background,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: const BorderSide(color: AppColors.border),
@@ -1652,7 +1806,9 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
             const SizedBox(height: 20),
 
             // 6. Professional Certificate / Document Upload UI
-            Text('Certificate / Document Upload', style: AppTypography.captionBold.copyWith(color: AppColors.primary)),
+            Text('Certificate / Document Upload',
+                style: AppTypography.captionBold
+                    .copyWith(color: AppColors.primary)),
             const SizedBox(height: 8),
             Container(
               width: double.infinity,
@@ -1688,7 +1844,8 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
                         const SizedBox(height: 4),
                         Text(
                           'Supported file types: PDF, PNG, JPG, JPEG (Max 10MB)',
-                          style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+                          style: AppTypography.caption
+                              .copyWith(color: AppColors.textTertiary),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 12),
@@ -1699,7 +1856,8 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.primary,
                             side: const BorderSide(color: AppColors.primary),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
                           ),
                         ),
                       ],
@@ -1712,10 +1870,12 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: AppColors.success.withValues(alpha: 0.12),
+                                color:
+                                    AppColors.success.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: const Icon(Icons.verified, color: AppColors.success, size: 20),
+                              child: const Icon(Icons.verified,
+                                  color: AppColors.success, size: 20),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -1734,7 +1894,8 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
                                   if (_selectedFileSize != null)
                                     Text(
                                       _selectedFileSize!,
-                                      style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+                                      style: AppTypography.caption.copyWith(
+                                          color: AppColors.textTertiary),
                                     ),
                                 ],
                               ),
@@ -1744,10 +1905,12 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
                               children: [
                                 TextButton(
                                   onPressed: _chooseFile,
-                                  child: const Text('Change', style: TextStyle(fontSize: 12)),
+                                  child: const Text('Change',
+                                      style: TextStyle(fontSize: 12)),
                                 ),
                                 IconButton(
-                                  icon: const Icon(Icons.close, size: 18, color: AppColors.error),
+                                  icon: const Icon(Icons.close,
+                                      size: 18, color: AppColors.error),
                                   tooltip: 'Remove File',
                                   onPressed: _removeFile,
                                 ),
@@ -1757,7 +1920,8 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
                         ),
                         const SizedBox(height: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
                             color: AppColors.primarySoft.withValues(alpha: 0.5),
                             borderRadius: BorderRadius.circular(6),
@@ -1782,10 +1946,13 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 OutlinedButton(
-                  onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
+                  onPressed:
+                      _isSaving ? null : () => Navigator.of(context).pop(false),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
                   ),
                   child: const Text('Cancel'),
                 ),
@@ -1795,16 +1962,20 @@ class _AddAchievementFormState extends State<_AddAchievementForm> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.secondary,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 22, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
                   ),
                   child: _isSaving
                       ? const SizedBox(
                           height: 18,
                           width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
                         )
-                      : const Text('Save Achievement', style: TextStyle(fontWeight: FontWeight.bold)),
+                      : const Text('Save Achievement',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             ),

@@ -1,9 +1,9 @@
-import json
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.db.base import get_db
@@ -11,6 +11,8 @@ from app.api.deps import get_current_user
 from app.models.user import User
 from app.models.academic import Subject, Room, Division
 from app.services.ai_client import is_configured, send_chat_message
+from app.services.assistant_context import retrieve_enosis_context
+from app.services.assistant_prompt import build_chat_messages
 from app.core.config import settings
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -20,10 +22,22 @@ _NOT_CONFIGURED_DETAIL = (
     "The AI assistant isn't configured yet. Get a free API key from "
     "console.groq.com and set GROQ_API_KEY in .env, then restart the backend."
 )
+_AI_REQUEST_FAILED_DETAIL = (
+    "The AI assistant could not complete this request. Please try again shortly."
+)
+
+
+class ChatHistoryMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=2000)
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(max_length=2000)
+    conversation_history: list[ChatHistoryMessage] = Field(
+        default_factory=list,
+        max_length=12,
+    )
 
 
 class ChatResponse(BaseModel):
@@ -53,44 +67,42 @@ def chat(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Single-turn chat with the LLM — parsed post-solve Timetable Assistant
-    routing. Supports returning friendly conversational responses alongside
-    an optional structured delta for timetable swaps.
-    """
+    """Answer a general faculty question with relevant read-only ENOSIS facts."""
     if not is_configured():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=_NOT_CONFIGURED_DETAIL)
 
-    if not payload.message.strip():
+    message = payload.message.strip()
+    if not message:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
-    # 1. Fetch current timetable entries from database to populate LLM context
-    from app.models.timetable import TimetableEntry
-    entries = db.query(TimetableEntry).all()
-    
-    context_lines = []
-    for e in entries:
-        context_lines.append(
-            f"- Subject: {e.subject.name}, Teacher: {e.faculty.full_name}, "
-            f"Division: {e.division.division_code}, Day: {e.day}, Slot: {e.slot}, Room: {e.room.name}"
-        )
-    timetable_context = "\n".join(context_lines)
+    history = [
+        {"role": item.role, "content": item.content.strip()}
+        for item in payload.conversation_history
+        if item.content.strip()
+    ]
 
     try:
-        reply_raw = send_chat_message(payload.message, timetable_context=timetable_context)
-        
-        try:
-            parsed = json.loads(reply_raw)
-            reply_text = parsed.get("reply", "")
-            delta = parsed.get("delta", None)
-        except json.JSONDecodeError:
-            reply_text = reply_raw
-            delta = None
-            
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"AI request failed: {e}")
+        context = retrieve_enosis_context(db, current_user, message, history)
+    except SQLAlchemyError as error:
+        logger.error("ENOSIS assistant context lookup failed (%s)", type(error).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ENOSIS data is temporarily unavailable. Please try again shortly.",
+        ) from error
 
-    return ChatResponse(reply=reply_text, delta=delta)
+    try:
+        prompt_messages = build_chat_messages(message, history, context)
+        reply_text = send_chat_message(prompt_messages).strip()
+        if not reply_text:
+            raise RuntimeError("The AI provider returned an empty response.")
+    except Exception as error:
+        logger.error("ENOSIS assistant request failed (%s)", type(error).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=_AI_REQUEST_FAILED_DETAIL,
+        ) from error
+
+    return ChatResponse(reply=reply_text)
 
 
 @router.post("/timetable-config-chat", response_model=TimetableConfigChatResponse)
