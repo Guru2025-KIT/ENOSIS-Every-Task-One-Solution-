@@ -592,18 +592,9 @@ class TimetableProvider extends ChangeNotifier {
         'slotNumbers': c.slotNumbers,
       }).toList();
 
-      final groupMap = <String, Set<String>>{};
-      for (final a in _assignments) {
-        final parts = a.className.split('-');
-        if (parts.length == 3) {
-          final parentKey = '${parts[0]}-${parts[1]}';
-          groupMap.putIfAbsent(parentKey, () => <String>{}).add(a.className);
-        }
-      }
-      final combinedGroups = groupMap.values
-          .where((g) => g.length > 1)
-          .map((g) => g.toList())
-          .toList();
+      // Distinct divisions (e.g. TY-AIML-A vs TY-AIML-B) have independent timetables.
+      // Do not auto-combine them into shared slots.
+      final List<List<String>> combinedGroups = [];
 
       final chosenDays = (_scheduleConfig?.dayNames != null && _scheduleConfig!.dayNames.isNotEmpty)
           ? _scheduleConfig!.dayNames
@@ -671,29 +662,43 @@ class TimetableProvider extends ChangeNotifier {
    String _resolveIntent(TimetableConstraint con) {
     final cat = con.category.toLowerCase();
     
-    // ✅ Handle the new Hard/Soft structured categories from the UI
-    if (cat.contains('fixed session') || cat.contains('lab continuity')) return 'fixed';
-    if (cat.contains('combined') || cat.contains('joint session')) return 'parallel';
-    if (cat.contains('replacement') || cat.contains('substitute free')) return 'fill';
-    
-    // Handle explicit prefixes (if any)
-    if (cat.startsWith('fixed|')) return 'fixed';
-    if (cat.startsWith('blacklist|')) return 'blacklist';
-    if (cat.startsWith('whitelist|')) return 'whitelist';
-    if (cat.startsWith('fill|')) return 'fill';
-    if (cat.startsWith('holiday|')) return 'holiday';
-    if (cat.startsWith('parallel|')) return 'parallel';
-    
-    // Handle NLP rules
-    if (cat.startsWith('nlp|')) {
-      final parts = con.category.split('|');
-      if (parts.length >= 2) return parts[1].toLowerCase();
+    // Check if category has '|' separated parts with an explicit intent code
+    final parts = con.category.split('|');
+    if (parts.length >= 2) {
+      final lastPart = parts.last.trim().toLowerCase();
+      if (['fixed', 'blacklist', 'whitelist', 'fill', 'holiday', 'parallel',
+           'preferred', 'avoid_first_period', 'avoid_last_period',
+           'no_theory_after_lunch', 'workload_balance'].contains(lastPart)) {
+        return lastPart;
+      }
+      final firstPart = parts.first.trim().toLowerCase();
+      if (['fixed', 'blacklist', 'whitelist', 'fill', 'holiday', 'parallel'].contains(firstPart)) {
+        return firstPart;
+      }
     }
     
-    // Fallbacks for old formats
-    if (cat.contains('holiday')) return 'holiday';
-    if (cat.contains('unavailable') || cat.contains('block')) return 'blacklist';
-    if (cat.contains('preferred') || cat.contains('avoid')) return 'whitelist'; // Treat soft preferences as whitelist/avoid
+    // Structured categories
+    if (cat.contains('fixed session') || cat.contains('lab continuity') || cat.contains('fixed institutional')) return 'fixed';
+    if (cat.contains('parallel') || cat.contains('combined') || cat.contains('joint session') || cat.contains('elective')) return 'parallel';
+    if (cat.contains('replacement') || cat.contains('substitute free')) return 'fill';
+    
+    // Soft preferences
+    if (cat.contains('preferred day') || cat.contains('preferred slot')) return 'preferred';
+    if (cat.contains('avoid first period')) return 'avoid_first_period';
+    if (cat.contains('avoid last period')) return 'avoid_last_period';
+    if (cat.contains('workload balance')) return 'workload_balance';
+    if (cat.contains('no theory after lunch')) return 'no_theory_after_lunch';
+
+    // Handle NLP rules
+    if (cat.startsWith('nlp|')) {
+      final nlpParts = con.category.split('|');
+      if (nlpParts.length >= 2) return nlpParts[1].toLowerCase();
+    }
+    
+    // Fallbacks
+    if (cat.contains('holiday') || cat.contains('closed')) return 'holiday';
+    if (cat.contains('unavailable') || cat.contains('block') || cat.contains('avoid') || cat.contains('not ')) return 'blacklist';
+    if (cat.contains('preferred') || cat.contains('only')) return 'whitelist';
     
     return 'blacklist';
   }

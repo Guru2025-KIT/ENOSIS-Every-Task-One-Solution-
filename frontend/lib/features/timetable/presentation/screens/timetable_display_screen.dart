@@ -15,6 +15,7 @@ class TimetableDisplayScreen extends StatefulWidget {
 
 class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final ScrollController _displayScrollController = ScrollController();
   String? _selectedTarget;
   bool _isExporting = false;
 
@@ -38,6 +39,7 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
   void dispose() {
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
+    _displayScrollController.dispose();
     super.dispose();
   }
 
@@ -234,126 +236,173 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
     String? activeKey,
     TimetableProvider provider,
   ) {
-    const double slotColWidth = 76.0;
+    const double slotColWidth = 64.0;
+    const double minDayColWidth = 145.0;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // ── Header Row ──────────────────────────────────────────────
-        Row(
-          children: [
-            _buildHeaderCell('Time / Slot', slotColWidth, isFirst: true),
-            ...days.asMap().entries.map((entry) {
-              final d = entry.value;
-              final isLast = entry.key == days.length - 1;
-              final shortName = d.length >= 3 ? d.substring(0, 3).toUpperCase() : d.toUpperCase();
-              return Expanded(
-                child: _buildHeaderCell(shortName, null, isLast: isLast),
-              );
-            }),
-          ],
-        ),
-        const SizedBox(height: 4),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        final int dayCount = days.isEmpty ? 1 : days.length;
 
-        // ── Body Rows ───────────────────────────────────────────────
-        ...timeSlots.map((slot) {
-          final isBreak = slot.isBreak;
-          final double rowHeight = isBreak ? 32.0 : 88.0;
+        final double calculatedDayWidth = (availableWidth - slotColWidth - (dayCount * 3.0)) / dayCount;
+        final bool enableScroll = calculatedDayWidth < minDayColWidth;
+        final double dayColWidth = enableScroll ? minDayColWidth : calculatedDayWidth;
+        final double totalGridWidth = slotColWidth + (dayCount * (dayColWidth + 3.0));
 
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 4.0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        Widget buildGridTable() {
+          return SizedBox(
+            width: enableScroll ? totalGridWidth : availableWidth,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Slot / Time Column
-                Container(
-                  width: slotColWidth,
-                  height: rowHeight,
-                  padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 3.0),
-                  decoration: BoxDecoration(
-                    color: isBreak ? const Color(0xFFFFFBEB) : const Color(0xFFF8FAFC),
-                    border: Border.all(
-                      color: isBreak ? const Color(0xFFFDE68A) : const Color(0xFFE2E8F0),
-                      width: 1.0,
-                    ),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          isBreak ? 'Break' : 'Slot ${slot.lectureNumber}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 11.5,
-                            color: isBreak ? const Color(0xFFD97706) : const Color(0xFF0F172A),
-                          ),
-                        ),
-                      ),
-                      if (!isBreak && slot.startTime.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            '${slot.startTime}\n${slot.endTime}',
-                            style: const TextStyle(
-                              fontSize: 8.5,
-                              color: Color(0xFF64748B),
-                              fontWeight: FontWeight.w600,
-                              height: 1.15,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                // ── Header Row ──────────────────────────────────────────────
+                Row(
+                  children: [
+                    _buildHeaderCell('Time / Slot', slotColWidth, isFirst: true),
+                    ...days.asMap().entries.map((entry) {
+                      final d = entry.value;
+                      final isLast = entry.key == days.length - 1;
+                      final shortName = d.length >= 3 ? d.substring(0, 3).toUpperCase() : d.toUpperCase();
+                      if (enableScroll) {
+                        return SizedBox(
+                          width: dayColWidth + 3.0,
+                          child: _buildHeaderCell(shortName, dayColWidth, isLast: isLast),
+                        );
+                      }
+                      return Expanded(
+                        child: _buildHeaderCell(shortName, null, isLast: isLast),
+                      );
+                    }),
+                  ],
                 ),
+                const SizedBox(height: 4),
 
-                // Day Cells
-                ...days.map((day) {
-                  String cellKey = '${day}_${slot.lectureNumber}';
-                  List<String>? cellData = grid[cellKey];
+                // ── Body Rows ───────────────────────────────────────────────
+                ...timeSlots.map((slot) {
+                  final isBreak = slot.isBreak;
+                  final double rowHeight = isBreak ? 32.0 : 94.0;
 
-                  if (isBreak || cellData == null || cellData.isEmpty || cellData[0] == 'Break') {
-                    return Expanded(child: _buildBreakCell(rowHeight));
-                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4.0),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Slot / Time Column
+                        Container(
+                          width: slotColWidth,
+                          height: rowHeight,
+                          padding: const EdgeInsets.symmetric(horizontal: 2.0, vertical: 3.0),
+                          decoration: BoxDecoration(
+                            color: isBreak ? const Color(0xFFFFFBEB) : const Color(0xFFF8FAFC),
+                            border: Border.all(
+                              color: isBreak ? const Color(0xFFFDE68A) : const Color(0xFFE2E8F0),
+                              width: 1.0,
+                            ),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  isBreak ? 'Break' : 'Slot ${slot.lectureNumber}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 11.0,
+                                    color: isBreak ? const Color(0xFFD97706) : const Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ),
+                              if (!isBreak && slot.startTime.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    '${slot.startTime}\n${slot.endTime}',
+                                    style: const TextStyle(
+                                      fontSize: 8.5,
+                                      color: Color(0xFF64748B),
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.15,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
 
-                  String rawSubj = cellData.isNotEmpty ? cellData[0] : 'Free';
-                  String subj = rawSubj.trim();
+                        // Day Cells
+                        ...days.map((day) {
+                          String cellKey = '${day}_${slot.lectureNumber}';
+                          List<String>? cellData = grid[cellKey];
 
-                  bool isContinuation = false;
-                  if (slot.lectureNumber > 1) {
-                    String prevKey = '${day}_${slot.lectureNumber - 1}';
-                    List<String>? prevData = grid[prevKey];
-                    if (prevData != null && prevData.length > 1 && prevData[0] == rawSubj && prevData[1] == cellData[1]) {
-                      isContinuation = true;
-                    }
-                  }
+                          Widget cellWidget;
+                          if (isBreak || cellData == null || cellData.isEmpty || cellData[0] == 'Break') {
+                            cellWidget = _buildBreakCell(rowHeight);
+                          } else {
+                            String rawSubj = cellData.isNotEmpty ? cellData[0] : 'Free';
+                            String subj = rawSubj.trim();
 
-                  if (subj == 'Free' || subj == '-') {
-                    return Expanded(child: _buildFreeCell(rowHeight));
-                  }
+                            bool isContinuation = false;
+                            if (slot.lectureNumber > 1) {
+                              String prevKey = '${day}_${slot.lectureNumber - 1}';
+                              List<String>? prevData = grid[prevKey];
+                              if (prevData != null && prevData.length > 1 && prevData[0] == rawSubj && prevData[1] == cellData[1]) {
+                                isContinuation = true;
+                              }
+                            }
 
-                  return Expanded(
-                    child: _buildClassCell(
-                      cellData: cellData,
-                      rawSubj: subj,
-                      isContinuation: isContinuation,
-                      provider: provider,
-                      activeKey: activeKey,
-                      height: rowHeight,
+                            if (subj == 'Free' || subj == '-') {
+                              cellWidget = _buildFreeCell(rowHeight);
+                            } else {
+                              cellWidget = _buildClassCell(
+                                cellData: cellData,
+                                rawSubj: subj,
+                                isContinuation: isContinuation,
+                                provider: provider,
+                                activeKey: activeKey,
+                                height: rowHeight,
+                              );
+                            }
+                          }
+
+                          if (enableScroll) {
+                            return SizedBox(
+                              width: dayColWidth + 3.0,
+                              child: cellWidget,
+                            );
+                          }
+                          return Expanded(child: cellWidget);
+                        }),
+                      ],
                     ),
                   );
                 }),
               ],
             ),
           );
-        }),
-      ],
+        }
+
+        if (enableScroll) {
+          return Scrollbar(
+            controller: _displayScrollController,
+            thumbVisibility: true,
+            trackVisibility: true,
+            child: SingleChildScrollView(
+              controller: _displayScrollController,
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: buildGridTable(),
+            ),
+          );
+        }
+
+        return buildGridTable();
+      },
     );
   }
 
@@ -495,7 +544,7 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
     return Container(
       height: height,
       margin: const EdgeInsets.only(left: 3.0),
-      padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 3.5),
+      padding: const EdgeInsets.symmetric(horizontal: 3.0, vertical: 3.0),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(6),
@@ -506,7 +555,12 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
         children: List.generate(subjs.length, (i) {
           String s = subjs[i].trim();
           String cleanS = _cleanSubjectName(s);
-          String f = i < facs.length ? facs[i].trim() : '';
+          List<String> facList = (i < facs.length ? facs[i] : '')
+              .split('/')
+              .map((f) => f.trim())
+              .where((f) => f.isNotEmpty)
+              .toList();
+          String f = facList.join(', ');
           String r = i < rooms.length ? rooms[i].trim() : '';
           String b = i < batches.length ? batches[i].trim() : '';
           String chipText = b.isNotEmpty ? (r.isNotEmpty ? '$b · $r' : b) : r;
@@ -522,64 +576,70 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
               child: Tooltip(
                 message: '$s\n${f.isNotEmpty ? "Faculty: $f\n" : ""}${chipText.isNotEmpty ? "Location: $chipText" : ""}',
                 preferBelow: false,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.center,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        cleanS,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: subjs.length > 1 ? 9.5 : 10.5,
-                          color: txtColor,
-                          height: 1.15,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (f.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          f,
-                          style: TextStyle(
-                            fontSize: subjs.length > 1 ? 8.0 : 9.0,
-                            color: txtColor.withValues(alpha: 0.75),
-                            fontWeight: FontWeight.w600,
-                            height: 1.1,
-                          ),
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                      if (chipText.isNotEmpty) ...[
-                        const SizedBox(height: 3),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: txtColor.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(3),
-                            border: Border.all(color: txtColor.withValues(alpha: 0.18), width: 0.5),
-                          ),
-                          child: Text(
-                            chipText,
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.center,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxHeight: height - 8),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            cleanS,
                             style: TextStyle(
-                              fontSize: subjs.length > 1 ? 7.5 : 8.5,
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w800,
+                              fontSize: subjs.length > 1 ? 9.5 : 10.5,
                               color: txtColor,
+                              height: 1.15,
                             ),
                             textAlign: TextAlign.center,
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ],
-                    ],
+                          if (f.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              f,
+                              style: TextStyle(
+                                fontSize: subjs.length > 1 ? 8.0 : 9.0,
+                                color: txtColor.withValues(alpha: 0.75),
+                                fontWeight: FontWeight.w600,
+                                height: 1.1,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                          if (chipText.isNotEmpty) ...[
+                            const SizedBox(height: 2.5),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: txtColor.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(3),
+                                border: Border.all(color: txtColor.withValues(alpha: 0.18), width: 0.5),
+                              ),
+                              child: Text(
+                                chipText,
+                                style: TextStyle(
+                                  fontSize: subjs.length > 1 ? 7.5 : 8.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: txtColor,
+                                  height: 1.15,
+                                ),
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
