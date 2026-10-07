@@ -61,7 +61,7 @@ class ApiClient {
     }
     return candidateBaseUrls.first;
   }
-  
+
   /// Configurable public application base URL for shareable links
   static const String appBaseUrl = 'http://localhost:5000';
 
@@ -94,6 +94,7 @@ class ApiClient {
     Future<http.Response> Function(String base) requestFn, {
     Duration? timeout,
     int timeoutSeconds = 7,
+    bool retryOnTimeout = true,
   }) async {
     final effectiveTimeout = timeout ?? Duration(seconds: timeoutSeconds);
     final candidates = candidateBaseUrls;
@@ -101,13 +102,18 @@ class ApiClient {
 
     for (final base in candidates) {
       try {
-        final perCandidateTimeout = (_activeBaseUrl == null && candidates.length > 1)
-            ? const Duration(seconds: 3)
-            : effectiveTimeout;
+        final perCandidateTimeout =
+            (retryOnTimeout && _activeBaseUrl == null && candidates.length > 1)
+                ? const Duration(seconds: 3)
+                : effectiveTimeout;
         final response = await requestFn(base).timeout(perCandidateTimeout);
         _activeBaseUrl = base;
         return response;
       } catch (e) {
+        // A timed-out POST may still be running on the server.
+        if (e is TimeoutException && !retryOnTimeout) {
+          rethrow;
+        }
         lastError = e;
         debugPrint('[ApiClient] Connection failed for $base: $e. Trying next candidate if available...');
       }
@@ -133,6 +139,7 @@ class ApiClient {
     String? token,
     Duration? timeout,
     int timeoutSeconds = 7,
+    bool retryOnTimeout = true,
   }) {
     final effectiveToken = _resolveToken(token);
     return _sendWithFallback((base) {
@@ -144,7 +151,7 @@ class ApiClient {
         },
         body: jsonEncode(body),
       );
-    }, timeout: timeout, timeoutSeconds: timeoutSeconds);
+    }, timeout: timeout, timeoutSeconds: timeoutSeconds, retryOnTimeout: retryOnTimeout);
   }
 
   /// POST with form-encoded fields — used specifically by /auth/login,

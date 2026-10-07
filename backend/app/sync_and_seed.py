@@ -426,6 +426,9 @@ def seed_all_faculty_profiles():
         for u in all_users:
             ensure_faculty_complete_academic_data(db, u)
         print("  [OK] Ensured full academic profiles, timetable schedules, and SLI contexts for all users.")
+    except Exception as e:
+        db.rollback()
+        print(f"  [WARN] Faculty profile seed notice: {e}")
     finally:
         db.close()
 
@@ -434,5 +437,4 @@ if __name__ == "__main__":
     sync_database_schema()
     seed_admin_user()
     seed_all_faculty_profiles()
-
 
