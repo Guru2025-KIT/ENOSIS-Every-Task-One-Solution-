@@ -14,7 +14,7 @@ def send_chat_message(messages: list[dict[str, str]]) -> str:
     client = Groq(
         api_key=settings.GROQ_API_KEY,
         timeout=settings.AI_REQUEST_TIMEOUT_SECONDS,
-        max_retries=0,
+        max_retries=2,
     )
     response = client.chat.completions.create(
         model=settings.GROQ_MODEL,
