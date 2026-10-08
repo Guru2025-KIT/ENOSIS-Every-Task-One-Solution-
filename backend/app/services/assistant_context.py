@@ -785,7 +785,7 @@ def retrieve_enosis_context(
                     my_query = my_query.filter(TimetableEntry.day == day_index_filter)
                 if slot_filter is not None:
                     my_query = my_query.filter(TimetableEntry.slot == slot_filter)
-                own_entries = my_query.order_by(TimetableEntry.day, TimetableEntry.slot).limit(100).all()
+                own_entries = my_query.order_by(TimetableEntry.day, TimetableEntry.slot).limit(30).all()
                 context["my_published_timetable"] = [_timetable_fact(e, config) for e in own_entries]
 
             # ── Entity-targeted query with smart fallback ────────────────────
@@ -803,24 +803,24 @@ def retrieve_enosis_context(
                 if slot_filter is not None:
                     q = q.filter(TimetableEntry.slot == slot_filter)
 
-                entries = q.order_by(TimetableEntry.day, TimetableEntry.slot).limit(150).all()
+                entries = q.order_by(TimetableEntry.day, TimetableEntry.slot).limit(30).all()
 
                 # Fallback Relaxation: if strict intersection is empty
                 if not entries and matched_faculty_ids and matched_division_ids:
                     fallback_fac_q = base_query.filter(TimetableEntry.faculty_id.in_(matched_faculty_ids))
                     if day_index_filter is not None:
                         fallback_fac_q = fallback_fac_q.filter(TimetableEntry.day == day_index_filter)
-                    entries = fallback_fac_q.order_by(TimetableEntry.day, TimetableEntry.slot).limit(150).all()
+                    entries = fallback_fac_q.order_by(TimetableEntry.day, TimetableEntry.slot).limit(30).all()
 
                 if not entries and matched_division_ids:
                     fallback_div_q = base_query.filter(TimetableEntry.division_id.in_(matched_division_ids))
                     if day_index_filter is not None:
                         fallback_div_q = fallback_div_q.filter(TimetableEntry.day == day_index_filter)
-                    entries = fallback_div_q.order_by(TimetableEntry.day, TimetableEntry.slot).limit(150).all()
+                    entries = fallback_div_q.order_by(TimetableEntry.day, TimetableEntry.slot).limit(30).all()
 
                 if not entries and matched_faculty_ids:
                     fac_all_days_q = base_query.filter(TimetableEntry.faculty_id.in_(matched_faculty_ids))
-                    entries = fac_all_days_q.order_by(TimetableEntry.day, TimetableEntry.slot).limit(150).all()
+                    entries = fac_all_days_q.order_by(TimetableEntry.day, TimetableEntry.slot).limit(30).all()
 
             elif is_timetable_query or is_status_query:
                 overview_query = base_query
@@ -828,7 +828,7 @@ def retrieve_enosis_context(
                     overview_query = overview_query.filter(TimetableEntry.day == day_index_filter)
                 if slot_filter is not None:
                     overview_query = overview_query.filter(TimetableEntry.slot == slot_filter)
-                entries = overview_query.order_by(TimetableEntry.day, TimetableEntry.slot).limit(80).all()
+                entries = overview_query.order_by(TimetableEntry.day, TimetableEntry.slot).limit(25).all()
 
             context["published_timetable"] = [_timetable_fact(e, config) for e in entries]
 
@@ -852,7 +852,7 @@ def retrieve_enosis_context(
                     .options(*assignment_options)
                     .filter(or_(*assignment_filters))
                     .order_by(TeachingAssignment.faculty_id, TeachingAssignment.subject_id)
-                    .limit(100)
+                    .limit(15)
                     .all()
                 )
                 context["teaching_assignments"] = [_assignment_fact(a) for a in assignments]
@@ -864,19 +864,19 @@ def retrieve_enosis_context(
                     .options(*assignment_options)
                     .filter(TeachingAssignment.faculty_id == current_user.id)
                     .order_by(TeachingAssignment.subject_id, TeachingAssignment.division_id)
-                    .limit(100)
+                    .limit(15)
                     .all()
                 )
                 context["my_teaching_assignments"] = [_assignment_fact(a) for a in own_assignments]
 
     # ── All divisions & subjects summary ─────────────────────────────────────
     if is_timetable_query or is_status_query or bool(matched_faculty_ids) or bool(matched_division_ids):
-        all_divs = db.query(Division).order_by(Division.year, Division.division_code).limit(50).all()
+        all_divs = db.query(Division).order_by(Division.year, Division.division_code).limit(10).all()
         context["all_divisions"] = [
             {"name": d.name, "year": d.year, "division_code": d.division_code}
             for d in all_divs
         ]
-        all_subs = db.query(Subject).order_by(Subject.name).limit(50).all()
+        all_subs = db.query(Subject).order_by(Subject.name).limit(15).all()
         context["all_subjects"] = [
             {"name": s.name, "code": s.code} for s in all_subs
         ]
@@ -890,7 +890,7 @@ def retrieve_enosis_context(
                 Task.is_completed.is_(False),
             )
             .order_by(Task.due_date.is_(None), Task.due_date, Task.created_at.desc())
-            .limit(25)
+            .limit(15)
             .all()
         )
         context["my_open_tasks"] = [

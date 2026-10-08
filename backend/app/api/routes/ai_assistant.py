@@ -62,6 +62,93 @@ class TimetableConfigChatResponse(BaseModel):
     parsed_successfully: bool = True
 
 
+def _fallback_generate_reply(message: str, context: dict[str, Any]) -> str:
+    """Intelligent, context-aware fallback response generator when external LLM API is temporarily unreachable."""
+    q = message.lower()
+    current_user = context.get("current_user", {})
+    user_name = current_user.get("name") or "Faculty Member"
+    today = context.get("today", "Today")
+    pub_status = context.get("timetable_publication_status", {})
+    is_published = pub_status.get("is_published", False)
+
+    # 1. Timetable / Schedule queries
+    if any(k in q for k in ["schedule", "timetable", "today", "tomorrow", "lecture", "class", "period", "slot"]):
+        if not is_published:
+            return f"Hello {user_name}, the academic timetable has not been published yet by the department administrator. Once published, your daily schedule and classroom locations will automatically appear here."
+
+        my_slots = context.get("my_published_timetable", [])
+        if my_slots:
+            lines = [f"📅 **Your Schedule for {today}** (User: {user_name}):", ""]
+            for s in my_slots:
+                sub = s.get("subject_name") or s.get("subject") or "Lecture"
+                room = s.get("room_name") or s.get("room") or "Classroom"
+                div = s.get("division_name") or s.get("division") or ""
+                slot_num = s.get("slot", 0) + 1
+                time_str = s.get("time_range") or f"Slot {slot_num}"
+                lines.append(f"• **{time_str}**: {sub} — {div} ({room})")
+            return "\n".join(lines)
+
+        general_slots = context.get("published_timetable", [])
+        if general_slots:
+            lines = [f"📅 **Department Timetable Entries for {today}**:", ""]
+            for s in general_slots[:6]:
+                sub = s.get("subject_name") or s.get("subject") or "Lecture"
+                fac = s.get("faculty_name") or s.get("faculty") or ""
+                room = s.get("room_name") or s.get("room") or "Room"
+                div = s.get("division_name") or s.get("division") or ""
+                slot_num = s.get("slot", 0) + 1
+                lines.append(f"• **Slot {slot_num}**: {sub} | {fac} | {div} ({room})")
+            return "\n".join(lines)
+
+        return f"You have no scheduled classes for **{today}** in the active published timetable."
+
+    # 2. Teaching assignments / subjects
+    if any(k in q for k in ["teach", "subject", "assigned", "course"]):
+        my_tas = context.get("my_teaching_assignments", []) or context.get("teaching_assignments", [])
+        if my_tas:
+            lines = [f"📚 **Your Active Teaching Assignments** ({user_name}):", ""]
+            for ta in my_tas:
+                sub = ta.get("subject_name") or ta.get("subject_code") or "Subject"
+                div = ta.get("division_name") or ta.get("division_code") or "Division"
+                stype = ta.get("session_type", "Theory").capitalize()
+                lines.append(f"• **{sub}** ({stype}) — Division {div}")
+            return "\n".join(lines)
+        all_subs = context.get("all_subjects", [])
+        if all_subs:
+            sub_names = [s.get("name") for s in all_subs[:8] if s.get("name")]
+            return f"The department has active subjects including: {', '.join(sub_names)}."
+
+    # 3. Career Development & Certificates
+    if any(k in q for k in ["certificate", "certification", "career", "achievement", "fdp", "workshop", "publication"]):
+        cd = context.get("career_development") or context.get("my_career_development")
+        if cd and cd.get("person_exists"):
+            achievements = cd.get("all_achievements", [])
+            total = cd.get("total_achievements", len(achievements))
+            pname = cd.get("name") or user_name
+            if not achievements or total == 0:
+                return f"{pname} has no certificates or career development achievements currently recorded in ENOSIS."
+            lines = [f"🏆 **Career Achievements & Certifications for {pname}** (Total: {total}):", ""]
+            for ach in achievements[:5]:
+                title = ach.get("title") or "Achievement"
+                org = ach.get("issuing_organization") or "Institution"
+                cat = ach.get("category") or "Certification"
+                lines.append(f"• **{title}** — {org} ({cat})")
+            return "\n".join(lines)
+        return f"No certificate records were found matching your query for {user_name}."
+
+    # 4. General assistant greeting / fallback
+    dept = current_user.get("department") or "Engineering"
+    return (
+        f"Hello {user_name}! I am your ENOSIS Academic AI Assistant for {dept}.\n\n"
+        "I can help you with:\n"
+        "• 📅 **Today's Schedule & Room Allocations**\n"
+        "• 📚 **Assigned Subjects & Divisions**\n"
+        "• 🏆 **Career Development & Certificates**\n"
+        "• 📊 **SLI Student Learning Index & Analytics**\n\n"
+        "How can I assist you with your academic workflows today?"
+    )
+
+
 @router.post("/chat", response_model=ChatResponse)
 def chat(
     payload: ChatRequest,
