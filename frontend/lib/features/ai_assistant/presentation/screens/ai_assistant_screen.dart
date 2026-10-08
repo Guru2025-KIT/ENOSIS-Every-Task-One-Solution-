@@ -200,12 +200,12 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
   String _currentSpeakingMessage = '';
 
   final List<String> _suggestions = [
-    "Show me Rajesh Kumar's certificates",
-    "What certificates does Rajesh Kumar have?",
-    "Does Rajesh Kumar have a Python certificate?",
-    "What are Rajesh Kumar's career achievements?",
     "What is my schedule today?",
+    "Show faculty certificates & achievements",
     "What tasks are due soon?",
+    "Show attendance summary",
+    "What are the published timetable slots?",
+    "Explain DBMS normalization",
   ];
 
   @override
@@ -480,7 +480,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen>
                     const SizedBox(width: 12),
                     const Expanded(
                       child: Text(
-                        'Listening... Speak your command (e.g. "Show Rajesh Kumar\'s certificates")',
+                        'Listening... Speak your command (e.g. "What is my schedule today?" or "Show certificates")',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,

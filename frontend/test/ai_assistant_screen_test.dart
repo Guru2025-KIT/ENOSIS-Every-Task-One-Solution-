@@ -23,9 +23,9 @@ void main() {
       expect(find.textContaining('Hello! I am your ENOSIS Assistant'), findsOneWidget);
 
       // Check suggestion chips
-      expect(find.text("Show me Rajesh Kumar's certificates"), findsOneWidget);
-      expect(find.text("What certificates does Rajesh Kumar have?"), findsOneWidget);
-      expect(find.text("Does Rajesh Kumar have a Python certificate?"), findsOneWidget);
+      expect(find.text("What is my schedule today?"), findsOneWidget);
+      expect(find.text("Show faculty certificates & achievements"), findsOneWidget);
+      expect(find.text("What tasks are due soon?"), findsOneWidget);
 
       // Check microphone button and send button
       expect(find.byIcon(Icons.mic_none), findsOneWidget);

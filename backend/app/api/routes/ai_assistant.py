@@ -85,7 +85,7 @@ def chat(
     try:
         context = retrieve_enosis_context(db, current_user, message, history)
     except SQLAlchemyError as error:
-        logger.error("ENOSIS assistant context lookup failed (%s)", type(error).__name__)
+        logger.error("ENOSIS assistant context lookup failed (%s): %s", type(error).__name__, error, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="ENOSIS data is temporarily unavailable. Please try again shortly.",
@@ -97,7 +97,7 @@ def chat(
         if not reply_text:
             raise RuntimeError("The AI provider returned an empty response.")
     except Exception as error:
-        logger.error("ENOSIS assistant request failed (%s)", type(error).__name__)
+        logger.error("ENOSIS assistant request failed (%s): %s", type(error).__name__, error, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=_AI_REQUEST_FAILED_DETAIL,

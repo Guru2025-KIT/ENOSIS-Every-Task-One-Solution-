@@ -301,8 +301,8 @@ def _extract_subject_entities(text: str, db: Session) -> list[Subject]:
 
 
 def _extract_explicit_person_query(text: str) -> str | None:
-    """Extract person name mentioned in queries like 'Show Rajesh Kumar's certificates'."""
-    # 1. Possessive pattern: "Rajesh Kumar's certificates", "John Nonexistent's"
+    """Extract person name mentioned dynamically in queries like 'Show Dr. Sharma's certificates'."""
+    # 1. Possessive pattern: "Faculty Name's certificates", "Student Name's achievements"
     pos_match = re.search(r"\b([A-Za-z]+(?:\s+[A-Za-z]+)*)'s\b", text)
     if pos_match:
         cand = pos_match.group(1).strip()
@@ -310,7 +310,7 @@ def _extract_explicit_person_query(text: str) -> str | None:
         if cleaned and len(cleaned) >= 2:
             return cleaned
 
-    # 2. "certificates of Rajesh Kumar", "achievements for John Doe"
+    # 2. "certificates of Faculty Name", "achievements for Person Name"
     of_match = re.search(r"(?:certificates?|certifications?|achievements?|profile|skills?|projects?|publications?)\s+(?:of|for|by)\s+([A-Za-z\s]+)", text, re.IGNORECASE)
     if of_match:
         cand = of_match.group(1).strip()
@@ -318,7 +318,7 @@ def _extract_explicit_person_query(text: str) -> str | None:
         if cleaned and len(cleaned) >= 2:
             return cleaned
 
-    # 3. "Show me Rajesh Kumar certificates", "Does Rajesh Kumar have..."
+    # 3. "Show me Faculty Name certificates", "Does Person Name have..."
     verb_match = re.search(r"(?:show|tell|what|does|which|open|give|find|view|list|how many)\s+(?:me\s+)?(?:about\s+)?([A-Za-z\s]+?)(?:\s+has|\s+have|\s+completed|\s+done|\s+certificates?|\s+certifications?|\s+achievements?|\s+profile|\s+skills?|\s+projects?|\s+timetable|\s+schedule)", text, re.IGNORECASE)
     if verb_match:
         cand = verb_match.group(1).strip()
@@ -326,14 +326,14 @@ def _extract_explicit_person_query(text: str) -> str | None:
         if cleaned and len(cleaned) >= 2:
             return cleaned
 
-    # 4. Honorifics: "Dr. Rajesh Kumar", "Prof. Sharma"
+    # 4. Honorifics: "Dr. Name", "Prof. Name"
     hon_match = re.search(r"\b(?:dr\.|prof\.|mr\.|mrs\.|ms\.)\s*([A-Za-z]+(?:\s+[A-Za-z]+)?)", text, re.IGNORECASE)
     if hon_match:
         cand = hon_match.group(1).strip()
         if len(cand) >= 2:
             return cand
 
-    # 5. Two capitalized words: e.g. "Rajesh Kumar", "John Nonexistent"
+    # 5. Two capitalized words: e.g. "First Last"
     cap_match = re.search(r"\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b", text)
     if cap_match:
         cand = cap_match.group(1).strip()
@@ -438,7 +438,8 @@ def _build_user_career_profile(target_user: User, db: Session, topic_filter: str
         db.query(Achievement)
         .filter(Achievement.owner_id == target_user.id)
         .order_by(
-            Achievement.date_achieved.desc().nullslast(),
+            Achievement.date_achieved.is_(None),
+            Achievement.date_achieved.desc(),
             Achievement.created_at.desc(),
         )
         .all()

@@ -62,7 +62,7 @@ When asked about a faculty or user's Career Development, certificates, certifica
 achievements, publications, FDPs, workshops, awards, skills, or projects:
 1. Examine `career_development` (for specific person asked) or `my_career_development` (for logged-in user).
 2. If `person_exists` is false:
-   - State clearly that the requested person (e.g. "Rajesh Kumar") was not found in the ENOSIS database.
+   - State clearly that the requested person was not found in the ENOSIS database.
    - Do NOT invent certificates for people who do not exist.
 3. If `person_exists` is true but `total_achievements` or `total_certifications` is 0:
    - State clearly that the person has no certificates or career development achievements recorded in ENOSIS.
