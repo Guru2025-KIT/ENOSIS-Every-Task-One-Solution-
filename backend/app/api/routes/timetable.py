@@ -36,6 +36,7 @@ from app.schemas.timetable import (
     ConstraintCreate, ConstraintOut,
     TimetableGenerationRequest, SolverDivision, SolverSubject, SolverRoom,
     SolverAssignment, SolverUnavailability, SolverSoftConstraint,
+    SolverInstitutionalCourse, SolverSharedCourse,
     TimetableEntryOut, CollegeInfo, GenerationRunOut, ValidationResponse,
     ConflictDetail,
     InstitutionalCourseCreate, InstitutionalCourseOut,
@@ -48,6 +49,15 @@ from app.services.timetable_validator import validate_generated_timetable
 from app.services.timetable_preflight import run_preflight_checks
 from app.services.timetable_staged_solver import StagedTimetableSolver
 from app.services.notifications import notify
+
+
+def _clean_title(name_str: str) -> str:
+    """Helper to clean and normalize faculty titles for resilient lookup."""
+    s = (name_str or "").lower().strip()
+    for prefix in ["dr.", "dr ", "prof.", "prof ", "mr.", "mr ", "mrs.", "mrs ", "ms.", "ms ", "er.", "er "]:
+        if s.startswith(prefix):
+            s = s[len(prefix):].strip()
+    return s
 
 
 router = APIRouter(prefix="/timetable", tags=["timetable"])
@@ -1283,14 +1293,6 @@ def publish_timetable(
         "sun": 6, "sunday": 6,
     })
 
-    # Helper to clean and normalize names
-    def _clean_title(name_str: str) -> str:
-        s = name_str.lower().strip()
-        for prefix in ["dr.", "dr ", "prof.", "prof ", "mr.", "mr ", "mrs.", "mrs ", "ms.", "ms ", "er.", "er "]:
-            if s.startswith(prefix):
-                s = s[len(prefix):].strip()
-        return s
-
     dept = db.query(Department).first()
     dept_id = dept.department_id if dept else 1
 
@@ -2304,38 +2306,24 @@ def _resolve_export_grid_data(payload: dict[str, Any], db: Session):
 
     time_slots = payload.get("time_slots")
     if not time_slots or len(time_slots) == 0:
-        db_slots = db.query(TimeSlot).filter(TimeSlot.is_active == True).order_by(TimeSlot.slot_number.asc()).all()
-        if db_slots:
-            time_slots = [
-                {
-                    "slot_number": s.slot_number,
-                    "lecture_number": s.lecture_number,
-                    "start_time": s.start_time or "",
-                    "end_time": s.end_time or "",
-                    "is_break": s.is_break,
-                    "label": s.label or f"Slot {s.slot_number}"
-                }
-                for s in db_slots
-            ]
-        else:
-            periods = config.periods_per_day if config and config.periods_per_day else 8
-            time_slots = []
-            start_hour = 9
-            for p in range(1, periods + 1):
-                s_h = start_hour + (p - 1)
-                e_h = s_h + 1
-                s_ampm = "AM" if s_h < 12 else "PM"
-                e_ampm = "AM" if e_h < 12 else "PM"
-                s12 = s_h if s_h <= 12 else (s_h - 12)
-                e12 = e_h if e_h <= 12 else (e_h - 12)
-                time_slots.append({
-                    "slot_number": p,
-                    "lecture_number": p,
-                    "start_time": f"{s12:02d}:00 {s_ampm}",
-                    "end_time": f"{e12:02d}:00 {e_ampm}",
-                    "is_break": False,
-                    "label": f"Slot {p}"
-                })
+        periods = config.periods_per_day if config and config.periods_per_day else 8
+        time_slots = []
+        start_hour = 9
+        for p in range(1, periods + 1):
+            s_h = start_hour + (p - 1)
+            e_h = s_h + 1
+            s_ampm = "AM" if s_h < 12 else "PM"
+            e_ampm = "AM" if e_h < 12 else "PM"
+            s12 = s_h if s_h <= 12 else (s_h - 12)
+            e12 = e_h if e_h <= 12 else (e_h - 12)
+            time_slots.append({
+                "slot_number": p,
+                "lecture_number": p,
+                "start_time": f"{s12:02d}:00 {s_ampm}",
+                "end_time": f"{e12:02d}:00 {e_ampm}",
+                "is_break": False,
+                "label": f"Slot {p}"
+            })
 
     multi_grid_data = payload.get("multi_grid_data") or payload.get("timetables")
     grid_data = payload.get("grid_data") or {}
