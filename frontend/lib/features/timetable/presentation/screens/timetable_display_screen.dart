@@ -714,7 +714,6 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
       ),
     );
   }
-  }
 
   @override
   Widget build(BuildContext context) {

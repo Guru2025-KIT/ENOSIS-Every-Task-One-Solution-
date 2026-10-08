@@ -1147,10 +1147,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     },
             ),
           ],
-        ),
-      ),
-    );
-  }
+        );
+      },
+    ),
+  );
+}
 
   // ─── FACULTY PERFORMANCE DETAILS MODAL ────────────────────────────────────
 
