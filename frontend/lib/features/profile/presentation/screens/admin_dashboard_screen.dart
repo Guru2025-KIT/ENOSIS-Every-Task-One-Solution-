@@ -819,6 +819,207 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
+  // ─── ASSIGN SUBJECTS TO FACULTY (ADMIN OVERRIDE) ──────────────────────────
+
+  void _openAssignSubjectDialog(FacultyModel faculty) {
+    final codeCtrl = TextEditingController();
+    final nameCtrl = TextEditingController();
+    String selectedYear = 'S.Y. B.Tech';
+    String selectedSemester = 'Semester IV';
+    String selectedDept = faculty.department.isNotEmpty ? faculty.department : 'CSE (AI & ML)';
+    int credits = 3;
+    bool isSaving = false;
+
+    // Preset course options for rapid 1-click filling
+    final List<Map<String, String>> sampleCourses = [
+      {'code': 'UAMPC0403', 'name': 'Design and Analysis of Algorithms (DAA)', 'year': 'S.Y. B.Tech', 'sem': 'Semester IV'},
+      {'code': 'UAMPC0304', 'name': 'Database Management System (DBMS)', 'year': 'S.Y. B.Tech', 'sem': 'Semester III'},
+      {'code': 'UAMPC0501', 'name': 'Machine Learning', 'year': 'T.Y. B.Tech', 'sem': 'Semester V'},
+      {'code': 'UAMPC0601', 'name': 'Deep Learning', 'year': 'T.Y. B.Tech', 'sem': 'Semester VI'},
+      {'code': 'UAMPC0702', 'name': 'Generative AI', 'year': 'Final Year B.Tech', 'sem': 'Semester VII'},
+      {'code': 'UAMPC0401', 'name': 'Computer Networks', 'year': 'S.Y. B.Tech', 'sem': 'Semester IV'},
+      {'code': 'UAMPC0305', 'name': 'Principles of AIML', 'year': 'S.Y. B.Tech', 'sem': 'Semester III'},
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.secondary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.menu_book, color: AppColors.secondary, size: 22),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Assign Subject / Course', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                    Text('Faculty: ${faculty.name} (${faculty.employeeId})', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 500,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Quick Select Preset Subject:',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: sampleCourses.map((sc) {
+                      return ActionChip(
+                        label: Text('${sc['code']}: ${sc['name']}', style: const TextStyle(fontSize: 11)),
+                        onPressed: () {
+                          setDialogState(() {
+                            codeCtrl.text = sc['code']!;
+                            nameCtrl.text = sc['name']!;
+                            selectedYear = sc['year']!;
+                            selectedSemester = sc['sem']!;
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: TextField(
+                          controller: codeCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Course / Subject Code *',
+                            hintText: 'e.g. UAMPC0403',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 3,
+                        child: TextField(
+                          controller: nameCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Course Name *',
+                            hintText: 'e.g. Design & Analysis of Algorithms',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: selectedYear,
+                          decoration: const InputDecoration(labelText: 'Academic Year', border: OutlineInputBorder()),
+                          items: ['F.Y. B.Tech', 'S.Y. B.Tech', 'T.Y. B.Tech', 'Final Year B.Tech']
+                              .map((y) => DropdownMenuItem(value: y, child: Text(y, style: const TextStyle(fontSize: 12))))
+                              .toList(),
+                          onChanged: (v) => setDialogState(() => selectedYear = v!),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: selectedSemester,
+                          decoration: const InputDecoration(labelText: 'Semester', border: OutlineInputBorder()),
+                          items: ['Semester I', 'Semester II', 'Semester III', 'Semester IV', 'Semester V', 'Semester VI', 'Semester VII', 'Semester VIII']
+                              .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 12))))
+                              .toList(),
+                          onChanged: (v) => setDialogState(() => selectedSemester = v!),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    decoration: InputDecoration(
+                      labelText: 'Department',
+                      hintText: selectedDept,
+                      border: const OutlineInputBorder(),
+                    ),
+                    readOnly: true,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: isSaving ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary, foregroundColor: Colors.white),
+              icon: isSaving
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.check_circle_outline, size: 18),
+              label: const Text('Assign Subject'),
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      if (codeCtrl.text.trim().isEmpty || nameCtrl.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter Course Code and Course Name.')),
+                        );
+                        return;
+                      }
+                      setDialogState(() => isSaving = true);
+                      try {
+                        await _repository.createSubjectAllocation(
+                          courseCode: codeCtrl.text.trim().toUpperCase(),
+                          courseName: nameCtrl.text.trim(),
+                          department: selectedDept,
+                          year: selectedYear,
+                          semester: selectedSemester,
+                          credits: credits,
+                          facultyId: faculty.id,
+                        );
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        await _loadDashboardData();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Successfully assigned ${nameCtrl.text.trim()} to ${faculty.name}!'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() => isSaving = false);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to assign subject: $e'), backgroundColor: AppColors.error),
+                          );
+                        }
+                      }
+                    },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ─── FACULTY PERFORMANCE DETAILS MODAL ────────────────────────────────────
 
   void _showFacultyPerformanceDetails(FacultyModel faculty) async {
@@ -965,16 +1166,33 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   const Text('📚 Course Allocations & Workload', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF2563EB).withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      '${metrics['total_lecture_hours'] ?? 0}h Theory · ${metrics['total_lab_hours'] ?? 0}h Lab',
-                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
-                                    ),
+                                  Row(
+                                    children: [
+                                      OutlinedButton.icon(
+                                        style: OutlinedButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                        icon: const Icon(Icons.add, size: 14),
+                                        label: const Text('Assign Subject', style: TextStyle(fontSize: 12)),
+                                        onPressed: () {
+                                          Navigator.pop(context);
+                                          _openAssignSubjectDialog(faculty);
+                                        },
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          '${metrics['total_lecture_hours'] ?? 0}h Theory · ${metrics['total_lab_hours'] ?? 0}h Lab',
+                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -1412,6 +1630,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           ),
                         ),
                         // Actions
+                        IconButton(
+                          icon: const Icon(Icons.menu_book, color: AppColors.secondary),
+                          tooltip: 'Assign / Allocate Subject',
+                          onPressed: () => _openAssignSubjectDialog(faculty),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.insights_rounded, color: Color(0xFF2563EB)),
                           tooltip: 'View Performance & Profile',
