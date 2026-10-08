@@ -33,6 +33,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
   String _selectedYear = 'S.Y. B.Tech';
   String _selectedSemester = 'Semester IV';
   late KitCourseInfo _selectedCourse;
+  List<KitCourseInfo> _facultyAssignedCourses = kitAimlCourses;
+  bool _isLoadingCourses = true;
 
   List<String> get _availableSemesters {
     switch (_selectedYear) {
@@ -50,9 +52,13 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
   }
 
   List<KitCourseInfo> get _availableCourses {
-    return kitAimlCourses
+    final list = _facultyAssignedCourses
         .where((c) => c.semester == _selectedSemester)
         .toList();
+    if (list.isEmpty) {
+      return _facultyAssignedCourses;
+    }
+    return list;
   }
 
   void _onYearChanged(String newYear) {
@@ -121,6 +127,26 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     );
     _repository.selectCourse(_selectedCourse);
     _recalculate();
+    _loadAssignedCourses();
+  }
+
+  Future<void> _loadAssignedCourses() async {
+    try {
+      final assigned = await _repository.fetchAssignedCourses();
+      if (mounted && assigned.isNotEmpty) {
+        setState(() {
+          _facultyAssignedCourses = assigned;
+          _selectedCourse = assigned.first;
+          _selectedYear = _selectedCourse.year;
+          _selectedSemester = _selectedCourse.semester;
+          _isLoadingCourses = false;
+          _repository.selectCourse(_selectedCourse);
+          _recalculate();
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingCourses = false);
+    }
   }
 
   @override
@@ -147,6 +173,28 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  Future<void> _syncSliIndirectData() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Syncing Indirect CO Attainment from SLI Module...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+    await _repository.fetchSliIndirectAttainment(_selectedCourse.code);
+    setState(() {
+      _recalculate();
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Successfully synced SLI student responses into COPO Indirect Attainment!'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   // ─── FILE PICKER & EXTRACTION HANDLERS ──────────────────────────────────────
@@ -1145,6 +1193,9 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
 
     final report = _cachedReport ?? _repository.calculateLocalReport();
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth > 950;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -1153,71 +1204,98 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           children: [
             Text(
               'CO-PO Attainment Workbench',
-              style: AppTypography.h3
-                  .copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+              style: AppTypography.h3.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: isDesktop ? 16 : 14,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
             Text(
-              '${_repository.master.courseCode} · ${_repository.master.courseName} (${_repository.master.semester})',
+              '${_repository.master.courseCode} · ${_repository.master.courseName}',
               style: AppTypography.caption.copyWith(
-                  color: Colors.white.withValues(alpha: 0.85), fontSize: 11.5),
+                color: Colors.white.withValues(alpha: 0.85),
+                fontSize: 11,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
         backgroundColor: AppColors.primary,
         elevation: 1,
         actions: [
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.secondary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+          if (isDesktop) ...[
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.secondary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              icon: const Icon(Icons.tune_rounded, size: 14),
+              label: Text(
+                'Rules (${_repository.config.directWeightPercent.toInt()}/${_repository.config.indirectWeightPercent.toInt()})',
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+              onPressed: _showAttainmentConfigDialog,
             ),
-            icon: const Icon(Icons.tune_rounded, size: 15),
-            label: Text(
-              'Attainment Rules (${_repository.config.directWeightPercent.toInt()}/${_repository.config.indirectWeightPercent.toInt()} · Cutoff ${_repository.config.passingThresholdPercent.toInt()}%)',
-              style:
-                  const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+            const SizedBox(width: 6),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white.withValues(alpha: 0.18),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              icon: const Icon(Icons.picture_as_pdf_outlined, size: 14),
+              label: const Text('Export PDF',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              onPressed: () => _exportPdfReport(report),
             ),
-            onPressed: _showAttainmentConfigDialog,
-          ),
-          const SizedBox(width: 6),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white.withValues(alpha: 0.18),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+            const SizedBox(width: 6),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white60),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              ),
+              icon: const Icon(Icons.swap_horiz_rounded, size: 14),
+              label: const Text('Switch Course',
+                  style: TextStyle(fontSize: 11)),
+              onPressed: () {
+                setState(() {
+                  _hasStartedMapping = false;
+                });
+              },
             ),
-            icon: const Icon(Icons.picture_as_pdf_outlined, size: 15),
-            label: const Text('Export PDF',
-                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
-            onPressed: () => _exportPdfReport(report),
-          ),
-          const SizedBox(width: 6),
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
-              side: const BorderSide(color: Colors.white60),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            const SizedBox(width: 4),
+          ] else ...[
+            IconButton(
+              icon: const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
+              tooltip: 'Attainment Rules & Calculation %',
+              onPressed: _showAttainmentConfigDialog,
             ),
-            icon: const Icon(Icons.school_outlined, size: 15),
-            label: const Text('Switch Course / Year',
-                style: TextStyle(fontSize: 11.5)),
-            onPressed: () {
-              setState(() {
-                _hasStartedMapping = false;
-              });
-            },
-          ),
-          const SizedBox(width: 4),
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined, color: Colors.white, size: 20),
+              tooltip: 'Export PDF Report',
+              onPressed: () => _exportPdfReport(report),
+            ),
+            IconButton(
+              icon: const Icon(Icons.swap_horiz_rounded, color: Colors.white, size: 20),
+              tooltip: 'Switch Course / Year',
+              onPressed: () {
+                setState(() {
+                  _hasStartedMapping = false;
+                });
+              },
+            ),
+          ],
           IconButton(
-            icon: const Icon(Icons.functions_rounded,
-                color: Colors.white, size: 20),
+            icon: const Icon(Icons.functions_rounded, color: Colors.white, size: 20),
             tooltip: 'View Formulas',
             onPressed: _showFormulaGuideDialog,
           ),
@@ -1229,46 +1307,44 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           const SizedBox(width: 6),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(102),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildCategorizedCategoryBar(),
-              TabBar(
-                controller: _tabController,
-                isScrollable: true,
-                labelColor: Colors.white,
-                unselectedLabelColor: Colors.white.withValues(alpha: 0.65),
-                indicatorColor: AppColors.secondary,
-                indicatorWeight: 3.5,
-                tabs: const [
-                  Tab(
-                      icon: Icon(Icons.grid_on, size: 16),
-                      text: '1. Master & Matrix'),
-                  Tab(
-                      icon: Icon(Icons.people_outline, size: 16),
-                      text: '2. Roll Call'),
-                  Tab(
-                      icon: Icon(Icons.assignment_outlined, size: 16),
-                      text: '3. ISE 1'),
-                  Tab(
-                      icon: Icon(Icons.quiz_outlined, size: 16),
-                      text: '4. MSE'),
-                  Tab(
-                      icon: Icon(Icons.assignment_turned_in_outlined, size: 16),
-                      text: '5. ISE 2'),
-                  Tab(
-                      icon: Icon(Icons.school_outlined, size: 16),
-                      text: '6. ESE'),
-                  Tab(
-                      icon: Icon(Icons.rate_review_outlined, size: 16),
-                      text: '7. Exit Survey'),
-                  Tab(
-                      icon: Icon(Icons.analytics_outlined, size: 16),
-                      text: '8. Attainment Report'),
-                ],
-              ),
-            ],
+          preferredSize: const Size.fromHeight(46),
+          child: Container(
+            color: AppColors.primary.withValues(alpha: 0.95),
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white.withValues(alpha: 0.65),
+              indicatorColor: AppColors.secondary,
+              indicatorWeight: 3,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+              tabs: const [
+                Tab(
+                    icon: Icon(Icons.grid_on, size: 15),
+                    text: '1. Master & Matrix'),
+                Tab(
+                    icon: Icon(Icons.people_outline, size: 15),
+                    text: '2. Roll Call'),
+                Tab(
+                    icon: Icon(Icons.assignment_outlined, size: 15),
+                    text: '3. ISE 1'),
+                Tab(
+                    icon: Icon(Icons.quiz_outlined, size: 15),
+                    text: '4. MSE'),
+                Tab(
+                    icon: Icon(Icons.assignment_turned_in_outlined, size: 15),
+                    text: '5. ISE 2'),
+                Tab(
+                    icon: Icon(Icons.school_outlined, size: 15),
+                    text: '6. ESE'),
+                Tab(
+                    icon: Icon(Icons.rate_review_outlined, size: 15),
+                    text: '7. Exit Survey'),
+                Tab(
+                    icon: Icon(Icons.analytics_outlined, size: 15),
+                    text: '8. Attainment Report'),
+              ],
+            ),
           ),
         ),
       ),
@@ -1696,24 +1772,29 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Step 1: Course Outcomes (CO1 - CO5) Entry',
-                            style: AppTypography.h3
-                                .copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Enter or customize the 5 Course Outcome (CO) statements for ${_repository.master.courseCode}',
-                            style: AppTypography.caption
-                                .copyWith(color: AppColors.textSecondary),
-                          ),
-                        ],
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Step 1: Course Outcomes (CO1 - CO5) Entry',
+                              style: AppTypography.h3
+                                  .copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Enter or customize the 5 Course Outcome (CO) statements for ${_repository.master.courseCode}',
+                              style: AppTypography.caption
+                                  .copyWith(color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
                       ),
                       ElevatedButton.icon(
                         onPressed: () {
@@ -1800,21 +1881,26 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Step 2: CO-PO & PSO Correlation Matrix',
-                              style: AppTypography.h3
-                                  .copyWith(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 4),
-                          Text(
-                              'Click any cell to cycle values: 0 (-) → 1 (Low) → 2 (Medium) → 3 (High)',
-                              style: AppTypography.caption
-                                  .copyWith(color: AppColors.textSecondary)),
-                        ],
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Step 2: CO-PO & PSO Correlation Matrix',
+                                style: AppTypography.h3
+                                    .copyWith(fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 4),
+                            Text(
+                                'Click any cell to cycle values: 0 (-) → 1 (Low) → 2 (Medium) → 3 (High)',
+                                style: AppTypography.caption
+                                    .copyWith(color: AppColors.textSecondary)),
+                          ],
+                        ),
                       ),
                       OutlinedButton.icon(
                         onPressed: () {
@@ -3106,6 +3192,74 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppColors.secondary.withOpacity(0.9), AppColors.secondary],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.secondary.withOpacity(0.2),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.sync_rounded, color: Colors.white, size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'SLI Module Integration Sync',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Fetch live student understanding & mastery survey responses directly from SLI END-Semester Records.',
+                            style: TextStyle(color: Colors.white70, fontSize: 11.5),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppColors.secondary,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.cloud_download_rounded, size: 18),
+                  label: const Text('Sync SLI Responses', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                  onPressed: _syncSliIndirectData,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
           Text('Course Exit Survey (Indirect Attainment)',
               style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
@@ -3267,10 +3421,14 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 12,
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
                           padding: const EdgeInsets.all(8),
@@ -3282,22 +3440,24 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                               color: Colors.white, size: 24),
                         ),
                         const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'NBA Compliance Audit Report Generator',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              'Active Rules: Direct ${_repository.config.directWeightPercent.toInt()}% · Survey ${_repository.config.indirectWeightPercent.toInt()}% · Passing Cutoff ${_repository.config.passingThresholdPercent.toInt()}% · Target ${_repository.config.targetBenchmark.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                  color: Colors.white70, fontSize: 11.5),
-                            ),
-                          ],
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'NBA Compliance Audit Report Generator',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                'Active Rules: Direct ${_repository.config.directWeightPercent.toInt()}% · Survey ${_repository.config.indirectWeightPercent.toInt()}% · Passing Cutoff ${_repository.config.passingThresholdPercent.toInt()}% · Target ${_repository.config.targetBenchmark.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                    color: Colors.white70, fontSize: 11.5),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -3597,7 +3757,10 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   const SizedBox(height: 16),
                   const Divider(height: 1),
                   const SizedBox(height: 12),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       const Text('Course Outcome Attainment = ',
                           style: TextStyle(
@@ -3643,7 +3806,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                           ),
                         ),
                       ),
-                      const SizedBox(width: 24),
+                      const SizedBox(width: 16),
                       const Text('Target Attainment = ',
                           style: TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 14)),

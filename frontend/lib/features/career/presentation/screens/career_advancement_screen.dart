@@ -424,6 +424,18 @@ class _CareerAdvancementScreenState extends State<CareerAdvancementScreen> {
     );
   }
 
+  Future<void> _openDocument(String? url) async {
+    if (url == null || url.trim().isEmpty) return;
+    final uri = Uri.tryParse(url.trim());
+    if (uri != null) {
+      if (kIsWeb) {
+        html.window.open(url, '_blank');
+      } else if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    }
+  }
+
   String _formatDate(DateTime date) {
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
