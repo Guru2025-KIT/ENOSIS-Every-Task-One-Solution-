@@ -513,5 +513,25 @@ class TimetableRepository {
     }
     throw TimetableException('Failed to export Excel');
   }
+
+  Future<Map<String, dynamic>> fetchAiAdvisor({
+    required List<dynamic> assignments,
+    required List<dynamic> lockedSlots,
+    required List<dynamic> divisions,
+    required List<String> workingDays,
+    required int periodsPerDay,
+  }) async {
+    final response = await ApiClient.postJson('/timetable/ai-advisor', {
+      'assignments': assignments,
+      'locked_slots': lockedSlots,
+      'divisions': divisions,
+      'working_days': workingDays,
+      'periods_per_day': periodsPerDay,
+    });
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw TimetableException('Failed to fetch AI Advisor recommendations');
+  }
 }
 

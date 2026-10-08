@@ -265,34 +265,44 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   ),
                   onPressed: () async {
-                    if (nameCtrl.text.trim().isEmpty) return;
+                    final roomName = nameCtrl.text.trim();
+                    if (roomName.isEmpty) return;
                     final cap = int.tryParse(capCtrl.text) ?? 60;
                     
                     final provider = context.read<TimetableProvider>();
                     if (existingRoom?.id != null) {
                       await provider.updateRoom(
                         existingRoom!.id!,
-                        Room(name: nameCtrl.text.trim(), type: selectedType, capacity: cap),
+                        Room(name: roomName, type: selectedType, capacity: cap),
                         building: bldgCtrl.text.trim(),
                         department: deptCtrl.text.trim(),
                         equipment: equipCtrl.text.trim(),
                         isActive: isActive,
                       );
                     } else {
+                      final isDuplicate = provider.rooms.any((r) => r.name.toLowerCase() == roomName.toLowerCase());
                       await provider.addRoom(
-                        Room(name: nameCtrl.text.trim(), type: selectedType, capacity: cap),
+                        Room(name: roomName, type: selectedType, capacity: cap),
                         building: bldgCtrl.text.trim(),
                         department: deptCtrl.text.trim(),
                         equipment: equipCtrl.text.trim(),
                         isActive: isActive,
                       );
+                      if (isDuplicate && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Room/Lab "$roomName" already existed; updated existing record.'),
+                            backgroundColor: const Color(0xFFF59E0B),
+                          ),
+                        );
+                      }
                     }
 
                     if (mounted) {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('${nameCtrl.text.trim()} saved successfully!'),
+                          content: Text('$roomName saved successfully!'),
                           backgroundColor: const Color(0xFF10B981),
                         ),
                       );

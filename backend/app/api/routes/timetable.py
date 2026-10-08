@@ -2048,14 +2048,25 @@ async def upload_excel(
                     continue
                 row_dict = dict(zip(headers, row))
                 try:
-                    room = Room(
-                        id=str(uuid.uuid4()),
-                        name=str(row_dict.get("name", "")).strip(),
-                        type=str(row_dict.get("type", "lecture")).strip().lower(),
-                        capacity=int(row_dict.get("capacity", 60)),
-                    )
-                    db.add(room)
-                    created_rooms.append(room)
+                    r_name = str(row_dict.get("name", "")).strip()
+                    if not r_name:
+                        continue
+                    r_type = str(row_dict.get("type", "lecture")).strip().lower()
+                    r_cap = int(row_dict.get("capacity", 60))
+                    existing_room = db.query(Room).filter(Room.name.ilike(r_name)).first()
+                    if existing_room:
+                        existing_room.type = r_type
+                        existing_room.capacity = r_cap
+                        created_rooms.append(existing_room)
+                    else:
+                        room = Room(
+                            id=str(uuid.uuid4()),
+                            name=r_name,
+                            type=r_type,
+                            capacity=r_cap,
+                        )
+                        db.add(room)
+                        created_rooms.append(room)
                 except Exception as e:
                     errors.append(f"Rooms Sheet Row {row_idx}: {str(e)}")
 
@@ -2470,4 +2481,106 @@ def export_pdf_timetable(payload: dict[str, Any], db: Session = Depends(get_db))
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=Timetable_{view_title.replace(' ', '_')}.pdf"}
     )
+
+
+@router.post("/ai-advisor")
+def timetable_ai_advisor(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    _: User = Depends(require_timetable_manager)
+):
+    """
+    Groq AI Timetable Schedule Advisor.
+    Audits the current course assignments, division loads, and locked slots,
+    and returns tailored optimization recommendations to eliminate empty slots
+    and properly structure Open Electives (OE) and Departmental (MDM) courses.
+    """
+    assignments = payload.get("assignments", [])
+    locked_slots = payload.get("locked_slots", [])
+    divisions = payload.get("divisions", [])
+    working_days = payload.get("working_days") or ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    periods_per_day = int(payload.get("periods_per_day") or 8)
+
+    # 1. Algorithmic Analytics
+    div_stats: dict[str, dict[str, Any]] = {}
+    oe_subjects: list[str] = []
+    mdm_subjects: list[str] = []
+
+    for a in assignments:
+        cls = a.get("className") or a.get("class_name") or ""
+        sub = a.get("subjectName") or a.get("subject_name") or ""
+        hrs = int(a.get("weeklyHours") or a.get("weekly_hours") or 3)
+        stype = (a.get("type") or "Theory").lower()
+
+        if "open elective" in sub.lower() or " oe" in sub.lower() or "institute" in sub.lower():
+            if sub not in oe_subjects: oe_subjects.append(sub)
+        elif "mdm" in sub.lower() or "minor" in sub.lower() or "elective" in sub.lower():
+            if sub not in mdm_subjects: mdm_subjects.append(sub)
+
+        if cls:
+            if cls not in div_stats:
+                div_stats[cls] = {"theory_hours": 0, "lab_hours": 0, "subjects": []}
+            if stype == "lab":
+                div_stats[cls]["lab_hours"] += hrs
+            else:
+                div_stats[cls]["theory_hours"] += hrs
+            if sub not in div_stats[cls]["subjects"]:
+                div_stats[cls]["subjects"].append(sub)
+
+    total_capacity_per_div = len(working_days) * periods_per_day
+
+    heuristic_suggestions = []
+    if oe_subjects:
+        heuristic_suggestions.append(f"🔒 **Institute Open Electives ({', '.join(oe_subjects[:2])})**: Recommended to lock to Friday Periods 3 & 4 so all departments share the same synchronized slot.")
+    if mdm_subjects:
+        heuristic_suggestions.append(f"🔒 **Departmental MDM Electives ({', '.join(mdm_subjects[:2])})**: Lock to Thursday Periods 5 & 6 across Year 3/4 divisions.")
+
+    for cls, stat in div_stats.items():
+        tot_hrs = stat["theory_hours"] + stat["lab_hours"]
+        if tot_hrs < (total_capacity_per_div * 0.5):
+            heuristic_suggestions.append(f"⚠️ **{cls}**: Total scheduled workload ({tot_hrs} hrs) is under-allocated for a {len(working_days)}-day week. Add remaining tutorials/self-study blocks.")
+        elif tot_hrs > total_capacity_per_div:
+            heuristic_suggestions.append(f"🚨 **{cls}**: Total workload ({tot_hrs} hrs) exceeds available periods ({total_capacity_per_div} hrs). Review weekly hours.")
+
+    if not heuristic_suggestions:
+        heuristic_suggestions.append("✅ Schedule workload is well-balanced across all divisions with zero detected over-allocations.")
+
+    # 2. Groq LLM Generation
+    ai_analysis = None
+    if settings.GROQ_API_KEY:
+        try:
+            from groq import Groq
+            client = Groq(api_key=settings.GROQ_API_KEY, timeout=15)
+            prompt = f"""You are the ENOSIS Academic Timetable AI Advisor.
+Audit the following timetable structure:
+- Working Days: {working_days} ({periods_per_day} periods/day)
+- Divisions & Workloads: {div_stats}
+- Currently Locked Slots: {len(locked_slots)}
+- Open Electives (OE): {oe_subjects}
+- Departmental Electives (MDM): {mdm_subjects}
+
+Provide 3 to 4 concise, high-value bullet points with recommendations for the coordinator:
+1. Ideal slots to lock Open Electives (OE) and MDM courses.
+2. How to prevent excessive free/empty periods on any day.
+3. Lab batch synchronization advice.
+Keep advice practical, professional, and under 150 words. Plain text with markdown bullets."""
+
+            resp = client.chat.completions.create(
+                model=settings.GROQ_MODEL or "openai/gpt-oss-20b",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+            )
+            ai_analysis = resp.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"[AI Advisor Note]: {e}")
+
+    return {
+        "status": "success",
+        "ai_recommendations": ai_analysis or "\n\n".join(heuristic_suggestions),
+        "heuristic_suggestions": heuristic_suggestions,
+        "division_workload_audit": div_stats,
+        "detected_open_electives": oe_subjects,
+        "detected_mdm_electives": mdm_subjects,
+    }
+
 

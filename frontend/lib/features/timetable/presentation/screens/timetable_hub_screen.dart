@@ -5,6 +5,7 @@ import 'time_slot_setup_screen.dart';
 import 'upload_assignments_screen.dart';
 import 'manage_rooms_screen.dart';
 import 'constraint_builder_screen.dart';
+import 'interactive_slot_locking_workbench_screen.dart';
 import 'generate_timetable_screen.dart';
 import 'timetable_display_screen.dart';
 
@@ -288,15 +289,33 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
 
             const SizedBox(height: 12),
 
-            // STEP 5: Generate & Publish Timetable
+            // STEP 4.5: Interactive Slot Locking & AI Advisor Workbench
             _buildStepCard(
               context: context,
               stepNumber: 5,
+              title: 'Interactive Slot Locking & Groq AI Workbench',
+              subtitle: 'Drag-and-drop Open Electives, MDM courses, and lock slots with Groq AI advisor recommendations.',
+              badgeText: 'Priority Locking 🔒',
+              icon: Icons.lock_clock_outlined,
+              isHighlighted: true,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const InteractiveSlotLockingWorkbenchScreen()),
+                );
+              },
+            ),
+
+            const SizedBox(height: 12),
+
+            // STEP 6: Generate & Publish Timetable
+            _buildStepCard(
+              context: context,
+              stepNumber: 6,
               title: 'Generate & Publish Timetable',
               subtitle: 'Run CP-SAT solver with automated relaxation to produce a complete schedule.',
               badgeText: hasPublished ? 'Schedule Ready' : 'Ready to Solve',
               icon: Icons.auto_awesome,
-              isHighlighted: true,
+              isHighlighted: false,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const GenerateTimetableScreen()),

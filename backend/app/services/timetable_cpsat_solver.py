@@ -434,6 +434,7 @@ class TimetableCpSatSolver:
         time_limit: Optional[float] = None,
         pre_assigned_faculty_busy: Optional[Set[Tuple[str, str, int]]] = None,
         pre_assigned_class_busy: Optional[Set[Tuple[str, str, int]]] = None,
+        pre_assigned_room_busy: Optional[Set[Tuple[str, str, int]]] = None,
     ) -> Optional[SolverResult]:
 
         if not sessions:
@@ -446,6 +447,7 @@ class TimetableCpSatSolver:
 
         pre_fac = pre_assigned_faculty_busy or set()
         pre_cls = pre_assigned_class_busy or set()
+        pre_rm_set = pre_assigned_room_busy or set()
 
         teaching_slots = [s for s in self.time_slots if not s.is_break and s.slot_number > 0]
         if not teaching_slots:
@@ -458,7 +460,7 @@ class TimetableCpSatSolver:
         for sess in sessions:
             opts: List[SessionOption] = []
             duration = sess.duration
-            fac_parts = [f.strip() for f in sess.faculty.split("|")]
+            fac_parts = [self._normalize(f) for f in sess.faculty.split("|") if f.strip()]
 
             for day in available_days:
                 for i, ts in enumerate(teaching_slots):
@@ -480,8 +482,14 @@ class TimetableCpSatSolver:
                     # Skip pre-assigned busy
                     if any((fp, day, s) in pre_fac for fp in fac_parts for s in block_slots):
                         continue
-                    if any((cls, day, s) in pre_cls for cls in sess.classes for s in block_slots):
+                    if any((self._normalize(cls), day, s) in pre_cls for cls in sess.classes for s in block_slots):
                         continue
+
+                    # For single division theory, ensure division's home room isn't pre-assigned busy
+                    if sess.type == "Theory" and len(sess.classes) == 1:
+                        home_rm = self._normalize(self._get_home_classroom(sess.classes[0]))
+                        if any((home_rm, day, s) in pre_rm_set for s in block_slots):
+                            continue
 
                     penalty = 0
                     reasons: List[str] = []
@@ -569,10 +577,10 @@ class TimetableCpSatSolver:
                 sched_vars.append(sv)
                 model.Add(sum(row) == sv) if row else model.Add(sv == 0)
 
-        # Faculty: at most one session per (faculty_part, day, slot)
+        # Faculty: strictly at most one session per (normalized_faculty_part, day, slot)
         fac_slot: Dict[Tuple[str, str, int], List] = defaultdict(list)
         for i, (sess, opts) in enumerate(zip(sessions, session_options)):
-            fps = [f.strip() for f in sess.faculty.split("|")]
+            fps = [self._normalize(f) for f in sess.faculty.split("|") if f.strip()]
             for j, opt in enumerate(opts):
                 for fp in fps:
                     for s in opt.slots:
@@ -592,11 +600,12 @@ class TimetableCpSatSolver:
             for j, opt in enumerate(opts):
                 v = choice_vars[i][j]
                 for cls in sess.classes:
+                    norm_cls = self._normalize(cls)
                     for s in opt.slots:
                         if whole:
-                            th_vars[(cls, opt.day, s)].append(v)
+                            th_vars[(norm_cls, opt.day, s)].append(v)
                         else:
-                            bt_vars[(cls, opt.day, s, sess.batch)].append(v)
+                            bt_vars[(norm_cls, opt.day, s, sess.batch)].append(v)
 
         for vl in th_vars.values():
             if len(vl) > 1:
@@ -610,17 +619,57 @@ class TimetableCpSatSolver:
             if len(bvl) > 1:
                 model.AddAtMostOne(bvl)
 
+        # Home Classroom separation: No two single-division theory sessions using the same Home Classroom
+        home_room_slot: Dict[Tuple[str, str, int], List] = defaultdict(list)
+        for i, (sess, opts) in enumerate(zip(sessions, session_options)):
+            if sess.type == "Theory" and len(sess.classes) == 1:
+                hrm = self._normalize(self._get_home_classroom(sess.classes[0]))
+                for j, opt in enumerate(opts):
+                    for s in opt.slots:
+                        home_room_slot[(hrm, opt.day, s)].append(choice_vars[i][j])
+        for vl in home_room_slot.values():
+            if len(vl) > 1:
+                model.AddAtMostOne(vl)
+
         # Same subject taught at most once per (class, day) for theory
         sd_vars: Dict[Tuple[str, str, str], List] = defaultdict(list)
         for i, (sess, opts) in enumerate(zip(sessions, session_options)):
             if sess.type != "Theory":
                 continue
             for cls in sess.classes:
+                norm_cls = self._normalize(cls)
                 for j, opt in enumerate(opts):
-                    sd_vars[(cls, sess.subject, opt.day)].append(choice_vars[i][j])
+                    sd_vars[(norm_cls, sess.subject, opt.day)].append(choice_vars[i][j])
         for vl in sd_vars.values():
             if len(vl) > 1:
                 model.AddAtMostOne(vl)
+
+        # Simultaneous Theory & Lab Room constraints to guarantee zero classroom/lab double-booking
+        if self.classrooms:
+            max_classrooms = len(self.classrooms)
+            theory_slot_vars: Dict[Tuple[str, int], List] = defaultdict(list)
+            for i, (sess, opts) in enumerate(zip(sessions, session_options)):
+                if sess.type == "Theory":
+                    for j, opt in enumerate(opts):
+                        v = choice_vars[i][j]
+                        for s in opt.slots:
+                            theory_slot_vars[(opt.day, s)].append(v)
+            for (day, slot), tvl in theory_slot_vars.items():
+                if len(tvl) > max_classrooms:
+                    model.Add(sum(tvl) <= max_classrooms)
+
+        if self.labs_pool:
+            max_labs = len(self.labs_pool)
+            lab_slot_vars: Dict[Tuple[str, int], List] = defaultdict(list)
+            for i, (sess, opts) in enumerate(zip(sessions, session_options)):
+                if sess.type == "Lab":
+                    for j, opt in enumerate(opts):
+                        v = choice_vars[i][j]
+                        for s in opt.slots:
+                            lab_slot_vars[(opt.day, s)].append(v)
+            for (day, slot), lvl in lab_slot_vars.items():
+                if len(lvl) > max_labs:
+                    model.Add(sum(lvl) <= max_labs)
 
         # Daily workload spread (soft penalty to avoid clustering on one day)
         cd_vars: Dict[Tuple[str, str], List] = defaultdict(list)
@@ -717,6 +766,8 @@ class TimetableCpSatSolver:
 
         rel_notes, unsched, sched_cnt = [], [], 0
         room_use: Dict[Tuple[str, int], Set[str]] = defaultdict(set)
+        for (p_rm, p_day, p_s) in pre_rm_set:
+            room_use[(p_day, p_s)].add(p_rm)
 
         for i, (sess, opts) in enumerate(zip(sessions, session_options)):
             placed = False
@@ -733,17 +784,14 @@ class TimetableCpSatSolver:
                             rn = r.get("name", "")
                             if rn and all(rn not in room_use[(opt.day, s)] for s in opt.slots):
                                 rm = rn
-                                for s in opt.slots:
-                                    room_use[(opt.day, s)].add(rn)
                                 break
                         if not rm:
-                            for l_idx in range(1, 20):
-                                cand_lab = f"Lab {l_idx}"
-                                if all(cand_lab not in room_use[(opt.day, s)] for s in opt.slots):
-                                    rm = cand_lab
-                                    for s in opt.slots:
-                                        room_use[(opt.day, s)].add(cand_lab)
-                                    break
+                            l_idx = 1
+                            while any(f"Lab {l_idx}" in room_use[(opt.day, s)] for s in opt.slots):
+                                l_idx += 1
+                            rm = f"Lab {l_idx}"
+                        for s in opt.slots:
+                            room_use[(opt.day, s)].add(rm)
 
                     # 2. Theory Sessions:
                     else:
@@ -753,33 +801,33 @@ class TimetableCpSatSolver:
                                 rn = r.get("name", "")
                                 if rn and all(rn not in room_use[(opt.day, s)] for s in opt.slots):
                                     rm = rn
-                                    for s in opt.slots:
-                                        room_use[(opt.day, s)].add(rn)
                                     break
                             if not rm:
-                                rm = f"Shared Hall {len(room_use[(opt.day, opt.slots[0])]) + 1}"
-                                for s in opt.slots:
-                                    room_use[(opt.day, s)].add(rm)
+                                c_idx = 1
+                                while any(f"Shared Hall {c_idx}" in room_use[(opt.day, s)] for s in opt.slots):
+                                    c_idx += 1
+                                rm = f"Shared Hall {c_idx}"
+                            for s in opt.slots:
+                                room_use[(opt.day, s)].add(rm)
                         else:
                             # Single class-level theory lecture: MUST use the division's dedicated HOME CLASSROOM
                             cls_name = sess.classes[0] if sess.classes else ""
                             candidate_home = self._get_home_classroom(cls_name)
                             if candidate_home and all(candidate_home not in room_use[(opt.day, s)] for s in opt.slots):
                                 rm = candidate_home
-                                for s in opt.slots:
-                                    room_use[(opt.day, s)].add(candidate_home)
                             else:
                                 for r in self.classrooms:
                                     rn = r.get("name", "")
                                     if rn and all(rn not in room_use[(opt.day, s)] for s in opt.slots):
                                         rm = rn
-                                        for s in opt.slots:
-                                            room_use[(opt.day, s)].add(rn)
                                         break
                                 if not rm:
-                                    rm = candidate_home or f"Classroom {len(room_use[(opt.day, opt.slots[0])]) + 1}"
-                                    for s in opt.slots:
-                                        room_use[(opt.day, s)].add(rm)
+                                    c_idx = 1
+                                    while any(f"Classroom {c_idx}" in room_use[(opt.day, s)] for s in opt.slots):
+                                        c_idx += 1
+                                    rm = f"Classroom {c_idx}"
+                            for s in opt.slots:
+                                room_use[(opt.day, s)].add(rm)
 
                     for cls in sess.classes:
                         for s in opt.slots:
@@ -897,6 +945,7 @@ class TimetableCpSatSolver:
         pre_dt: Dict[str, Dict[str, Any]] = {c: {} for c in all_classes}
         fac_busy: Set[Tuple[str, str, int]] = set()
         cls_busy: Set[Tuple[str, str, int]] = set()
+        room_busy: Set[Tuple[str, str, int]] = set()
         ts_nums = {ts.slot_number for ts in self.time_slots}
 
         for c_name in all_classes:
@@ -916,7 +965,7 @@ class TimetableCpSatSolver:
         used_fixed_slots: Set[Tuple[int, str, int]] = set()
 
         def try_place_fixed(sess: SolverSession) -> bool:
-            fps = [f.strip() for f in sess.faculty.split("|")]
+            fps = [self._normalize(f) for f in sess.faculty.split("|") if f.strip()]
             for con in fixed_cons:
                 if not self._constraint_matches_session(con, sess):
                     continue
@@ -932,16 +981,42 @@ class TimetableCpSatSolver:
                             continue
                         if any((fp, day, s) in fac_busy for fp in fps for s in block):
                             continue
-                        if any((cls, day, s) in cls_busy for cls in sess.classes for s in block):
+                        if any((self._normalize(cls), day, s) in cls_busy for cls in sess.classes for s in block):
                             continue
+
+                        # Determine unique non-colliding fixed room
+                        fixed_rm = ""
+                        if sess.type == "Theory":
+                            if len(sess.classes) == 1:
+                                cand_rm = self._get_home_classroom(sess.classes[0])
+                                if all((cand_rm, day, s) not in room_busy for s in block):
+                                    fixed_rm = cand_rm
+                            if not fixed_rm:
+                                for r in self.classrooms:
+                                    rn = r.get("name", "")
+                                    if rn and all((rn, day, s) not in room_busy for s in block):
+                                        fixed_rm = rn
+                                        break
+                            if not fixed_rm:
+                                c_idx = 1
+                                while any((f"Classroom {c_idx}", day, s) in room_busy for s in block):
+                                    c_idx += 1
+                                fixed_rm = f"Classroom {c_idx}"
+                        else:
+                            for r in self.labs_pool:
+                                rn = r.get("name", "")
+                                if rn and all((rn, day, s) not in room_busy for s in block):
+                                    fixed_rm = rn
+                                    break
+                            if not fixed_rm:
+                                l_idx = 1
+                                while any((f"Lab {l_idx}", day, s) in room_busy for s in block):
+                                    l_idx += 1
+                                fixed_rm = f"Lab {l_idx}"
+
                         for cls in sess.classes:
                             for s in block:
                                 key = f"{day}_{s}"
-                                fixed_rm = (
-                                    self._get_home_classroom(cls)
-                                    if sess.type == "Theory" and len(sess.classes) == 1
-                                    else (self.labs_pool[0].get("name", "Lab 1") if sess.type == "Lab" and self.labs_pool else "")
-                                )
                                 pre_tt[cls][key].append([sess.subject, sess.faculty, fixed_rm, "All"])
                                 pre_dt[cls][key] = {
                                     "subject": sess.subject, "faculty": sess.faculty,
@@ -953,7 +1028,9 @@ class TimetableCpSatSolver:
                                 fac_busy.add((fp, day, s))
                         for cls in sess.classes:
                             for s in block:
-                                cls_busy.add((cls, day, s))
+                                cls_busy.add((self._normalize(cls), day, s))
+                        for s in block:
+                            room_busy.add((fixed_rm, day, s))
                         used_fixed_slots.add((id(con), day, sn))
                         return True
             return False
@@ -977,6 +1054,7 @@ class TimetableCpSatSolver:
             start_time=start_time, time_limit=p_time,
             pre_assigned_faculty_busy=fac_busy,
             pre_assigned_class_busy=cls_busy,
+            pre_assigned_room_busy=room_busy,
         )
 
         # Stage 2: Optimize Soft constraints while keeping 100% Hard + 100% Hours
@@ -990,6 +1068,7 @@ class TimetableCpSatSolver:
                 time_limit=max(5.0, self.time_limit_seconds - elapsed),
                 pre_assigned_faculty_busy=fac_busy,
                 pre_assigned_class_busy=cls_busy,
+                pre_assigned_room_busy=room_busy,
             )
 
         # Stage 3: Diagnostic fallback if hard constraints themselves physically collide
@@ -1003,7 +1082,9 @@ class TimetableCpSatSolver:
                 time_limit=max(5.0, self.time_limit_seconds - elapsed),
                 pre_assigned_faculty_busy=fac_busy,
                 pre_assigned_class_busy=cls_busy,
+                pre_assigned_room_busy=room_busy,
             )
+
 
         if res is None or res.status not in ("OPTIMAL", "FEASIBLE"):
             return SolverResult(

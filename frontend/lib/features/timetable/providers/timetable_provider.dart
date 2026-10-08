@@ -46,11 +46,22 @@ class TimetableProvider extends ChangeNotifier {
   List<String> get facultyNames => _assignments.map((a) => a.facultyName).toSet().toList()..sort();
   List<String> get subjectNames => _assignments.map((a) => a.subjectName).toSet().toList()..sort();
   List<String> get classesAndBatches => _assignments.map((a) => a.className).where((c) => c.isNotEmpty).toSet().toList()..sort();
+  List<String> get divisions => classesAndBatches;
   List<String> get days {
     if (_scheduleConfig != null && _scheduleConfig!.dayNames.isNotEmpty) {
       return _scheduleConfig!.dayNames;
     }
     return const ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  }
+
+  String getHomeClassroomForDivision(String divisionName) {
+    if (divisionName.isEmpty) return 'Room 101';
+    final classrooms = _roomModels.where((r) => r.type.toLowerCase() != 'lab').toList();
+    if (classrooms.isNotEmpty) {
+      final idx = divisionName.hashCode.abs() % classrooms.length;
+      return classrooms[idx].name;
+    }
+    return 'Room 101';
   }
 
   // Initialization & Data Loading
