@@ -12,6 +12,8 @@ from fastapi.testclient import TestClient
 from app.db.base import SessionLocal
 from app.main import app
 from app.models.academic import Division, Room, Subject, TeachingAssignment
+from app.models.achievement import Achievement, AchievementCategory
+from app.models.document import Document
 from app.models.generation_history import GenerationRun
 from app.models.timetable import TimetableEntry
 from app.models.user import User
@@ -298,3 +300,123 @@ def test_consecutive_questions_are_independent_requests_with_separate_replies(fa
     assert first.json()["reply"] == "Normalization answer."
     assert second.json()["reply"] == "Gradient descent answer."
     assert mock_chat.call_count == 2
+
+
+def test_career_development_certificates_retrieval(faculty_user):
+    faculty_id, token = faculty_user
+    db = SessionLocal()
+    
+    # Create faculty member Rajesh Kumar
+    import uuid
+    from datetime import date
+    rajesh = User(
+        id=str(uuid.uuid4()),
+        email="rajesh.kumar@college.edu",
+        hashed_password="hashed_pw",
+        full_name="Rajesh Kumar",
+        employee_id="FAC-RK-101",
+        department="Computer Engineering",
+        designation="Associate Professor",
+    )
+    db.add(rajesh)
+    db.flush()
+
+    # Create certificates / achievements with document
+    doc = Document(
+        id=str(uuid.uuid4()),
+        owner_id=rajesh.id,
+        file_name="rajesh_python_advanced_cert.pdf",
+        url="https://res.cloudinary.com/enosis/docs/rajesh_python_cert.pdf",
+        cloudinary_public_id="enosis/rajesh_python_cert",
+        resource_type="raw",
+        file_size_bytes=1024 * 500,
+    )
+    db.add(doc)
+    db.flush()
+
+    ach1 = Achievement(
+        id=str(uuid.uuid4()),
+        owner_id=rajesh.id,
+        title="Advanced Python & Data Structures Specialization",
+        category=AchievementCategory.CERTIFICATION,
+        organization="University of Michigan & Coursera",
+        date_achieved=date(2026, 6, 15),
+        description="Comprehensive Python programming, OOP design, and algorithmic problem solving.",
+        document_id=doc.id,
+    )
+    ach2 = Achievement(
+        id=str(uuid.uuid4()),
+        owner_id=rajesh.id,
+        title="AWS Certified Solutions Architect - Associate",
+        category=AchievementCategory.CERTIFICATION,
+        organization="Amazon Web Services",
+        date_achieved=date(2026, 8, 20),
+        description="Cloud architecture, VPC peering, and high availability systems.",
+    )
+    ach3 = Achievement(
+        id=str(uuid.uuid4()),
+        owner_id=rajesh.id,
+        title="National Best Faculty Researcher Award",
+        category=AchievementCategory.AWARD,
+        organization="IEEE Computer Society",
+        date_achieved=date(2026, 9, 10),
+        description="Awarded for outstanding research contributions in distributed systems.",
+    )
+    db.add_all((ach1, ach2, ach3))
+    db.commit()
+    db.close()
+
+    # 1. Test "Show me Rajesh Kumar's certificates."
+    with patch("app.api.routes.ai_assistant.is_configured", return_value=True), \
+         patch("app.api.routes.ai_assistant.send_chat_message", return_value="Rajesh Kumar has 2 certifications.") as mock_chat:
+        response = client.post(
+            "/ai/chat",
+            json={"message": "Show me Rajesh Kumar's certificates."},
+            headers=_auth_headers(token),
+        )
+    assert response.status_code == 200
+    prompt = mock_chat.call_args.args[0][0]["content"]
+    assert "Rajesh Kumar" in prompt
+    assert "Advanced Python & Data Structures Specialization" in prompt
+    assert "rajesh_python_advanced_cert.pdf" in prompt
+    assert "AWS Certified Solutions Architect" in prompt
+    assert "https://res.cloudinary.com/enosis/docs/rajesh_python_cert.pdf" in prompt
+
+    # 2. Test "Does Rajesh Kumar have a Python certificate?"
+    with patch("app.api.routes.ai_assistant.is_configured", return_value=True), \
+         patch("app.api.routes.ai_assistant.send_chat_message", return_value="Yes, Rajesh Kumar has an Advanced Python certification.") as mock_chat:
+        response = client.post(
+            "/ai/chat",
+            json={"message": "Does Rajesh Kumar have a Python certificate?"},
+            headers=_auth_headers(token),
+        )
+    assert response.status_code == 200
+    prompt = mock_chat.call_args.args[0][0]["content"]
+    assert "Advanced Python" in prompt
+    assert "topic_matched_achievements" in prompt
+
+    # 3. Test "What are Rajesh Kumar's career development achievements?"
+    with patch("app.api.routes.ai_assistant.is_configured", return_value=True), \
+         patch("app.api.routes.ai_assistant.send_chat_message", return_value="Rajesh Kumar has 3 achievements including awards and certifications.") as mock_chat:
+        response = client.post(
+            "/ai/chat",
+            json={"message": "What are Rajesh Kumar's career development achievements?"},
+            headers=_auth_headers(token),
+        )
+    assert response.status_code == 200
+    prompt = mock_chat.call_args.args[0][0]["content"]
+    assert "National Best Faculty Researcher Award" in prompt
+    assert "total_achievements" in prompt
+
+    # 4. Test non-existent person
+    with patch("app.api.routes.ai_assistant.is_configured", return_value=True), \
+         patch("app.api.routes.ai_assistant.send_chat_message", return_value="No person named John Nonexistent was found in ENOSIS.") as mock_chat:
+        response = client.post(
+            "/ai/chat",
+            json={"message": "Show me John Nonexistent's certificates."},
+            headers=_auth_headers(token),
+        )
+    assert response.status_code == 200
+    prompt = mock_chat.call_args.args[0][0]["content"]
+    assert '"person_exists":false' in prompt
+
