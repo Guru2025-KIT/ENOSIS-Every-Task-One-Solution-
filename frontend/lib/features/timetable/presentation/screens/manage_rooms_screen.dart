@@ -81,9 +81,11 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Text(
-                    existingRoom == null ? 'Add New Room / Lab' : 'Edit Room / Lab',
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Colors.white),
+                  Expanded(
+                    child: Text(
+                      existingRoom == null ? 'Add New Room / Lab' : 'Edit Room / Lab',
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Colors.white),
+                    ),
                   ),
                 ],
               ),
@@ -466,7 +468,9 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
               children: [
                 Icon(Icons.check_circle, color: Color(0xFF10B981)),
                 SizedBox(width: 8),
-                Text('Rooms Import Successful', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFFFB923C))),
+                Expanded(
+                  child: Text('Rooms Import Successful', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFFFB923C))),
+                ),
               ],
             ),
             content: Column(
@@ -487,7 +491,7 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('• Classrooms / Lecture Halls:', style: TextStyle(color: Color(0xFFCBD5E1))),
+                          const Expanded(child: Text('• Classrooms / Lecture Halls:', style: TextStyle(color: Color(0xFFCBD5E1)))),
                           Text('$classroomsCount', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFFB923C))),
                         ],
                       ),
@@ -495,7 +499,7 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('• Computer & Science Labs:', style: TextStyle(color: Color(0xFFCBD5E1))),
+                          const Expanded(child: Text('• Computer & Science Labs:', style: TextStyle(color: Color(0xFFCBD5E1)))),
                           Text('$labsCount', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFFB923C))),
                         ],
                       ),
@@ -969,6 +973,8 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
         ],
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           indicatorColor: const Color(0xFFF97316),
           indicatorWeight: 3.5,
           labelColor: const Color(0xFFFB923C),
@@ -1005,29 +1011,27 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                 ),
               ],
             ),
-            child: Row(
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              alignment: WrapAlignment.spaceBetween,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [Color(0xFFEA580C), Color(0xFFF97316)]),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text(
-                    'Step 3',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    'Register available lecture halls, lab rooms, and division structures. The solver allocates them based on capacity and course type.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFFCBD5E1),
-                      fontWeight: FontWeight.w500,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFFEA580C), Color(0xFFF97316)]),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'Step 3',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
@@ -1039,6 +1043,17 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                   icon: const Icon(Icons.upload_file, size: 16),
                   label: const Text('Import Excel', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                   onPressed: _pickAndImportExcel,
+                ),
+                const SizedBox(
+                  width: double.infinity,
+                  child: Text(
+                    'Register available lecture halls, lab rooms, and division structures. The solver allocates them based on capacity and course type.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFFCBD5E1),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ),
               ],
             ),

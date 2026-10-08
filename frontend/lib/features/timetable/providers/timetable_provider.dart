@@ -666,20 +666,21 @@ class TimetableProvider extends ChangeNotifier {
     final parts = con.category.split('|');
     if (parts.length >= 2) {
       final lastPart = parts.last.trim().toLowerCase();
-      if (['fixed', 'blacklist', 'whitelist', 'fill', 'holiday', 'parallel',
+      if (['fixed', 'blacklist', 'whitelist', 'fill', 'holiday', 'parallel', 'joint',
            'preferred', 'avoid_first_period', 'avoid_last_period',
            'no_theory_after_lunch', 'workload_balance'].contains(lastPart)) {
         return lastPart;
       }
       final firstPart = parts.first.trim().toLowerCase();
-      if (['fixed', 'blacklist', 'whitelist', 'fill', 'holiday', 'parallel'].contains(firstPart)) {
+      if (['fixed', 'blacklist', 'whitelist', 'fill', 'holiday', 'parallel', 'joint'].contains(firstPart)) {
         return firstPart;
       }
     }
     
     // Structured categories
     if (cat.contains('fixed session') || cat.contains('lab continuity') || cat.contains('fixed institutional')) return 'fixed';
-    if (cat.contains('parallel') || cat.contains('combined') || cat.contains('joint session') || cat.contains('elective')) return 'parallel';
+    if (cat.contains('parallel') || cat.contains('elective')) return 'parallel';
+    if (cat.contains('combined') || cat.contains('joint session') || cat.contains('joint')) return 'joint';
     if (cat.contains('replacement') || cat.contains('substitute free')) return 'fill';
     
     // Soft preferences

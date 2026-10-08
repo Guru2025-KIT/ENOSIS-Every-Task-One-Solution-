@@ -65,14 +65,15 @@ class Constraint:
 @dataclass
 class SolverSession:
     session_id: str
-    faculty: str       # "FacA | FacB" for merged parallel-elective sessions
-    subject: str       # "SubA | SubB" for merged parallel-elective sessions
+    faculty: str       # Single faculty per session; "FacA | FacB" only for display merges
+    subject: str       # Specific subject this session teaches
     subject_code: str
     type: str          # "Theory" | "Lab"
     batch: str         # "-" / "All" for theory; "Batch 1", "Batch 2" … for labs
     classes: List[str]
     duration: int      # consecutive teaching slots required
     session_index: int
+    parallel_group: Optional[str] = None  # Non-None → must share (day, slot) with all sessions in same group+index
 
 
 @dataclass
@@ -147,54 +148,91 @@ class TimetableCpSatSolver:
     # Helpers                                                          #
     # -------------------------------------------------------------- #
 
+    # -------------------------------------------------------------- #
+    # Helpers                                                          #
+    # -------------------------------------------------------------- #
+
     def _normalize(self, text: str) -> str:
         return text.strip().lower()
 
     def _string_match(self, pattern: str, target: str) -> bool:
         if not pattern or not target:
             return False
-        p, t = pattern.lower().strip(), target.lower().strip()
-        if p == t or p in t or t in p:
+        p = pattern.strip().lower()
+        t = target.strip().lower()
+        if p == t:
             return True
-        pt = set(re.findall(r"\b[a-zA-Z0-9]{3,}\b", p))
-        tt = set(re.findall(r"\b[a-zA-Z0-9]{3,}\b", t))
-        return bool(pt and tt and pt & tt)
+
+        # Clean common faculty titles (Dr., Prof., Mr., etc.)
+        p_clean = re.sub(r"^(dr\.?|prof\.?|mr\.?|mrs\.?|ms\.?)\s+", "", p)
+        t_clean = re.sub(r"^(dr\.?|prof\.?|mr\.?|mrs\.?|ms\.?)\s+", "", t)
+        if p_clean == t_clean:
+            return True
+
+        # Strip parenthetical annotations e.g. '(MDM)', '(PE-II)'
+        pp = re.sub(r"\(.*?\)", "", p_clean).strip()
+        tp = re.sub(r"\(.*?\)", "", t_clean).strip()
+        if pp and tp and pp == tp:
+            return True
+
+        # Substring match if sufficiently distinctive (at least 4 chars)
+        shorter = min(len(p_clean), len(t_clean))
+        if shorter >= 4:
+            if p_clean == t_clean or p_clean in t_clean or t_clean in p_clean:
+                return True
+
+        # Handle compound faculty / subject lists separated by ' / ', ' | ', or ','
+        if " / " in pattern or " | " in pattern or "," in pattern:
+            candidates = [c.strip() for c in re.split(r"\s+[/\|]\s+|,", pattern) if c.strip()]
+            for c in candidates:
+                if self._string_match(c, target):
+                    return True
+
+        return False
 
     def _class_match(self, c1: str, c2: str) -> bool:
         if not c1 or not c2:
             return False
         n1 = c1.upper().replace("-", " ").strip()
         n2 = c2.upper().replace("-", " ").strip()
-        return n1 == n2 or n1.startswith(n2) or n2.startswith(n1)
+        if n1 == n2:
+            return True
+        # Allow prefix match only if one is general (e.g. 'TY AIML' matches 'TY AIML A')
+        # but NOT 'TY AIML A' matching 'TY AIML B'
+        if (n1.startswith(n2) or n2.startswith(n1)) and (n1.rsplit(" ", 1)[-1] != n2.rsplit(" ", 1)[-1] or len(n1.split()) == len(n2.split())):
+            return n1 == n2
+        return n1.startswith(n2) or n2.startswith(n1)
 
     def _intent_from_raw(self, intent_raw: str, category_raw: str) -> str:
-        """Normalise intent regardless of how Flutter encoded it."""
+        """Normalise intent regardless of how Flutter or NLP encoded it."""
         intent = (intent_raw or "").lower().strip()
         cat = (category_raw or "").lower()
+
+        # Check category keywords first for high-level semantic rules
+        if any(kw in cat for kw in ("parallel", "mdm", "oe", "elective")):
+            return "parallel"
+        if any(kw in cat for kw in ("combined", "joint", "merged")):
+            return "joint"
+        if "holiday" in cat or "college closed" in cat:
+            return "holiday"
+        if "no theory after lunch" in cat:
+            return "no_theory_after_lunch"
+        if "fill" in cat or "replace" in cat:
+            return "fill"
 
         if intent == "blacklist":
             return "avoid"
         if intent in ("avoid", "fixed", "force", "whitelist", "fill",
-                      "holiday", "no_theory_after_lunch", "parallel", "preferred"):
+                      "holiday", "no_theory_after_lunch", "parallel", "joint", "preferred"):
             return intent
 
         # Derive from category string when intent is blank or general
-        if not intent:
-            if "fixed" in cat or "force" in cat:
-                return "fixed"
-            if "no theory after lunch" in cat:
-                return "no_theory_after_lunch"
-            if "whitelist" in cat or "only" in cat:
-                return "whitelist"
-            if "preferred" in cat:
-                return "preferred"
-            if "fill" in cat or "replace" in cat:
-                return "fill"
-            if "holiday" in cat or "college closed" in cat:
-                return "holiday"
-            if "parallel" in cat or "elective" in cat:
-                return "parallel"
-            return "avoid"
+        if "fixed" in cat or "force" in cat:
+            return "fixed"
+        if "whitelist" in cat or "only" in cat:
+            return "whitelist"
+        if "preferred" in cat:
+            return "preferred"
         return "avoid"
 
     def _is_hard_constraint(self, con: Constraint) -> bool:
@@ -203,7 +241,7 @@ class TimetableCpSatSolver:
         or Soft (preference / objective penalty).
         """
         cat = (con.category or "").lower()
-        intent = (con.intent or "").lower()
+        intent = self._intent_from_raw(con.intent, con.category)
 
         # Explicit UI tags
         if "hard|" in cat or cat.startswith("hard"):
@@ -212,9 +250,10 @@ class TimetableCpSatSolver:
             return False
 
         # Structural hard constraints
-        if intent in ("fixed", "force", "holiday"):
+        if intent in ("fixed", "force", "holiday", "parallel", "joint", "whitelist"):
             return True
-        if any(kw in cat for kw in ("fixed", "force", "holiday", "closed")):
+        if any(kw in cat for kw in ("fixed", "force", "holiday", "closed",
+                                    "parallel", "elective", "joint", "combined", "mdm", "oe")):
             return True
 
         # Faculty unavailable / class unavailable / room unavailable is always HARD
@@ -225,14 +264,11 @@ class TimetableCpSatSolver:
 
         # Soft preferences
         if intent in ("no_theory_after_lunch", "avoid_first_period", "avoid_last_period",
-                      "preferred", "preferred_slot", "preferred_day_time", "workload_balance"):
+                      "preferred", "preferred_slot", "preferred_day_time", "workload_balance", "minimize_room_swaps"):
             return False
         if any(kw in cat for kw in ("preferred", "balance", "swap", "after lunch",
                                    "first period", "last period")):
             return False
-
-        if intent == "whitelist":
-            return True
 
         return True
 
@@ -306,74 +342,136 @@ class TimetableCpSatSolver:
     # Session building                                                  #
     # -------------------------------------------------------------- #
 
+    def _find_parallel_group(self, assignment: Assignment) -> Optional[str]:
+        """
+        Return the parallel-elective group ID if this subject belongs to an explicit
+        parallel constraint or an automatic elective (MDM/OE/Minor) pattern.
+        """
+        if assignment.type.lower() != "theory":
+            return None
+
+        # 1. Explicit Parallel Elective Constraint
+        for con in self.constraints:
+            intent = self._intent_from_raw(con.intent, con.category)
+            if intent == "parallel":
+                match_subj = (
+                    not con.subject_names
+                    or any(self._string_match(sn, assignment.subject) for sn in con.subject_names)
+                )
+                match_cls = (
+                    not con.class_names
+                    or any(self._class_match(cn, assignment.class_name) for cn in con.class_names)
+                )
+                if match_subj and match_cls:
+                    con_key = con.id or "_".join(sorted(con.subject_names)) or "parallel"
+                    return f"par_{con_key}"
+
+        # 2. Auto-detect MDM / OE / Minor electives across divisions of same year
+        s_norm = assignment.subject.lower()
+        if any(kw in s_norm for kw in ("mdm", "open elective", "oe-", "oe ", "(oe)", "minor-", "elective")):
+            # Extract year from class_name e.g. SY, TY, BTECH, FY
+            c_upper = assignment.class_name.upper()
+            year = "GEN"
+            for y in ("BTECH", "TY", "SY", "FY"):
+                if y in c_upper:
+                    year = y
+                    break
+            elec_type = "mdm" if "mdm" in s_norm or "minor" in s_norm else "oe"
+            return f"par_auto_{year}_{elec_type}"
+
+        return None
+
     def _build_sessions(self) -> List[SolverSession]:
+        """
+        Build SolverSessions from assignments respecting:
+        1. Parallel Electives (MDM/OE): Each division keeps its OWN separate session
+           (own faculty, own room) but ALL sessions in the same parallel group share
+           the SAME (day, slot) — enforced by CP-SAT hard linking constraints.
+        2. Combined/Joint Sessions: Multiple classes share ONE session with a single
+           faculty — triggered by the 'Combined / Joint Session' constraint or
+           by assignment-level joint_group_id.
+        3. Independent Divisions: All other divisions remain fully independent.
+        """
         sessions: List[SolverSession] = []
-        joint_theory: Dict[str, List[Assignment]] = defaultdict(list)
-        parallel_elective: Dict[str, List[Assignment]] = defaultdict(list)
-        individual: List[Assignment] = []
+        consumed_indices: Set[int] = set()
 
-        for a in self.assignments:
-            t = a.type.lower()
-            if t == "theory":
-                par_id = None
-                for con in self.constraints:
-                    if ("parallel" in (con.intent or "").lower()
-                            or "parallel" in con.category.lower()) and con.subject_names:
-                        if any(self._string_match(sn, a.subject) for sn in con.subject_names):
-                            par_id = f"par_{self._normalize(con.subject_names[0])}"
-                            break
-                if par_id:
-                    parallel_elective[par_id].append(a)
-                    continue
+        # ── 1. Combined / Joint sessions from assignment-level joint_group_id
+        jgid_groups: Dict[str, List[Tuple[int, Assignment]]] = defaultdict(list)
+        for idx, a in enumerate(self.assignments):
+            if a.type.lower() == "theory" and a.joint_group_id:
+                jgid_groups[f"jgid_{a.joint_group_id}_{self._normalize(a.subject)}"].append((idx, a))
+                consumed_indices.add(idx)
 
-                # Only merge into joint theory if explicitly tagged with a joint_group_id!
-                # Different divisions (e.g. TY-AIML-A vs TY-AIML-B) are INDEPENDENT classes.
-                if a.joint_group_id:
-                    joint_theory[f"jg_{a.joint_group_id}"].append(a)
-                    continue
-
-                individual.append(a)
-            else:
-                individual.append(a)
-
-        # 1. Joint theory groups (explicitly linked cohorts, e.g. Open Elective or Combined Dept)
-        for key, group in joint_theory.items():
+        for key, group_items in jgid_groups.items():
+            group = [item[1] for item in group_items]
             first = group[0]
-            all_cls: Set[str] = {a.class_name for a in group}
+            all_cls = sorted({a.class_name for a in group})
             hours = max(a.weekly_hours for a in group)
+            fac = first.faculty
             for h in range(hours):
                 sessions.append(SolverSession(
-                    session_id=f"{key}_h{h}", faculty=first.faculty,
+                    session_id=f"{key}_h{h}", faculty=fac,
                     subject=first.subject, subject_code=first.subject_code,
-                    type="Theory", batch="-", classes=sorted(all_cls),
-                    duration=1, session_index=h,
+                    type="Theory", batch="-", classes=all_cls,
+                    duration=1, session_index=h, parallel_group=None,
                 ))
 
-        # 2. Parallel electives: merge into ONE slot (different faculty teach
-        # different tracks simultaneously in the same time-slot)
-        for p_id, group in parallel_elective.items():
-            subj = " | ".join(a.subject for a in group)
-            fac  = " | ".join(a.faculty for a in group)
-            code = " | ".join(a.subject_code for a in group)
-            hours = max(a.weekly_hours for a in group)
-            classes = sorted({a.class_name for a in group})
-            for h in range(hours):
-                sessions.append(SolverSession(
-                    session_id=f"{p_id}_h{h}", faculty=fac,
-                    subject=subj, subject_code=code, type="Theory",
-                    batch="-", classes=classes, duration=1, session_index=h,
-                ))
+        # ── 2. Combined / Joint sessions from explicit Combined/Joint constraints
+        for con in self.constraints:
+            intent = self._intent_from_raw(con.intent, con.category)
+            if intent != "joint":
+                continue
 
-        # 3. Individual (division-specific theory + labs)
-        for idx, a in enumerate(individual):
+            matched_items: List[Tuple[int, Assignment]] = []
+            for idx, a in enumerate(self.assignments):
+                if idx in consumed_indices or a.type.lower() != "theory":
+                    continue
+                match_subj = (
+                    not con.subject_names
+                    or any(self._string_match(sn, a.subject) for sn in con.subject_names)
+                )
+                match_fac = (
+                    not con.faculty_names
+                    or any(self._string_match(fn, a.faculty) for fn in con.faculty_names)
+                )
+                match_cls = (
+                    not con.class_names
+                    or any(self._class_match(cn, a.class_name) for cn in con.class_names)
+                )
+                if match_subj and match_fac and match_cls:
+                    matched_items.append((idx, a))
+
+            if matched_items:
+                for idx, _ in matched_items:
+                    consumed_indices.add(idx)
+                group = [item[1] for item in matched_items]
+                first = group[0]
+                all_cls = sorted({a.class_name for a in group})
+                hours = max(a.weekly_hours for a in group)
+                fac = con.faculty_names[0] if con.faculty_names else first.faculty
+                key = f"jcon_{con.id or '_'.join(all_cls)}_{self._normalize(first.subject)}"
+                for h in range(hours):
+                    sessions.append(SolverSession(
+                        session_id=f"{key}_h{h}", faculty=fac,
+                        subject=first.subject, subject_code=first.subject_code,
+                        type="Theory", batch="-", classes=all_cls,
+                        duration=1, session_index=h, parallel_group=None,
+                    ))
+
+        # ── 3. Individual sessions (parallel electives get tagged, rest are fully independent)
+        for idx, a in enumerate(self.assignments):
+            if idx in consumed_indices:
+                continue
             t = a.type.lower()
             if t == "theory":
+                par_gid = self._find_parallel_group(a)
                 for h in range(a.weekly_hours):
                     sessions.append(SolverSession(
                         session_id=f"th_{idx}_h{h}", faculty=a.faculty,
                         subject=a.subject, subject_code=a.subject_code,
                         type="Theory", batch="-", classes=[a.class_name],
                         duration=1, session_index=h,
+                        parallel_group=par_gid,  # None for normal theory
                     ))
             elif t == "lab":
                 lab_slots = self.lab_slots_per_session
@@ -387,6 +485,7 @@ class TimetableCpSatSolver:
                         subject=a.subject, subject_code=a.subject_code,
                         type="Lab", batch=batch_label,
                         classes=[a.class_name], duration=lab_slots, session_index=b,
+                        parallel_group=None,
                     ))
 
         return sessions
@@ -502,7 +601,7 @@ class TimetableCpSatSolver:
                                 else:
                                     penalty += 1500
                                     reasons.append(f"Preference: outside preferred {day} {block_slots}")
-                        elif con.intent in ("fixed", "force"):
+                        elif con.intent in ("fixed", "force") or (con.intent in ("parallel", "joint") and (con.days or con.slot_numbers)):
                             if not (day_ok and slot_ok):
                                 valid = False
                                 break
@@ -628,6 +727,56 @@ class TimetableCpSatSolver:
                         excess_var = model.NewIntVar(0, len(vl), f"excess_{cls}_{day}")
                         model.Add(sum(vl) - max_d <= excess_var)
                         pen.append(excess_var * 200)
+
+        # ── Parallel Elective Hard Constraint ─────────────────────────────────────
+        # Sessions in the same parallel_group AND same session_index MUST be placed
+        # at the exact same (day, start_slot). This ensures MDM and OE (for example)
+        # happen simultaneously across divisions, with each division's own faculty.
+        par_grp_sessions: Dict[Tuple[str, int], List[Tuple[int, List[SessionOption]]]] = \
+            defaultdict(list)
+        for i, (sess, opts) in enumerate(zip(sessions, session_options)):
+            if sess.parallel_group is not None:
+                par_grp_sessions[(sess.parallel_group, sess.session_index)].append((i, opts))
+
+        for (pg, sidx), grp_list in par_grp_sessions.items():
+            if len(grp_list) < 2:
+                continue  # Nothing to link if only one session in group
+            # Collect the union of (day, start_slot) possibilities across all sessions in group
+            all_ds: Set[Tuple[str, int]] = set()
+            for (si, si_opts) in grp_list:
+                for opt in si_opts:
+                    all_ds.add((opt.day, opt.start_slot))
+
+            # Reference session is grp_list[0]; all others must share its (day, start_slot)
+            (si_ref, opts_ref) = grp_list[0]
+            ref_classes = set(sessions[si_ref].classes)
+            for (si_other, opts_other) in grp_list[1:]:
+                other_classes = set(sessions[si_other].classes)
+                # Only link parallel sessions across distinct divisions
+                if ref_classes & other_classes:
+                    continue
+                for (day, start_slot) in all_ds:
+                    ref_here = [
+                        choice_vars[si_ref][j]
+                        for j, opt in enumerate(opts_ref)
+                        if opt.day == day and opt.start_slot == start_slot
+                    ]
+                    other_here = [
+                        choice_vars[si_other][j]
+                        for j, opt in enumerate(opts_other)
+                        if opt.day == day and opt.start_slot == start_slot
+                    ]
+                    if ref_here and other_here:
+                        # Both have options here → enforce equality
+                        model.Add(sum(ref_here) == sum(other_here))
+                    elif ref_here and not other_here:
+                        # Ref can't pick this slot because other has no option for it
+                        for v in ref_here:
+                            model.Add(v == 0)
+                    elif other_here and not ref_here:
+                        # Other can't pick this slot because ref has no option for it
+                        for v in other_here:
+                            model.Add(v == 0)
 
         # Synchronize parallel lab batches for the same class
         # When Batch 1 and Batch 2 are scheduled in the same slot, reward (+500)

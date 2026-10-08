@@ -80,6 +80,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
               title: Text('Select $title'),
               content: SizedBox(
                 width: double.maxFinite,
+                height: MediaQuery.of(context).size.height * 0.55,
                 child: Column(
                   children: [
                     Expanded(
@@ -193,13 +194,6 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
   }
 
   void _addStructuredConstraint(bool isHard) {
-    if (_selectedDays.isEmpty && _selectedSlots.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select target Days or Slot numbers for the rule.')),
-      );
-      return;
-    }
-
     String category = isHard ? 'hard|$_selectedHardRule' : 'soft|$_selectedSoftRule';
     String intentCode = 'blacklist'; // Default for unavailable/avoid rules
 
@@ -209,6 +203,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
       if (_selectedHardRule == 'Parallel Elective (MDM/OE)') intentCode = 'parallel';
       if (_selectedHardRule == 'Fixed Session (Force Slot)') intentCode = 'fixed';
       if (_selectedHardRule == 'Lab Continuity (Force Consecutive)') intentCode = 'fixed';
+      if (_selectedHardRule == 'Combined / Joint Session') intentCode = 'joint';
       if (_selectedHardRule == 'Replacement Rule (Substitute Free)') intentCode = 'fill';
     } else {
       if (_selectedSoftRule == 'Preferred Day / Time') intentCode = 'preferred';
@@ -218,9 +213,43 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
       if (_selectedSoftRule == 'Minimize Daily Room Swaps') intentCode = 'minimize_room_swaps';
     }
 
+    // Validation: Parallel Elective needs at least 2 subjects selected
+    if (intentCode == 'parallel') {
+      if (_selectedSubjects.length < 2) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Parallel Elective: Select at least 2 elective subjects (e.g., MDM and OE).'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+    }
+    // Validation: Joint Session needs at least 2 classes selected
+    else if (intentCode == 'joint') {
+      if (_selectedClasses.length < 2) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Joint Session: Select at least 2 classes that attend together.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+    }
+    // Other constraints need Days or Slots
+    else if (intentCode != 'fill' && _selectedDays.isEmpty && _selectedSlots.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select target Days or Slot numbers for the rule.')),
+      );
+      return;
+    }
+
     final newConstraint = TimetableConstraint(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      category: '$category|$intentCode', 
+      category: '$category|$intentCode',
       facultyNames: List.from(_selectedFaculties),
       subjectNames: List.from(_selectedSubjects),
       classNames: List.from(_selectedClasses),
@@ -240,7 +269,7 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${isHard ? "Hard" : "Soft"} constraint added successfully!'),
+        content: Text('${isHard ? "Hard" : "Soft"} constraint added: ${isHard ? _selectedHardRule : _selectedSoftRule}'),
         backgroundColor: Colors.green,
       ),
     );
@@ -557,6 +586,8 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
         elevation: 0,
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           indicatorColor: const Color(0xFFF97316),

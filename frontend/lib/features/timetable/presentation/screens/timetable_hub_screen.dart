@@ -321,54 +321,63 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
                   ),
                 ],
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [Color(0xFFEA580C), Color(0xFFF97316)]),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.table_chart_outlined, color: Colors.white, size: 28),
-                  ),
-                  const SizedBox(width: 14),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'View & Export Timetable',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                            color: Colors.white,
-                          ),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFFEA580C), Color(0xFFF97316)]),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Inspect published schedules by class, teacher, or classroom, and export to Excel/PDF.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFFFB923C),
-                          ),
+                        child: const Icon(Icons.table_chart_outlined, color: Colors.white, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'View & Export Timetable',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Inspect schedules by class, teacher, or lab, and export to Excel/PDF.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFFFB923C),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFF97316),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF97316),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      ),
+                      icon: const Icon(Icons.grid_view_rounded, size: 18),
+                      label: const Text('Open Timetable Grid', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const TimetableDisplayScreen()),
+                        );
+                      },
                     ),
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const TimetableDisplayScreen()),
-                      );
-                    },
-                    child: const Text('Open Grid', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   ),
                 ],
               ),

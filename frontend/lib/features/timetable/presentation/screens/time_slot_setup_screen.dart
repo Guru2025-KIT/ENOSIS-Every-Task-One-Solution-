@@ -277,8 +277,11 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
-                            icon: const Icon(Icons.access_time),
-                            label: Text('Start: ${_formatTimeOfDay(_collegeStartTime)}'),
+                            icon: const Icon(Icons.access_time, size: 18),
+                            label: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text('Start: ${_formatTimeOfDay(_collegeStartTime)}'),
+                            ),
                             onPressed: () async {
                               final picked = await showTimePicker(context: context, initialTime: _collegeStartTime);
                               if (picked != null) setState(() => _collegeStartTime = picked);
@@ -288,8 +291,11 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: OutlinedButton.icon(
-                            icon: const Icon(Icons.access_time_filled),
-                            label: Text('End: ${_formatTimeOfDay(_collegeEndTime)}'),
+                            icon: const Icon(Icons.access_time_filled, size: 18),
+                            label: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text('End: ${_formatTimeOfDay(_collegeEndTime)}'),
+                            ),
                             onPressed: () async {
                               final picked = await showTimePicker(context: context, initialTime: _collegeEndTime);
                               if (picked != null) setState(() => _collegeEndTime = picked);
@@ -372,7 +378,9 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('Break 1 (Morning / Tea Break)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              const Expanded(
+                                child: Text('Break 1 (Morning / Tea Break)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              ),
                               Switch(
                                 value: _break1Enabled,
                                 activeThumbColor: AppColors.primary,
@@ -428,7 +436,9 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('Break 2 (Lunch Break)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              const Expanded(
+                                child: Text('Break 2 (Lunch Break)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              ),
                               Switch(
                                 value: _break2Enabled,
                                 activeThumbColor: AppColors.primary,
@@ -650,8 +660,11 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              icon: const Icon(Icons.login),
-                              label: Text('Start: ${_formatTimeOfDay(_manualStartTime)}'),
+                              icon: const Icon(Icons.login, size: 18),
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('Start: ${_formatTimeOfDay(_manualStartTime)}'),
+                              ),
                               onPressed: () async {
                                 final picked = await showTimePicker(context: context, initialTime: _manualStartTime);
                                 if (picked != null) setState(() => _manualStartTime = picked);
@@ -661,8 +674,11 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: OutlinedButton.icon(
-                              icon: const Icon(Icons.logout),
-                              label: Text('End: ${_formatTimeOfDay(_manualEndTime)}'),
+                              icon: const Icon(Icons.logout, size: 18),
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('End: ${_formatTimeOfDay(_manualEndTime)}'),
+                              ),
                               onPressed: () async {
                                 final picked = await showTimePicker(context: context, initialTime: _manualEndTime);
                                 if (picked != null) setState(() => _manualEndTime = picked);

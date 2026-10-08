@@ -219,8 +219,9 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
         backgroundColor: const Color(0xFF0F172A),
         foregroundColor: Colors.white,
         title: const Text(
-          'Timetable Generation Engine',
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.white),
+          'Timetable Generation',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Colors.white),
+          overflow: TextOverflow.ellipsis,
         ),
         actions: [
           if (generated.isNotEmpty)
@@ -228,12 +229,13 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
               padding: const EdgeInsets.only(right: 12.0),
               child: ElevatedButton.icon(
                 icon: _isSaving
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Icon(Icons.cloud_upload_outlined, size: 18),
-                label: const Text('Publish Entire Timetable', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.cloud_upload_outlined, size: 16),
+                label: const Text('Publish', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF10B981),
                   foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: _isSaving
@@ -480,7 +482,7 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Text(error, style: const TextStyle(fontSize: 12, color: Color(0xFECACA))),
+                      Text(error, style: const TextStyle(fontSize: 12, color: Color(0xFFFECACA))),
                       if (provider.conflictingConstraints.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         const Text('Conflicting Constraints:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
@@ -507,8 +509,11 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 10,
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
@@ -518,6 +523,7 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                               border: Border.all(color: const Color(0xFFF97316)),
                             ),
                             child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 const Icon(Icons.school_outlined, color: Color(0xFFEA580C), size: 18),
                                 const SizedBox(width: 8),
@@ -548,6 +554,7 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               ElevatedButton.icon(
                                 icon: _isExporting

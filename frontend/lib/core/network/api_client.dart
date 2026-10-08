@@ -104,7 +104,7 @@ class ApiClient {
         final perCandidateTimeout = (timeout != null)
             ? effectiveTimeout
             : ((_activeBaseUrl == null && candidates.length > 1)
-                ? const Duration(seconds: 3)
+                ? const Duration(seconds: 5)
                 : effectiveTimeout);
         final response = await requestFn(base).timeout(perCandidateTimeout);
         _activeBaseUrl = base;
