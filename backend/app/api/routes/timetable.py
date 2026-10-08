@@ -1622,6 +1622,10 @@ def publish_timetable(
                     faculty_id=fac_user.id,
                     subject_id=sub.id,
                     division_id=div.id,
+                    session_type="lab" if is_lab else "theory",
+                    weekly_count=1,
+                    duration_slots=2 if is_lab else 1,
+                    batch_name=batch_name if batch_name != "All" else None,
                 )
                 db.add(ta)
 
@@ -2409,17 +2413,23 @@ def export_excel_timetable(payload: dict[str, Any], db: Session = Depends(get_db
     view_title = payload.get("view_title", "Department Timetable")
     days, time_slots, grid_data, multi_grid_data = _resolve_export_grid_data(payload, db)
 
-    excel_bytes = generate_timetable_excel(
-        college_name=college,
-        department_name=dept,
-        academic_year=year,
-        semester=sem,
-        view_title=view_title,
-        days=days,
-        time_slots=time_slots,
-        grid_data=grid_data,
-        multi_grid_data=multi_grid_data
-    )
+    try:
+        excel_bytes = generate_timetable_excel(
+            college_name=college,
+            department_name=dept,
+            academic_year=year,
+            semester=sem,
+            view_title=view_title,
+            days=days,
+            time_slots=time_slots,
+            grid_data=grid_data,
+            multi_grid_data=multi_grid_data
+        )
+    except Exception as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate Excel timetable: {err}"
+        )
 
     return Response(
         content=excel_bytes,
@@ -2440,17 +2450,28 @@ def export_pdf_timetable(payload: dict[str, Any], db: Session = Depends(get_db))
     view_title = payload.get("view_title", "Department Timetable")
     days, time_slots, grid_data, multi_grid_data = _resolve_export_grid_data(payload, db)
 
-    pdf_bytes = generate_timetable_pdf(
-        college_name=college,
-        department_name=dept,
-        academic_year=year,
-        semester=sem,
-        view_title=view_title,
-        days=days,
-        time_slots=time_slots,
-        grid_data=grid_data,
-        multi_grid_data=multi_grid_data
-    )
+    try:
+        pdf_bytes = generate_timetable_pdf(
+            college_name=college,
+            department_name=dept,
+            academic_year=year,
+            semester=sem,
+            view_title=view_title,
+            days=days,
+            time_slots=time_slots,
+            grid_data=grid_data,
+            multi_grid_data=multi_grid_data
+        )
+    except RuntimeError as err:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=str(err)
+        )
+    except Exception as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate PDF timetable: {err}"
+        )
 
     return Response(
         content=pdf_bytes,
