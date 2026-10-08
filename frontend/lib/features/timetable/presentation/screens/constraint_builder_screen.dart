@@ -204,16 +204,23 @@ class _ConstraintBuilderScreenState extends State<ConstraintBuilderScreen> with 
     String intentCode = 'blacklist'; // Default for unavailable/avoid rules
 
     // Map UI string to code intent so Python solver knows what to do
-    if (_selectedHardRule == 'Fixed Institutional Slot (TPO/Guest)') intentCode = 'fixed';
-    if (_selectedHardRule == 'Parallel Elective (MDM/OE)') intentCode = 'parallel';
-    if (_selectedHardRule == 'Fixed Session (Force Slot)') intentCode = 'fixed';
-    if (_selectedHardRule == 'Lab Continuity (Force Consecutive)') intentCode = 'fixed';
-    if (_selectedHardRule == 'Replacement Rule (Substitute Free)') intentCode = 'fill';
+    if (isHard) {
+      if (_selectedHardRule == 'Fixed Institutional Slot (TPO/Guest)') intentCode = 'fixed';
+      if (_selectedHardRule == 'Parallel Elective (MDM/OE)') intentCode = 'parallel';
+      if (_selectedHardRule == 'Fixed Session (Force Slot)') intentCode = 'fixed';
+      if (_selectedHardRule == 'Lab Continuity (Force Consecutive)') intentCode = 'fixed';
+      if (_selectedHardRule == 'Replacement Rule (Substitute Free)') intentCode = 'fill';
+    } else {
+      if (_selectedSoftRule == 'Preferred Day / Time') intentCode = 'preferred';
+      if (_selectedSoftRule == 'Avoid First Period (Morning)') intentCode = 'avoid_first_period';
+      if (_selectedSoftRule == 'Avoid Last Period (Evening)') intentCode = 'avoid_last_period';
+      if (_selectedSoftRule == 'Faculty Workload Balance') intentCode = 'workload_balance';
+      if (_selectedSoftRule == 'Minimize Daily Room Swaps') intentCode = 'minimize_room_swaps';
+    }
 
     final newConstraint = TimetableConstraint(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      // Prefix category with intentCode so provider can parse it easily
-      category: '$intentCode|$_selectedHardRule', 
+      category: '$category|$intentCode', 
       facultyNames: List.from(_selectedFaculties),
       subjectNames: List.from(_selectedSubjects),
       classNames: List.from(_selectedClasses),

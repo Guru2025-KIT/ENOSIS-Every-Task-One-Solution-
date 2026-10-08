@@ -259,6 +259,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
         }
       }
 
+      if (!mounted) return;
       final List<TeachingAssignment> parsedAssignments = [];
       final provider = context.read<TimetableProvider>();
 
@@ -277,14 +278,13 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
           }
         }
 
-        // ✅ DETECT JOINT CLASSES
-        bool isJoint = finalClassNames.length > 1 && row.theoryHours > 0;
-        String jointId = isJoint ? 'joint_${DateTime.now().millisecondsSinceEpoch}_${row.faculty.hashCode}' : '';
+        // Divisions are independent classes; never merge into joint theory unless explicitly tagged
+        String jointId = '';
 
         for (String className in finalClassNames) {
           if (row.pracHours > 0) {
-            // ✅ Dynamic Batch Splitting
-            int numBatches = 2; // Default fallback
+            // Determine number of batches (default 2)
+            int numBatches = 2;
             try {
               var parts = className.split('-');
               if (parts.length >= 3) {
@@ -297,26 +297,41 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
               }
             } catch (_) {}
 
-            int baseHours = row.pracHours ~/ numBatches;
-            int remainder = row.pracHours % numBatches;
+            // In college timetables, lab sessions are typically 2 hours per batch.
+            // If pracHours is 2, this assignment represents a full 2-hour lab session for a batch.
+            // If pracHours >= 4, it represents multiple 2-hour batch sessions taken by this faculty.
+            int blockSize = 2;
+            int blocks = (row.pracHours >= blockSize) ? (row.pracHours ~/ blockSize) : 1;
+            int hoursPerBlock = (row.pracHours >= blockSize) ? blockSize : row.pracHours;
 
-            for (int b = 0; b < numBatches; b++) {
-              int h = baseHours + (b < remainder ? 1 : 0);
-              if (h > 0) {
-                parsedAssignments.add(TeachingAssignment(
-                  facultyName: row.faculty, subjectName: row.rawName, subjectCode: row.rawCode,
-                  className: className, 
-                  batch: 'Batch ${b+1}',
-                  weeklyHours: h, type: 'Lab',
-                ));
-              }
+            // Check how many batches for this subject and class already exist in parsedAssignments
+            int existingBatches = parsedAssignments
+                .where((a) => a.className == className && a.subjectName == row.rawName && a.type == 'Lab')
+                .length;
+
+            for (int b = 0; b < blocks; b++) {
+              int batchNum = ((existingBatches + b) % numBatches) + 1;
+              parsedAssignments.add(TeachingAssignment(
+                facultyName: row.faculty,
+                subjectName: row.rawName,
+                subjectCode: row.rawCode,
+                className: className,
+                batch: 'Batch $batchNum',
+                weeklyHours: hoursPerBlock,
+                type: 'Lab',
+              ));
             }
           }
 
           if (row.theoryHours > 0) {
             parsedAssignments.add(TeachingAssignment(
-              facultyName: row.faculty, subjectName: row.rawName, subjectCode: row.rawCode,
-              className: className, batch: '-', weeklyHours: row.theoryHours, type: 'Theory',
+              facultyName: row.faculty,
+              subjectName: row.rawName,
+              subjectCode: row.rawCode,
+              className: className,
+              batch: '-',
+              weeklyHours: row.theoryHours,
+              type: 'Theory',
               jointGroupId: jointId,
             ));
           }
