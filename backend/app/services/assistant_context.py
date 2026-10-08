@@ -4,19 +4,20 @@ assistant_context.py — Retrieve live ENOSIS data to ground the AI assistant.
 Design:
 1. Intent detection: classify the message into topic buckets (timetable_status,
    schedule_today, schedule_faculty, schedule_subject, schedule_division, tasks,
-   attendance, general).
+   attendance, career_development, certificates, general).
 2. Always provide: timetable publication status + basic schedule meta.
 3. Precise entity extraction:
-   - Faculty: token matching with title stripping, without matching stopwords or short subwords.
-   - Divisions: extracts year (FY/FE=1, SY/SE=2, TY/TE=3, BE/BTech=4) and division code (A-E),
-     plus specific name match.
-   - Subjects: matches code (e.g. UDSC0631, CS302, DAA) or distinct tokens (e.g. Deep Learning),
-     preventing spurious substring matches like '%ty%' or '%me%'.
-4. Timezone-aware (IST / Asia/Kolkata) day resolution with English & Hindi day support.
-5. Smart timetable querying:
-   - Resolves target faculty, division, subject, day, and slot.
-   - Uses fallback relaxation if strict intersection yields 0 entries but entity has records.
-6. Personal ("my/me/I") queries use the logged-in user's identity.
+   - Faculty & Users: token & full name matching with title stripping.
+   - Students: student master lookup by name or roll number.
+   - Divisions: extracts year and division code plus specific name match.
+   - Subjects: matches code or distinct tokens.
+4. Career Development & Certificates:
+   - Queries real `achievements` and `documents` tables for matched users or logged-in user.
+   - Extracts certificate metadata, file names, Cloudinary/download URLs, completion dates.
+   - Distinguishes between person not found, no records found, and specific topic matches (e.g. Python).
+5. Timezone-aware (IST / Asia/Kolkata) day resolution.
+6. Smart timetable querying with fallback relaxation.
+7. Personal ("my/me/I") queries use the logged-in user's identity.
 """
 
 import logging
@@ -28,14 +29,16 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.academic import Division, Room, Subject, TeachingAssignment
+from app.models.achievement import Achievement, AchievementCategory
 from app.models.attendance import (
     AttendanceStatus,
     LectureAttendanceRecord,
     LectureAttendanceSession,
 )
+from app.models.document import Document
 from app.models.generation_history import GenerationRun
 from app.models.schedule_config import ScheduleConfig
-from app.models.sli import Department
+from app.models.sli import Department, Student
 from app.models.timetable import TimetableEntry
 from app.models.todo import Task
 from app.models.user import User
@@ -49,7 +52,7 @@ logger = logging.getLogger("ai_assistant.context")
 _STOP_WORDS = {
     "a", "about", "all", "am", "an", "and", "are", "as", "assigned", "at", "be", "by", "can",
     "class", "classes", "course", "courses", "dept", "department", "do", "does", "division", "div",
-    "faculty", "for", "from", "give", "has", "have", "help", "he", "she", "i", "in", "is", "it", "me", "my", "of",
+    "faculty", "for", "from", "give", "has", "have", "help", "he", "she", "his", "her", "i", "in", "is", "it", "me", "my", "of",
     "on", "or", "our", "please", "prof", "professor", "room", "schedule", "section", "sec",
     "show", "sir", "madam", "slot", "slots", "subject", "subjects", "tell",
     "the", "their", "this", "time", "timetable", "to", "today", "tomorrow", "was", "we", "were",
@@ -65,17 +68,15 @@ _YEAR_WORDS = {
     "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "sixth": 6,
 }
 
-# Timetable-related intent terms
 _TIMETABLE_TERMS = {
     "schedule", "timetable", "timetables", "workload", "teaching", "teach",
     "lecture", "lectures", "period", "periods", "slot", "slots", "class",
     "classes", "published", "publish", "live", "release", "released",
     "visible", "see", "view", "current", "today", "tomorrow", "week",
     "weekly", "when", "which", "who", "room", "classroom", "lab",
-    "teaching", "assignment", "assigned", "bata", "batao", "dikhao", "kab", "kaha"
+    "assignment", "assigned", "bata", "batao", "dikhao", "kab", "kaha"
 }
 
-# Timetable status / publication intent
 _STATUS_TERMS = {
     "published", "publish", "live", "release", "released", "visible",
     "available", "active", "current", "status", "updated", "latest",
@@ -90,6 +91,16 @@ _SCHEDULE_TERMS = {
 _OWN_COURSE_TERMS = {"class", "classes", "course", "courses", "subject", "subjects"}
 _TASK_TERMS = {"task", "tasks", "todo", "todos", "reminder", "reminders", "deadline"}
 
+_CAREER_TERMS = {
+    "certificate", "certificates", "certification", "certifications", "certified",
+    "achievement", "achievements", "achieved", "career", "advancement", "resume", "cv",
+    "fdp", "fdps", "workshop", "workshops", "conference", "conferences", "publication",
+    "publications", "paper", "papers", "patent", "patents", "award", "awards", "recognition",
+    "course", "courses", "webinar", "webinars", "training", "trainings", "seminar", "seminars",
+    "skill", "skills", "project", "projects", "internship", "internships", "document", "documents",
+    "proof", "credential", "credentials", "portfolio", "uploaded", "qualifications"
+}
+
 _DAY_NAMES = {
     "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
     "friday": 4, "saturday": 5, "sunday": 6,
@@ -99,9 +110,40 @@ _DAY_NAMES = {
     "shukrawar": 4, "shaniwar": 5, "ravivar": 6
 }
 
+_CATEGORY_LABELS = {
+    "certification": "Certificate / Certification",
+    "fdp": "Faculty Development Program (FDP)",
+    "webinar": "Webinar",
+    "workshop": "Workshop",
+    "conference": "Conference",
+    "publication": "Publication / Research Paper",
+    "award": "Award / Recognition",
+    "research": "Research / Patent",
+    "patent": "Patent",
+    "course": "Course",
+    "book": "Book",
+    "book_chapter": "Book Chapter",
+    "consultancy": "Consultancy",
+    "seminar": "Seminar",
+    "training": "Training",
+    "other": "Other",
+}
+
+
 # ---------------------------------------------------------------------------
 # Helper utilities
 # ---------------------------------------------------------------------------
+
+def _format_size(size_bytes: int | None) -> str | None:
+    if size_bytes is None:
+        return None
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    else:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+
 
 def _search_terms(text: str) -> list[str]:
     return [
@@ -204,22 +246,36 @@ def _extract_division_entities(text: str, db: Session) -> list[Division]:
 
 
 def _extract_faculty_entities(text: str, db: Session) -> list[User]:
-    words = [w for w in re.findall(r'[a-zA-Z0-9]+', text.lower()) if len(w) >= 3 and w not in _STOP_WORDS]
-    if not words:
-        return []
-    
+    lower = text.lower()
     all_users = db.query(User).filter(User.is_active.is_(True)).all()
-    matched = []
+    matched: list[User] = []
+
+    # 1. Full cleaned name matching
     for u in all_users:
         if not u.full_name:
             continue
-        u_name = u.full_name.lower()
-        for prefix in ["dr.", "dr ", "prof.", "prof ", "mr.", "mr ", "mrs.", "mrs ", "ms.", "ms."]:
-            if u_name.startswith(prefix):
-                u_name = u_name[len(prefix):].strip()
-        u_tokens = set(re.findall(r'[a-zA-Z0-9]+', u_name))
-        if any(w in u_tokens for w in words):
-            matched.append(u)
+        u_name = u.full_name.lower().strip()
+        clean_u_name = re.sub(r"^(dr\.|dr\s+|prof\.|prof\s+|mr\.|mr\s+|mrs\.|mrs\s+|ms\.|ms\s+)", "", u_name).strip()
+        if len(clean_u_name) >= 3 and (clean_u_name in lower or u_name in lower):
+            if u not in matched:
+                matched.append(u)
+        elif u.employee_id and u.employee_id.lower() in lower:
+            if u not in matched:
+                matched.append(u)
+
+    # 2. Token-based matching if no full name match
+    if not matched:
+        words = [w for w in re.findall(r'[a-zA-Z0-9]+', lower) if len(w) >= 3 and w not in _STOP_WORDS]
+        if words:
+            for u in all_users:
+                if not u.full_name:
+                    continue
+                clean_u_name = re.sub(r"^(dr\.|dr\s+|prof\.|prof\s+|mr\.|mr\s+|mrs\.|mrs\s+|ms\.|ms\s+)", "", u.full_name.lower()).strip()
+                u_tokens = set(re.findall(r'[a-zA-Z0-9]+', clean_u_name))
+                if any(w in u_tokens for w in words):
+                    if u not in matched:
+                        matched.append(u)
+
     return matched
 
 
@@ -242,6 +298,50 @@ def _extract_subject_entities(text: str, db: Session) -> list[Subject]:
                 matched.append(s)
                 continue
     return matched
+
+
+def _extract_explicit_person_query(text: str) -> str | None:
+    """Extract person name mentioned in queries like 'Show Rajesh Kumar's certificates'."""
+    # 1. Possessive pattern: "Rajesh Kumar's certificates", "John Nonexistent's"
+    pos_match = re.search(r"\b([A-Za-z]+(?:\s+[A-Za-z]+)*)'s\b", text)
+    if pos_match:
+        cand = pos_match.group(1).strip()
+        cleaned = " ".join(w for w in cand.split() if w.lower() not in _STOP_WORDS and len(w) >= 2)
+        if cleaned and len(cleaned) >= 2:
+            return cleaned
+
+    # 2. "certificates of Rajesh Kumar", "achievements for John Doe"
+    of_match = re.search(r"(?:certificates?|certifications?|achievements?|profile|skills?|projects?|publications?)\s+(?:of|for|by)\s+([A-Za-z\s]+)", text, re.IGNORECASE)
+    if of_match:
+        cand = of_match.group(1).strip()
+        cleaned = " ".join(w for w in cand.split() if w.lower() not in _STOP_WORDS and len(w) >= 2)
+        if cleaned and len(cleaned) >= 2:
+            return cleaned
+
+    # 3. "Show me Rajesh Kumar certificates", "Does Rajesh Kumar have..."
+    verb_match = re.search(r"(?:show|tell|what|does|which|open|give|find|view|list|how many)\s+(?:me\s+)?(?:about\s+)?([A-Za-z\s]+?)(?:\s+has|\s+have|\s+completed|\s+done|\s+certificates?|\s+certifications?|\s+achievements?|\s+profile|\s+skills?|\s+projects?|\s+timetable|\s+schedule)", text, re.IGNORECASE)
+    if verb_match:
+        cand = verb_match.group(1).strip()
+        cleaned = " ".join(w for w in cand.split() if w.lower() not in _STOP_WORDS and len(w) >= 2)
+        if cleaned and len(cleaned) >= 2:
+            return cleaned
+
+    # 4. Honorifics: "Dr. Rajesh Kumar", "Prof. Sharma"
+    hon_match = re.search(r"\b(?:dr\.|prof\.|mr\.|mrs\.|ms\.)\s*([A-Za-z]+(?:\s+[A-Za-z]+)?)", text, re.IGNORECASE)
+    if hon_match:
+        cand = hon_match.group(1).strip()
+        if len(cand) >= 2:
+            return cand
+
+    # 5. Two capitalized words: e.g. "Rajesh Kumar", "John Nonexistent"
+    cap_match = re.search(r"\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b", text)
+    if cap_match:
+        cand = cap_match.group(1).strip()
+        words = [w for w in cand.split() if w.lower() not in _STOP_WORDS]
+        if len(words) >= 2:
+            return " ".join(words)
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -293,11 +393,105 @@ def _timetable_fact(entry: TimetableEntry, config: ScheduleConfig | None = None)
         "year": entry.division.year if entry.division else None,
         "division_code": entry.division.division_code if entry.division else "",
         "day": day_label,
-        "slot": entry.slot + 1,
+        "slot": entry.slot,
+        "period": entry.slot + 1,
         "time": time_str,
         "room": entry.room.name if entry.room else "TBD",
         "session_type": entry.session_type,
         "batch": entry.batch_name or "All",
+    }
+
+
+def _format_achievement_fact(achievement: Achievement, db: Session) -> dict[str, Any]:
+    doc_url = None
+    file_name = None
+    file_size = None
+    if achievement.document_id:
+        doc = db.query(Document).filter(Document.id == achievement.document_id).first()
+        if doc:
+            doc_url = doc.url
+            file_name = doc.file_name
+            file_size = _format_size(doc.file_size_bytes)
+
+    cat_val = achievement.category.value if hasattr(achievement.category, "value") else str(achievement.category)
+    cat_name = _CATEGORY_LABELS.get(cat_val.lower(), cat_val.title())
+
+    return {
+        "id": achievement.id,
+        "title": achievement.title,
+        "category": cat_val,
+        "category_name": cat_name,
+        "is_certification": cat_val.lower() in ("certification", "course") or "cert" in achievement.title.lower(),
+        "date_achieved": achievement.date_achieved.isoformat() if achievement.date_achieved else None,
+        "organization": achievement.organization,
+        "description": achievement.description,
+        "has_document": bool(achievement.document_id or doc_url),
+        "file_name": file_name,
+        "document_url": doc_url,
+        "file_size": file_size,
+        "created_at": achievement.created_at.isoformat() if achievement.created_at else None,
+    }
+
+
+def _build_user_career_profile(target_user: User, db: Session, topic_filter: str | None = None) -> dict[str, Any]:
+    achievements = (
+        db.query(Achievement)
+        .filter(Achievement.owner_id == target_user.id)
+        .order_by(
+            Achievement.date_achieved.desc().nullslast(),
+            Achievement.created_at.desc(),
+        )
+        .all()
+    )
+    formatted_achievements = [_format_achievement_fact(a, db) for a in achievements]
+    certifications = [a for a in formatted_achievements if a["is_certification"] or a["category"] == "certification"]
+
+    latest_cert = certifications[0] if certifications else None
+    latest_ach = formatted_achievements[0] if formatted_achievements else None
+
+    # Standalone uploaded documents
+    docs = db.query(Document).filter(Document.owner_id == target_user.id).order_by(Document.uploaded_at.desc()).all()
+    formatted_docs = [
+        {
+            "id": d.id,
+            "file_name": d.file_name,
+            "url": d.url,
+            "file_size": _format_size(d.file_size_bytes),
+            "uploaded_at": d.uploaded_at.isoformat() if d.uploaded_at else None,
+        }
+        for d in docs
+    ]
+
+    # Topic-specific matches if topic requested (e.g. "python", "aws", "cloud", etc.)
+    topic_matched = []
+    if topic_filter:
+        tf = topic_filter.lower()
+        topic_matched = [
+            a for a in formatted_achievements
+            if tf in a["title"].lower()
+            or (a["description"] and tf in a["description"].lower())
+            or (a["organization"] and tf in a["organization"].lower())
+        ]
+
+    return {
+        "person_exists": True,
+        "person_type": "faculty",
+        "name": target_user.full_name,
+        "email": target_user.email,
+        "employee_id": target_user.employee_id,
+        "department": target_user.department,
+        "designation": target_user.designation,
+        "experience": target_user.experience,
+        "joining_date": target_user.joining_date,
+        "total_achievements": len(formatted_achievements),
+        "total_certifications": len(certifications),
+        "total_documents": len(formatted_docs),
+        "latest_certificate": latest_cert,
+        "latest_achievement": latest_ach,
+        "certifications": certifications,
+        "all_achievements": formatted_achievements,
+        "uploaded_documents": formatted_docs,
+        "topic_matched_achievements": topic_matched if topic_filter else None,
     }
 
 
@@ -407,10 +601,11 @@ def retrieve_enosis_context(
     is_status_query = _contains_any(search_text, _STATUS_TERMS)
     is_task_query = _contains_any(search_text, _TASK_TERMS)
     is_attendance_query = "attendance" in set(re.findall(r"[a-z0-9]+", search_text.lower()))
+    is_career_query = _contains_any(search_text, _CAREER_TERMS)
 
     has_personal_reference = bool(
         re.search(
-            r"\b(i|my|mine|me|our|myself)\b|\b(this|current)\s+faculty\b",
+            r"\b(my|mine|myself|i\b|our)\b|\b(this|current)\s+faculty\b|\babout\s+me\b|\bfor\s+me\b|\bto\s+me\b|\bme\b\s*(?:schedule|timetable|classes|lectures|tasks|todos|certificates|achievements)",
             search_text.lower(),
         )
     )
@@ -440,6 +635,19 @@ def retrieve_enosis_context(
     matched_subject_ids = {s.id for s in matched_subjects}
     matched_division_ids = {d.id for d in matched_divisions}
 
+    # ── Topic detection for skills / specific certifications ─────────────────
+    topic_filter = None
+    common_skills = [
+        "python", "java", "c++", "c", "aws", "azure", "gcp", "cloud",
+        "machine learning", "ai", "artificial intelligence", "deep learning",
+        "data science", "nlp", "cybersecurity", "docker", "kubernetes",
+        "react", "flutter", "hpc", "database", "sql", "dbms", "networking"
+    ]
+    for skill in common_skills:
+        if re.search(rf"\b{re.escape(skill)}\b", search_text.lower()):
+            topic_filter = skill
+            break
+
     # ── Base context dict ────────────────────────────────────────────────────
     context: dict[str, Any] = {
         "today": today_name,
@@ -461,16 +669,58 @@ def retrieve_enosis_context(
         ],
         "teaching_assignments": [],
         "published_timetable": [],
-        "my_teaching_assignments": [],
         "my_published_timetable": [],
         "my_open_tasks": [],
         "my_teaching_attendance_summary": None,
+        "career_development": None,
+        "my_career_development": None,
         "all_divisions": [],
         "all_subjects": [],
         "unavailable_sources": [
             "A persisted course CO-PO mapping matrix is not available to this assistant."
         ],
     }
+
+    # ── Career Development & Certificates Retrieval ─────────────────────────
+    explicit_person = _extract_explicit_person_query(message) or _extract_explicit_person_query(search_text)
+    if is_career_query or matched_faculty or has_personal_reference or explicit_person:
+        # 1. Logged-in user's own career profile
+        if has_personal_reference or is_career_query:
+            context["my_career_development"] = _build_user_career_profile(current_user, db, topic_filter)
+
+        # 2. Target other faculty / user if explicitly matched
+        if matched_faculty:
+            career_profiles = []
+            for fac in matched_faculty:
+                career_profiles.append(_build_user_career_profile(fac, db, topic_filter))
+            context["career_development"] = career_profiles[0] if len(career_profiles) == 1 else career_profiles
+
+        elif explicit_person:
+            # Check Student table
+            clean_exp = explicit_person.lower()
+            student = db.query(Student).filter(func.lower(Student.name).like(f"%{clean_exp}%")).first()
+            if student:
+                context["career_development"] = {
+                    "person_exists": True,
+                    "person_type": "student",
+                    "name": student.name,
+                    "student_id": student.student_id,
+                    "program": student.program,
+                    "current_year": student.current_year,
+                    "total_achievements": 0,
+                    "total_certifications": 0,
+                    "certifications": [],
+                    "all_achievements": [],
+                    "message": f"Student {student.name} ({student.student_id}) has no certificates or career development records uploaded in ENOSIS.",
+                }
+            else:
+                context["career_development"] = {
+                    "person_exists": False,
+                    "searched_name": explicit_person,
+                    "total_achievements": 0,
+                    "total_certifications": 0,
+                    "message": f"No faculty, staff, or student named '{explicit_person}' was found in the ENOSIS database.",
+                }
 
     # ── Always populate publication status for timetable/status queries ─────
     if is_timetable_query or is_status_query or matched_faculty_ids or matched_division_ids or matched_subject_ids:
@@ -556,21 +806,18 @@ def retrieve_enosis_context(
 
                 # Fallback Relaxation: if strict intersection is empty
                 if not entries and matched_faculty_ids and matched_division_ids:
-                    # Try faculty on that day
                     fallback_fac_q = base_query.filter(TimetableEntry.faculty_id.in_(matched_faculty_ids))
                     if day_index_filter is not None:
                         fallback_fac_q = fallback_fac_q.filter(TimetableEntry.day == day_index_filter)
                     entries = fallback_fac_q.order_by(TimetableEntry.day, TimetableEntry.slot).limit(150).all()
 
                 if not entries and matched_division_ids:
-                    # Try division on that day
                     fallback_div_q = base_query.filter(TimetableEntry.division_id.in_(matched_division_ids))
                     if day_index_filter is not None:
                         fallback_div_q = fallback_div_q.filter(TimetableEntry.day == day_index_filter)
                     entries = fallback_div_q.order_by(TimetableEntry.day, TimetableEntry.slot).limit(150).all()
 
                 if not entries and matched_faculty_ids:
-                    # Entire week for faculty so assistant knows their schedule
                     fac_all_days_q = base_query.filter(TimetableEntry.faculty_id.in_(matched_faculty_ids))
                     entries = fac_all_days_q.order_by(TimetableEntry.day, TimetableEntry.slot).limit(150).all()
 

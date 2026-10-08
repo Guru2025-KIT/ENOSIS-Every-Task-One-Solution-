@@ -1,7 +1,7 @@
 import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:universal_html/html.dart' as html;
 
 import '../../../core/auth/auth_session.dart';
 import '../../../core/network/api_client.dart';
@@ -10,6 +10,13 @@ class TtsService {
   final FlutterTts _flutterTts = FlutterTts();
 
   bool voiceMode = true;
+  bool _isSpeaking = false;
+  html.AudioElement? _currentWebAudio;
+
+  bool get isSpeaking => _isSpeaking;
+
+  VoidCallback? onSpeakingStarted;
+  VoidCallback? onSpeakingFinished;
 
   TtsService() {
     _initTts();
@@ -19,20 +26,41 @@ class TtsService {
     try {
       await _flutterTts.setVolume(1.0);
       await _flutterTts.setPitch(1.0);
-      await _flutterTts.setSpeechRate(0.62);
+      await _flutterTts.setSpeechRate(0.55);
       await _flutterTts.setLanguage('en-IN');
+
+      _flutterTts.setStartHandler(() {
+        _isSpeaking = true;
+        onSpeakingStarted?.call();
+      });
+      _flutterTts.setCompletionHandler(() {
+        _isSpeaking = false;
+        onSpeakingFinished?.call();
+      });
+      _flutterTts.setCancelHandler(() {
+        _isSpeaking = false;
+        onSpeakingFinished?.call();
+      });
+      _flutterTts.setErrorHandler((msg) {
+        _isSpeaking = false;
+        onSpeakingFinished?.call();
+      });
     } catch (e) {
       debugPrint('TTS initialization error: $e');
     }
   }
 
   Future<void> speak(
-      String text, {
-        String role = 'assistant',
-      }) async {
-    if (!voiceMode || text.trim().isEmpty) return;
+    String text, {
+    String role = 'assistant',
+  }) async {
+    if (text.trim().isEmpty) return;
+    await stop();
 
-    // Try backend TTS first.
+    _isSpeaking = true;
+    onSpeakingStarted?.call();
+
+    // 1. Try backend ElevenLabs / Neural TTS first
     if (AuthSession.token != null) {
       try {
         final body = {
@@ -44,66 +72,75 @@ class TtsService {
           '/voice/tts',
           body,
           token: AuthSession.token,
+          timeoutSeconds: 15,
         );
 
-        if (response.statusCode == 200) {
+        if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
           if (kIsWeb) {
-            // Web audio playback is handled separately.
-            await _playWebAudio(response.bodyBytes, 1.25);
+            await _playWebAudio(response.bodyBytes, 1.0, fallbackText: text);
             return;
           }
-
-          // On Android/iOS, FlutterTts is used instead.
-          // We intentionally don't try to use dart:js here.
         }
       } catch (e) {
-        debugPrint(
-          'Backend TTS failed, falling back to local TTS: $e',
-        );
+        debugPrint('Backend ElevenLabs TTS failed, falling back to local TTS: $e');
       }
     }
 
-    // Android / iOS / fallback:
-    // Use the device's native text-to-speech engine.
+    // 2. Local fallback using FlutterTts
     try {
       await _flutterTts.stop();
       await _flutterTts.speak(text);
     } catch (e) {
       debugPrint('Local TTS speak error: $e');
+      _isSpeaking = false;
+      onSpeakingFinished?.call();
     }
   }
 
   Future<void> stop() async {
+    _isSpeaking = false;
     try {
+      if (kIsWeb && _currentWebAudio != null) {
+        _currentWebAudio?.pause();
+        _currentWebAudio = null;
+      }
       await _flutterTts.stop();
     } catch (_) {}
+    onSpeakingFinished?.call();
   }
 
-  /// Web audio playback.
-  ///
-  /// This method intentionally does nothing on non-web platforms.
-  /// The actual browser implementation can be added later using
-  /// a web-specific implementation.
-  Future<void> _playWebAudio(
-      Uint8List bytes,
-      double rate,
-      ) async {
+  Future<void> _playWebAudio(Uint8List bytes, double rate, {String? fallbackText}) async {
     if (!kIsWeb) return;
-
-    // For now, use FlutterTts on Web as a safe fallback.
-    //
-    // This avoids importing dart:js, which is unavailable on
-    // Android/iOS/Desktop.
     try {
-      final text = base64Encode(bytes);
+      if (_currentWebAudio != null) {
+        _currentWebAudio?.pause();
+        _currentWebAudio = null;
+      }
+      final blob = html.Blob([bytes], 'audio/mpeg');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final audio = html.AudioElement();
+      audio.src = url;
+      _currentWebAudio = audio;
 
-      // Prevent unused parameter warnings and keep this method
-      // platform-safe.
-      debugPrint(
-        'Web audio received: ${text.length} bytes, rate: $rate',
-      );
+      audio.onEnded.listen((_) {
+        _isSpeaking = false;
+        _currentWebAudio = null;
+        onSpeakingFinished?.call();
+      });
+      audio.onError.listen((_) {
+        _isSpeaking = false;
+        _currentWebAudio = null;
+        onSpeakingFinished?.call();
+      });
+
+      await audio.play();
     } catch (e) {
       debugPrint('Web audio play exception: $e');
+      _isSpeaking = false;
+      onSpeakingFinished?.call();
+      if (fallbackText != null && fallbackText.isNotEmpty) {
+        await _flutterTts.speak(fallbackText);
+      }
     }
   }
 }
