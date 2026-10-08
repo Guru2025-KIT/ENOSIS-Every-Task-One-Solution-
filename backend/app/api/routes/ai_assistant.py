@@ -85,7 +85,7 @@ def chat(
     try:
         context = retrieve_enosis_context(db, current_user, message, history)
     except Exception as error:
-        logger.warning("ENOSIS assistant context lookup non-fatal failure (%s). Proceeding with fallback context.", type(error).__name__)
+        logger.warning("ENOSIS assistant context lookup non-fatal failure (%s). Proceeding with fallback context: %s", type(error).__name__, error)
         context = {
             "today": "Today",
             "today_weekday_index": 0,
@@ -119,7 +119,7 @@ def chat(
         if not reply_text:
             raise RuntimeError("The AI provider returned an empty response.")
     except Exception as error:
-        logger.error("ENOSIS assistant request failed (%s)", type(error).__name__)
+        logger.error("ENOSIS assistant request failed (%s): %s", type(error).__name__, error, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=_AI_REQUEST_FAILED_DETAIL,
