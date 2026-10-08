@@ -1,6 +1,6 @@
 {
   "model_name": "LogisticRegression",
-  "trained_at": "2026-10-08T16:55:53.450989+00:00",
+  "trained_at": "2026-10-08T17:56:10.617622+00:00",
   "total_samples": 104,
   "train_samples": 78,
   "validation_samples": 26,

@@ -1294,7 +1294,11 @@ def publish_timetable(
     })
 
     dept = db.query(Department).first()
-    dept_id = dept.department_id if dept else 1
+    if not dept:
+        dept = Department(department_id=1, name="Computer Science & Engineering", code="CSE")
+        db.add(dept)
+        db.flush()
+    dept_id = dept.department_id
 
     sem = db.query(Semester).filter(Semester.status == "ACTIVE").first()
     if not sem:

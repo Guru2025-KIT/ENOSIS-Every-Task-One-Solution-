@@ -144,6 +144,15 @@ class TimetableCpSatSolver:
             for c in group:
                 self.group_lookup[c] = group
 
+        all_cls_names = sorted(list({a.class_name for a in self.assignments if a.class_name}))
+        self.home_classrooms: Dict[str, str] = {}
+        for c_idx, c_name in enumerate(all_cls_names):
+            if self.classrooms:
+                self.home_classrooms[c_name] = self.classrooms[c_idx % len(self.classrooms)].get("name", f"Classroom {c_idx + 1}")
+            else:
+                self.home_classrooms[c_name] = f"Room {101 + c_idx}"
+
+
     # -------------------------------------------------------------- #
     # Helpers                                                          #
     # -------------------------------------------------------------- #
@@ -167,6 +176,20 @@ class TimetableCpSatSolver:
         n1 = c1.upper().replace("-", " ").strip()
         n2 = c2.upper().replace("-", " ").strip()
         return n1 == n2 or n1.startswith(n2) or n2.startswith(n1)
+
+    def _get_home_classroom(self, class_name: str) -> str:
+        if not class_name:
+            return self.classrooms[0].get("name", "Classroom 1") if self.classrooms else "Room 101"
+        if class_name in self.home_classrooms:
+            return self.home_classrooms[class_name]
+        if self.classrooms:
+            idx = abs(hash(class_name)) % len(self.classrooms)
+            rm = self.classrooms[idx].get("name", f"Classroom {idx + 1}")
+        else:
+            rm = f"Room {101 + (abs(hash(class_name)) % 50)}"
+        self.home_classrooms[class_name] = rm
+        return rm
+
 
     def _intent_from_raw(self, intent_raw: str, category_raw: str) -> str:
         """Normalise intent regardless of how Flutter encoded it."""
@@ -295,8 +318,7 @@ class TimetableCpSatSolver:
                 return False
         if con.class_names:
             has_filter = True
-            if not any(any(self._class_match(cn, cls) for cn in con.class_names)
-                        for cls in sess.classes):
+            if not any(self._class_match(cn, cls) for cn in con.class_names for cls in sess.classes):
                 return False
         if not has_filter:
             if not con.days and not con.slot_numbers:
@@ -693,15 +715,6 @@ class TimetableCpSatSolver:
                         rtt[c_name][key] = []
                         rdt[c_name][key] = {"subject": "Free", "faculty": "", "batch": "", "type": "Free"}
 
-        # Establish dedicated home classrooms per class for class-level theory lectures
-        home_classrooms: Dict[str, str] = {}
-        sorted_classes = sorted(list(all_classes))
-        for c_idx, c_name in enumerate(sorted_classes):
-            if self.classrooms:
-                home_classrooms[c_name] = self.classrooms[c_idx % len(self.classrooms)].get("name", f"Classroom {c_idx + 1}")
-            else:
-                home_classrooms[c_name] = f"Room {101 + c_idx}"
-
         rel_notes, unsched, sched_cnt = [], [], 0
         room_use: Dict[Tuple[str, int], Set[str]] = defaultdict(set)
 
@@ -750,7 +763,7 @@ class TimetableCpSatSolver:
                         else:
                             # Single class-level theory lecture: MUST use the division's dedicated HOME CLASSROOM
                             cls_name = sess.classes[0] if sess.classes else ""
-                            candidate_home = home_classrooms.get(cls_name)
+                            candidate_home = self._get_home_classroom(cls_name)
                             if candidate_home and all(candidate_home not in room_use[(opt.day, s)] for s in opt.slots):
                                 rm = candidate_home
                                 for s in opt.slots:
@@ -925,7 +938,7 @@ class TimetableCpSatSolver:
                             for s in block:
                                 key = f"{day}_{s}"
                                 fixed_rm = (
-                                    home_classrooms.get(cls, "Classroom 1")
+                                    self._get_home_classroom(cls)
                                     if sess.type == "Theory" and len(sess.classes) == 1
                                     else (self.labs_pool[0].get("name", "Lab 1") if sess.type == "Lab" and self.labs_pool else "")
                                 )
