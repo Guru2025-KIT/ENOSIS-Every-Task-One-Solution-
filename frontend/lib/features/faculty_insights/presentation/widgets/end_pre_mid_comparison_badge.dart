@@ -49,8 +49,10 @@ class EndPreMidComparisonBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.border),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 4,
+        runSpacing: 4,
         children: [
           Text(
             '$label: ',
@@ -87,9 +89,7 @@ class EndPreMidComparisonBadge extends StatelessWidget {
           ],
           // MID Stage Pill
           if (hasMid) ...[
-            const SizedBox(width: 4),
             const Icon(Icons.arrow_forward, size: 10, color: AppColors.textSecondary),
-            const SizedBox(width: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
@@ -108,9 +108,7 @@ class EndPreMidComparisonBadge extends StatelessWidget {
           ],
           // END Stage Pill
           if (hasEnd) ...[
-            const SizedBox(width: 4),
             const Icon(Icons.arrow_forward, size: 10, color: AppColors.textSecondary),
-            const SizedBox(width: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
@@ -127,7 +125,6 @@ class EndPreMidComparisonBadge extends StatelessWidget {
               ),
             ),
             if (delta != null && delta != 0) ...[
-              const SizedBox(width: 6),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

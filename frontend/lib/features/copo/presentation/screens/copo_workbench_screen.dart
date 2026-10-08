@@ -1555,79 +1555,103 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 const Text('1. Academic Year: ',
                     style:
                         TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                const SizedBox(width: 6),
-                DropdownButton<String>(
-                  value: _selectedYear,
-                  isDense: true,
-                  underline: const SizedBox(),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                      fontSize: 12.5),
-                  items: [
-                    'F.Y. B.Tech',
-                    'S.Y. B.Tech',
-                    'T.Y. B.Tech',
-                    'Final Year B.Tech'
-                  ]
-                      .map((y) => DropdownMenuItem(value: y, child: Text(y)))
-                      .toList(),
-                  onChanged: (y) {
-                    if (y != null) _onYearChanged(y);
-                  },
-                ),
-                const SizedBox(width: 18),
-                const Text('2. Semester: ',
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                const SizedBox(width: 6),
-                DropdownButton<String>(
-                  value: _selectedSemester,
-                  isDense: true,
-                  underline: const SizedBox(),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                      fontSize: 12.5),
-                  items: _availableSemesters
-                      .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                      .toList(),
-                  onChanged: (s) {
-                    if (s != null) _onSemesterChanged(s);
-                  },
-                ),
-                const SizedBox(width: 18),
-                const Text('3. Course: ',
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                const SizedBox(width: 6),
-                DropdownButton<String>(
-                  value: _selectedCourse.code,
-                  isDense: true,
-                  underline: const SizedBox(),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.secondary,
-                      fontSize: 12.5),
-                  items: courses.map((c) {
-                    return DropdownMenuItem(
-                      value: c.code,
-                      child: Text(
-                        '${c.code} · ${c.name}',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (code) {
-                    if (code != null) {
-                      final chosen = courses.firstWhere((c) => c.code == code);
-                      _onCourseChanged(chosen);
-                    }
-                  },
-                ),
-              ],
+                  // Safe items and value for Year Dropdown
+                  Builder(
+                    builder: (context) {
+                      const yearItems = [
+                        'F.Y. B.Tech',
+                        'S.Y. B.Tech',
+                        'T.Y. B.Tech',
+                        'Final Year B.Tech'
+                      ];
+                      final safeYear = yearItems.contains(_selectedYear) ? _selectedYear : yearItems[1];
+                      return DropdownButton<String>(
+                        value: safeYear,
+                        isDense: true,
+                        underline: const SizedBox(),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                            fontSize: 12.5),
+                        items: yearItems
+                            .map((y) => DropdownMenuItem(value: y, child: Text(y)))
+                            .toList(),
+                        onChanged: (y) {
+                          if (y != null) _onYearChanged(y);
+                        },
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 18),
+                  const Text('2. Semester: ',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  const SizedBox(width: 6),
+                  Builder(
+                    builder: (context) {
+                      final sems = _availableSemesters;
+                      final safeSem = sems.contains(_selectedSemester) ? _selectedSemester : (sems.isNotEmpty ? sems.first : 'Semester IV');
+                      return DropdownButton<String>(
+                        value: safeSem,
+                        isDense: true,
+                        underline: const SizedBox(),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                            fontSize: 12.5),
+                        items: sems
+                            .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                            .toList(),
+                        onChanged: (s) {
+                          if (s != null) _onSemesterChanged(s);
+                        },
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 18),
+                  const Text('3. Course: ',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  const SizedBox(width: 6),
+                  Builder(
+                    builder: (context) {
+                      final courseList = courses.isNotEmpty ? courses : kitAimlCourses;
+                      final courseCodes = courseList.map((c) => c.code).toSet();
+                      final safeCourseCode = courseCodes.contains(_selectedCourse.code)
+                          ? _selectedCourse.code
+                          : (courseList.isNotEmpty ? courseList.first.code : 'UAMPC0403');
+                      return DropdownButton<String>(
+                        value: safeCourseCode,
+                        isDense: true,
+                        underline: const SizedBox(),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.secondary,
+                            fontSize: 12.5),
+                        items: courseList.map((c) {
+                          return DropdownMenuItem(
+                            value: c.code,
+                            child: Text(
+                              '${c.code} · ${c.name}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (code) {
+                          if (code != null) {
+                            final chosen = courseList.firstWhere(
+                              (c) => c.code == code,
+                              orElse: () => courseList.first,
+                            );
+                            _onCourseChanged(chosen);
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
-          ),
           const SizedBox(height: 10),
           const Divider(height: 1),
           const SizedBox(height: 10),
@@ -1778,7 +1802,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     alignment: WrapAlignment.spaceBetween,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Flexible(
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 600),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -1887,7 +1912,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     alignment: WrapAlignment.spaceBetween,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Flexible(
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 600),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -3227,7 +3253,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       child: const Icon(Icons.sync_rounded, color: Colors.white, size: 24),
                     ),
                     const SizedBox(width: 14),
-                    Flexible(
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 550),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -3440,7 +3467,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                               color: Colors.white, size: 24),
                         ),
                         const SizedBox(width: 12),
-                        Flexible(
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 550),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [

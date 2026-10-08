@@ -342,38 +342,46 @@ def seed_admin_user():
     from app.models.user import User, UserRole
     from app.core.security import hash_password
 
-    DEFAULT_ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@enosis.edu.in").strip().lower()
+    DEFAULT_ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "enosissofficial@gmail.com").strip().lower()
     DEFAULT_ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
     DEFAULT_ADMIN_NAME = os.environ.get("ADMIN_NAME", "ENOSIS Administrator")
 
     db = SessionLocal()
     try:
-        admin_user = db.query(User).filter(User.role == UserRole.ADMIN).first()
+        # Check if an admin with enosissofficial@gmail.com already exists
+        admin_user = db.query(User).filter(User.email == DEFAULT_ADMIN_EMAIL).first()
+        
+        # If not, check if an admin with old email exists and update it
         if not admin_user:
-            admin_user = db.query(User).filter(User.email == DEFAULT_ADMIN_EMAIL).first()
-            if admin_user:
-                admin_user.role = UserRole.ADMIN
-                admin_user.is_active = True
-                admin_user.can_manage_timetable = True
+            old_admin = db.query(User).filter(User.email == "admin@enosis.edu.in").first()
+            if old_admin:
+                old_admin.email = DEFAULT_ADMIN_EMAIL
+                old_admin.role = UserRole.ADMIN
+                old_admin.is_active = True
+                old_admin.can_manage_timetable = True
+                old_admin.hashed_password = hash_password(DEFAULT_ADMIN_PASSWORD)
                 db.commit()
-                print(f"  [OK] Promoted existing {admin_user.email} to ADMIN role.")
-            else:
-                new_admin = User(
-                    email=DEFAULT_ADMIN_EMAIL,
-                    hashed_password=hash_password(DEFAULT_ADMIN_PASSWORD),
-                    full_name=DEFAULT_ADMIN_NAME,
-                    role=UserRole.ADMIN,
-                    department="Administration",
-                    employee_id="ADMIN-001",
-                    is_active=True,
-                    can_manage_timetable=True,
-                )
-                db.add(new_admin)
-                db.commit()
-                print(f"  [OK] Created default admin user: {DEFAULT_ADMIN_EMAIL} (password: {DEFAULT_ADMIN_PASSWORD})")
+                print(f"  [OK] Updated admin account email to: {DEFAULT_ADMIN_EMAIL} (password: {DEFAULT_ADMIN_PASSWORD})")
+                return
+
+            new_admin = User(
+                email=DEFAULT_ADMIN_EMAIL,
+                hashed_password=hash_password(DEFAULT_ADMIN_PASSWORD),
+                full_name=DEFAULT_ADMIN_NAME,
+                role=UserRole.ADMIN,
+                department="Administration",
+                employee_id="ADMIN-001",
+                is_active=True,
+                can_manage_timetable=True,
+            )
+            db.add(new_admin)
+            db.commit()
+            print(f"  [OK] Created default admin user: {DEFAULT_ADMIN_EMAIL} (password: {DEFAULT_ADMIN_PASSWORD})")
         else:
+            admin_user.role = UserRole.ADMIN
             admin_user.is_active = True
             admin_user.can_manage_timetable = True
+            admin_user.hashed_password = hash_password(DEFAULT_ADMIN_PASSWORD)
             db.commit()
             print(f"  [OK] Admin account active & verified: {admin_user.email}")
     except Exception as e:

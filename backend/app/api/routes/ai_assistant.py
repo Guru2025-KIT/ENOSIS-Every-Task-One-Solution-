@@ -84,12 +84,34 @@ def chat(
 
     try:
         context = retrieve_enosis_context(db, current_user, message, history)
-    except SQLAlchemyError as error:
-        logger.error("ENOSIS assistant context lookup failed (%s)", type(error).__name__)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="ENOSIS data is temporarily unavailable. Please try again shortly.",
-        ) from error
+    except Exception as error:
+        logger.warning("ENOSIS assistant context lookup non-fatal failure (%s). Proceeding with fallback context.", type(error).__name__)
+        context = {
+            "today": "Today",
+            "today_weekday_index": 0,
+            "current_datetime": "",
+            "current_user": {
+                "name": current_user.full_name,
+                "department": current_user.department,
+                "role": current_user.role.value if current_user.role else "faculty",
+                "designation": current_user.designation,
+            },
+            "schedule_config": {},
+            "timetable_publication_status": {},
+            "matched_subjects": [],
+            "matched_faculty": [],
+            "matched_divisions": [],
+            "teaching_assignments": [],
+            "published_timetable": [],
+            "my_published_timetable": [],
+            "my_open_tasks": [],
+            "my_teaching_attendance_summary": None,
+            "career_development": None,
+            "my_career_development": None,
+            "all_divisions": [],
+            "all_subjects": [],
+            "unavailable_sources": [],
+        }
 
     try:
         prompt_messages = build_chat_messages(message, history, context)
@@ -192,12 +214,24 @@ Rules:
         messages.extend(history_messages)
         messages.append({"role": "user", "content": message})
 
-        response = client.chat.completions.create(
-            model=settings.GROQ_MODEL,
-            response_format={"type": "json_object"},
-            messages=messages,
-            temperature=0.1
-        )
+        candidate_models = [settings.GROQ_MODEL, "openai/gpt-oss-20b", "qwen/qwen3.8-27b", "openai/gpt-oss-120b"]
+        models_to_try = list(dict.fromkeys(candidate_models))
+        response = None
+        for m in models_to_try:
+            try:
+                response = client.chat.completions.create(
+                    model=m,
+                    response_format={"type": "json_object"},
+                    messages=messages,
+                    temperature=0.1
+                )
+                if response and response.choices:
+                    break
+            except Exception as mex:
+                logger.warning(f"Groq model {m} failed for timetable config: {mex}. Trying next...")
+
+        if not response or not response.choices:
+            raise RuntimeError("All Groq candidate models failed.")
 
         raw = response.choices[0].message.content
         data = json.loads(raw)

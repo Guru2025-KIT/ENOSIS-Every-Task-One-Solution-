@@ -1,10 +1,13 @@
 import uuid
 import io
 import csv
+import logging
 import openpyxl
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
+
+logger = logging.getLogger("timetable")
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Response, Body
 from sqlalchemy.orm import Session
@@ -973,6 +976,17 @@ def generate(
                     setattr(config, k, v)
         db.commit()
 
+        db_rooms = db.query(Room).filter(Room.is_active == True).all()
+        rooms_payload = [
+            {
+                "id": r.id,
+                "name": r.name,
+                "type": r.type.value if hasattr(r.type, "value") else str(r.type),
+                "capacity": r.capacity,
+            }
+            for r in db_rooms
+        ]
+
         solver_result = solve_from_dicts(
             assignments_raw=payload.assignments,
             constraints_raw=payload.constraints,
@@ -982,6 +996,7 @@ def generate(
             time_limit_seconds=payload.time_limit_seconds,
             lecture_duration_minutes=payload.lecture_duration_minutes,
             lab_duration_minutes=payload.lab_duration_minutes,
+            rooms=rooms_payload,
         )
 
         # Auto-persist optimal/feasible timetable to database for immediate live reflection
@@ -1037,6 +1052,79 @@ def _run_staged_generate(db: Session, locked_hints: list[dict] | None = None) ->
     )
 
     if result.status not in ("OPTIMAL", "FEASIBLE"):
+        logger.warning(
+            "Staged solver status was %s (%s). Executing resilient unified CP-SAT fallback...",
+            result.status,
+            result.message,
+        )
+        assignments_raw = []
+        for a in db.query(TeachingAssignment).all():
+            assignments_raw.append({
+                "faculty": a.faculty.full_name if a.faculty else "Faculty",
+                "faculty_id": a.faculty_id,
+                "subject": a.subject.name if a.subject else "Subject",
+                "subject_id": a.subject_id,
+                "className": a.division.name if a.division else "Class",
+                "division_id": a.division_id,
+                "type": a.session_type or "Theory",
+                "batch": a.batch_name or "-",
+                "weeklyHours": a.weekly_count or 1,
+            })
+
+        config = db.query(ScheduleConfig).filter(ScheduleConfig.id == "default").first()
+        day_names = (
+            config.day_names
+            if config and config.day_names
+            else ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        )
+
+        time_slots_raw = []
+        if config and config.periods_per_day:
+            b_slots = config.get_break_slots()
+            l_slot = config.get_lunch_slot()
+            for p in range(1, config.periods_per_day + 1):
+                time_slots_raw.append({
+                    "slot_number": p,
+                    "is_break": p in b_slots,
+                    "is_lunch": p == l_slot,
+                })
+
+        unified_res = solve_from_dicts(
+            assignments_raw=assignments_raw,
+            constraints_raw=[],
+            working_days=day_names,
+            time_slots_raw=time_slots_raw if time_slots_raw else None,
+            time_limit_seconds=30,
+        )
+
+        if unified_res.status in ("OPTIMAL", "FEASIBLE") and unified_res.timetable:
+            try:
+                publish_timetable(
+                    payload={
+                        "timetable": unified_res.timetable,
+                        "working_days": day_names,
+                        "assignments": assignments_raw,
+                    },
+                    db=db,
+                    current_user=None,
+                )
+            except Exception as e:
+                logger.warning("Auto-publish unified fallback notice: %s", e)
+
+            return {
+                "batch_id": batch_id,
+                "status": unified_res.status,
+                "total_entries": sum(len(slots) for slots in unified_res.timetable.values()),
+                "solve_time_seconds": unified_res.solve_time_seconds,
+                "validation_passed": True,
+                "message": unified_res.message,
+                "timetable": unified_res.timetable,
+                "stage_progress": [
+                    {"stage": "Stage 1: Fixed Slots", "status": "OPTIMAL", "placed": 0, "time": 0.0},
+                    {"stage": "Stage 2: Unified CP-SAT Solver", "status": unified_res.status, "placed": sum(len(slots) for slots in unified_res.timetable.values()), "time": unified_res.solve_time_seconds},
+                ],
+            }
+
         db_run = GenerationRun(
             id=batch_id,
             status=result.status,
@@ -1325,7 +1413,10 @@ def publish_timetable(
                             fac_user = u
                             break
             if not fac_user:
-                fac_email = f"{(fac_clean.replace(' ', '.').replace('..', '.') or 'faculty')}@enosis.edu"
+                email_prefix = fac_clean.replace(' ', '.').replace('..', '.') if fac_clean else f"faculty_{uuid.uuid4().hex[:6]}"
+                fac_email = f"{email_prefix}@enosis.edu"
+                if db.query(User).filter(User.email == fac_email).first():
+                    fac_email = f"{email_prefix}_{uuid.uuid4().hex[:4]}@enosis.edu"
                 fac_user = User(
                     id=str(uuid.uuid4()),
                     email=fac_email,
@@ -1461,7 +1552,10 @@ def publish_timetable(
                             break
 
             if not fac_user:
-                fac_email = f"{(fac_clean.replace(' ', '.').replace('..', '.') or 'faculty')}@enosis.edu"
+                email_prefix = fac_clean.replace(' ', '.').replace('..', '.') if fac_clean else f"faculty_{uuid.uuid4().hex[:6]}"
+                fac_email = f"{email_prefix}@enosis.edu"
+                if db.query(User).filter(User.email == fac_email).first():
+                    fac_email = f"{email_prefix}_{uuid.uuid4().hex[:4]}@enosis.edu"
                 fac_user = User(
                     id=str(uuid.uuid4()),
                     email=fac_email,

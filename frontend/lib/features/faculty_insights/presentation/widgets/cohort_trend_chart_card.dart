@@ -321,6 +321,14 @@ class _CohortTrendChartCardState extends State<CohortTrendChartCard> {
   }
 }
 
+class _CohortChartNode {
+  final Offset point;
+  final double value;
+  final String label;
+
+  _CohortChartNode({required this.point, required this.value, required this.label});
+}
+
 class _CohortTrajectoryChartPainter extends CustomPainter {
   final MetricTrajectory trajectory;
   final Color color;
@@ -332,7 +340,7 @@ class _CohortTrajectoryChartPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    const leftPadding = 32.0;
+    const leftPadding = 36.0;
     const rightPadding = 24.0;
     const topPadding = 24.0;
     const bottomPadding = 32.0;
@@ -342,7 +350,7 @@ class _CohortTrajectoryChartPainter extends CustomPainter {
 
     // Draw horizontal grid lines for 1.0, 2.0, 3.0, 4.0, 5.0
     final gridPaint = Paint()
-      ..color = Colors.grey.withValues(alpha: 0.2)
+      ..color = Colors.grey.withValues(alpha: 0.18)
       ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke;
 
@@ -363,11 +371,11 @@ class _CohortTrajectoryChartPainter extends CustomPainter {
       textPainter.paint(canvas, Offset(leftPadding - textPainter.width - 6, y - textPainter.height / 2));
     }
 
-    // X coordinates for the 3 milestones
+    // Symmetrical coordinates across chart width
     final xCoords = [
-      leftPadding + chartWidth * 0.15,
+      leftPadding + chartWidth * 0.16,
       leftPadding + chartWidth * 0.50,
-      leftPadding + chartWidth * 0.85,
+      leftPadding + chartWidth * 0.84,
     ];
 
     final xLabels = ['PRE Baseline', 'MID Progress', 'END Outcome'];
@@ -390,8 +398,8 @@ class _CohortTrajectoryChartPainter extends CustomPainter {
       );
     }
 
-    // Collect available points
-    final points = <Offset>[];
+    // Collect available nodes safely without null assertions
+    final nodes = <_CohortChartNode>[];
     final values = [trajectory.pre, trajectory.mid, trajectory.end];
 
     for (int i = 0; i < 3; i++) {
@@ -399,11 +407,15 @@ class _CohortTrajectoryChartPainter extends CustomPainter {
       if (val != null) {
         final clamped = val.clamp(1.0, 5.0);
         final y = topPadding + chartHeight - ((clamped - 1.0) / 4.0) * chartHeight;
-        points.add(Offset(xCoords[i], y));
+        nodes.add(_CohortChartNode(
+          point: Offset(xCoords[i], y),
+          value: val,
+          label: xLabels[i],
+        ));
       }
     }
 
-    if (points.isEmpty) {
+    if (nodes.isEmpty) {
       const noDataSpan = TextSpan(
         text: 'Awaiting Assessment Submissions',
         style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontStyle: FontStyle.italic),
@@ -415,20 +427,20 @@ class _CohortTrajectoryChartPainter extends CustomPainter {
     }
 
     // Draw gradient area below line
-    if (points.length >= 2) {
+    if (nodes.length >= 2) {
       final path = Path();
-      path.moveTo(points.first.dx, points.first.dy);
+      path.moveTo(nodes.first.point.dx, nodes.first.point.dy);
 
-      for (int i = 1; i < points.length; i++) {
-        final prev = points[i - 1];
-        final curr = points[i];
+      for (int i = 1; i < nodes.length; i++) {
+        final prev = nodes[i - 1].point;
+        final curr = nodes[i].point;
         final cx = (prev.dx + curr.dx) / 2;
         path.cubicTo(cx, prev.dy, cx, curr.dy, curr.dx, curr.dy);
       }
 
       final fillPath = Path.from(path);
-      fillPath.lineTo(points.last.dx, topPadding + chartHeight);
-      fillPath.lineTo(points.first.dx, topPadding + chartHeight);
+      fillPath.lineTo(nodes.last.point.dx, topPadding + chartHeight);
+      fillPath.lineTo(nodes.first.point.dx, topPadding + chartHeight);
       fillPath.close();
 
       final areaPaint = Paint()
@@ -456,9 +468,9 @@ class _CohortTrajectoryChartPainter extends CustomPainter {
     }
 
     // Draw individual nodes and value badges
-    for (int i = 0; i < points.length; i++) {
-      final pt = points[i];
-      final val = values[i]!;
+    for (final node in nodes) {
+      final pt = node.point;
+      final val = node.value;
 
       // Outer glow
       canvas.drawCircle(

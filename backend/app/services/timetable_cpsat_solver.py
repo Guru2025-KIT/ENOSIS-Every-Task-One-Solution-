@@ -73,6 +73,7 @@ class SolverSession:
     classes: List[str]
     duration: int      # consecutive teaching slots required
     session_index: int
+    joint_group_id: Optional[str] = None
 
 
 @dataclass
@@ -326,10 +327,14 @@ class TimetableCpSatSolver:
                     parallel_elective[par_id].append(a)
                     continue
 
-                # Only merge into joint theory if explicitly tagged with a joint_group_id!
-                # Different divisions (e.g. TY-AIML-A vs TY-AIML-B) are INDEPENDENT classes.
+                # Merge into joint theory if explicitly tagged or part of combined_groups with matching subject+faculty
                 if a.joint_group_id:
                     joint_theory[f"jg_{a.joint_group_id}"].append(a)
+                    continue
+
+                grp = self.group_lookup.get(a.class_name)
+                if grp and any(o.faculty == a.faculty and o.subject == a.subject and o.class_name in grp for o in self.assignments if o != a):
+                    joint_theory[f"cg_{self._normalize(a.subject)}_{self._normalize(a.faculty)}"].append(a)
                     continue
 
                 individual.append(a)
@@ -346,7 +351,7 @@ class TimetableCpSatSolver:
                     session_id=f"{key}_h{h}", faculty=first.faculty,
                     subject=first.subject, subject_code=first.subject_code,
                     type="Theory", batch="-", classes=sorted(all_cls),
-                    duration=1, session_index=h,
+                    duration=1, session_index=h, joint_group_id=first.joint_group_id,
                 ))
 
         # 2. Parallel electives: merge into ONE slot (different faculty teach
@@ -688,6 +693,15 @@ class TimetableCpSatSolver:
                         rtt[c_name][key] = []
                         rdt[c_name][key] = {"subject": "Free", "faculty": "", "batch": "", "type": "Free"}
 
+        # Establish dedicated home classrooms per class for class-level theory lectures
+        home_classrooms: Dict[str, str] = {}
+        sorted_classes = sorted(list(all_classes))
+        for c_idx, c_name in enumerate(sorted_classes):
+            if self.classrooms:
+                home_classrooms[c_name] = self.classrooms[c_idx % len(self.classrooms)].get("name", f"Classroom {c_idx + 1}")
+            else:
+                home_classrooms[c_name] = f"Room {101 + c_idx}"
+
         rel_notes, unsched, sched_cnt = [], [], 0
         room_use: Dict[Tuple[str, int], Set[str]] = defaultdict(set)
 
@@ -698,18 +712,61 @@ class TimetableCpSatSolver:
                     placed = True
                     sched_cnt += 1
                     bl = "All" if sess.type == "Theory" else (sess.batch or "Batch 1")
-                    pool = self.labs_pool if sess.type == "Lab" else self.classrooms
                     rm = ""
-                    for r in pool:
-                        rn = r.get("name", "")
-                        if rn and rn not in room_use[(opt.day, opt.slots[0])]:
-                            rm = rn
-                            room_use[(opt.day, opt.slots[0])].add(rn)
-                            break
-                    if not rm:
-                        used_count = len(room_use[(opt.day, opt.slots[0])]) + 1
-                        rm = f"Lab {used_count}" if sess.type == "Lab" else f"Classroom {used_count}"
-                        room_use[(opt.day, opt.slots[0])].add(rm)
+
+                    # 1. Lab Practical Sessions: assign from lab pool
+                    if sess.type == "Lab":
+                        for r in self.labs_pool:
+                            rn = r.get("name", "")
+                            if rn and all(rn not in room_use[(opt.day, s)] for s in opt.slots):
+                                rm = rn
+                                for s in opt.slots:
+                                    room_use[(opt.day, s)].add(rn)
+                                break
+                        if not rm:
+                            for l_idx in range(1, 20):
+                                cand_lab = f"Lab {l_idx}"
+                                if all(cand_lab not in room_use[(opt.day, s)] for s in opt.slots):
+                                    rm = cand_lab
+                                    for s in opt.slots:
+                                        room_use[(opt.day, s)].add(cand_lab)
+                                    break
+
+                    # 2. Theory Sessions:
+                    else:
+                        # Check if joint / multi-class / dept-level course (more than 1 class)
+                        if len(sess.classes) > 1 or sess.joint_group_id:
+                            for r in self.classrooms:
+                                rn = r.get("name", "")
+                                if rn and all(rn not in room_use[(opt.day, s)] for s in opt.slots):
+                                    rm = rn
+                                    for s in opt.slots:
+                                        room_use[(opt.day, s)].add(rn)
+                                    break
+                            if not rm:
+                                rm = f"Shared Hall {len(room_use[(opt.day, opt.slots[0])]) + 1}"
+                                for s in opt.slots:
+                                    room_use[(opt.day, s)].add(rm)
+                        else:
+                            # Single class-level theory lecture: MUST use the division's dedicated HOME CLASSROOM
+                            cls_name = sess.classes[0] if sess.classes else ""
+                            candidate_home = home_classrooms.get(cls_name)
+                            if candidate_home and all(candidate_home not in room_use[(opt.day, s)] for s in opt.slots):
+                                rm = candidate_home
+                                for s in opt.slots:
+                                    room_use[(opt.day, s)].add(candidate_home)
+                            else:
+                                for r in self.classrooms:
+                                    rn = r.get("name", "")
+                                    if rn and all(rn not in room_use[(opt.day, s)] for s in opt.slots):
+                                        rm = rn
+                                        for s in opt.slots:
+                                            room_use[(opt.day, s)].add(rn)
+                                        break
+                                if not rm:
+                                    rm = candidate_home or f"Classroom {len(room_use[(opt.day, opt.slots[0])]) + 1}"
+                                    for s in opt.slots:
+                                        room_use[(opt.day, s)].add(rm)
 
                     for cls in sess.classes:
                         for s in opt.slots:
@@ -843,6 +900,8 @@ class TimetableCpSatSolver:
                         pre_tt[c_name][key] = []
                         pre_dt[c_name][key] = {"subject": "Free", "faculty": "", "batch": "", "type": "Free"}
 
+        used_fixed_slots: Set[Tuple[int, str, int]] = set()
+
         def try_place_fixed(sess: SolverSession) -> bool:
             fps = [f.strip() for f in sess.faculty.split("|")]
             for con in fixed_cons:
@@ -853,6 +912,8 @@ class TimetableCpSatSolver:
                     continue
                 for day in tgt_days:
                     for sn in con.slot_numbers:
+                        if (id(con), day, sn) in used_fixed_slots:
+                            continue
                         block = [sn] if sess.duration == 1 else list(range(sn, sn + sess.duration))
                         if not all(s in ts_nums and s not in self.break_slots for s in block):
                             continue
@@ -863,10 +924,15 @@ class TimetableCpSatSolver:
                         for cls in sess.classes:
                             for s in block:
                                 key = f"{day}_{s}"
-                                pre_tt[cls][key].append([sess.subject, sess.faculty, "", "All"])
+                                fixed_rm = (
+                                    home_classrooms.get(cls, "Classroom 1")
+                                    if sess.type == "Theory" and len(sess.classes) == 1
+                                    else (self.labs_pool[0].get("name", "Lab 1") if sess.type == "Lab" and self.labs_pool else "")
+                                )
+                                pre_tt[cls][key].append([sess.subject, sess.faculty, fixed_rm, "All"])
                                 pre_dt[cls][key] = {
                                     "subject": sess.subject, "faculty": sess.faculty,
-                                    "room": "", "batch": "All", "type": sess.type,
+                                    "room": fixed_rm, "batch": "All", "type": sess.type,
                                     "is_joint": len(sess.classes) > 1, "code": sess.subject_code,
                                 }
                         for fp in fps:
@@ -875,6 +941,7 @@ class TimetableCpSatSolver:
                         for cls in sess.classes:
                             for s in block:
                                 cls_busy.add((cls, day, s))
+                        used_fixed_slots.add((id(con), day, sn))
                         return True
             return False
 
@@ -883,12 +950,15 @@ class TimetableCpSatSolver:
             if not try_place_fixed(sess):
                 remaining.append(sess)
 
+        # Remaining sessions are flexible; strip fixed/force constraints so they can use any free slot
+        remaining_constraints = [c for c in active_constraints if c.intent not in ("fixed", "force")]
+
         # ---- Phase 2: Multi-stage CP-SAT ----------------------------- #
         p_time = max(5.0, self.time_limit_seconds * 0.5)
 
         # Stage 1: Try 100% Hard + Strict Soft + 100% Hours
         res = self._solve_model(
-            sessions=remaining, active_constraints=active_constraints,
+            sessions=remaining, active_constraints=remaining_constraints,
             holidays=holidays, available_days=available_days,
             strict_soft=True, require_all_sessions=True,
             start_time=start_time, time_limit=p_time,
@@ -900,7 +970,7 @@ class TimetableCpSatSolver:
         if res is None:
             elapsed = time.monotonic() - start_time
             res = self._solve_model(
-                sessions=remaining, active_constraints=active_constraints,
+                sessions=remaining, active_constraints=remaining_constraints,
                 holidays=holidays, available_days=available_days,
                 strict_soft=False, require_all_sessions=True,
                 start_time=start_time,
@@ -913,7 +983,7 @@ class TimetableCpSatSolver:
         if res is None:
             elapsed = time.monotonic() - start_time
             res = self._solve_model(
-                sessions=remaining, active_constraints=active_constraints,
+                sessions=remaining, active_constraints=remaining_constraints,
                 holidays=holidays, available_days=available_days,
                 strict_soft=False, require_all_sessions=False,
                 start_time=start_time,

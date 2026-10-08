@@ -11,6 +11,7 @@ import '../../../../core/auth/auth_session.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../dashboard/presentation/screens/main_shell.dart';
 import '../../data/auth_repository.dart';
+import '../../../profile/presentation/screens/admin_dashboard_screen.dart';
 import 'admin_login_screen.dart';
 import 'signup_screen.dart';
 
@@ -63,26 +64,28 @@ class _LoginScreenState extends State<LoginScreen> {
               const Text('Reset Password', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ],
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Enter your registered faculty email address. A new temporary password will be sent directly to your inbox.',
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: resetEmailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Registered Faculty Email',
-                  hintText: 'faculty@enosis.edu.in',
-                  prefixIcon: Icon(Icons.email_outlined),
-                  border: OutlineInputBorder(),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Enter your registered faculty email address. A new temporary password will be sent directly to your inbox.',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+                TextField(
+                  controller: resetEmailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Registered Faculty Email',
+                    hintText: 'faculty@enosis.edu.in',
+                    prefixIcon: Icon(Icons.email_outlined),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -227,13 +230,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
       if ((AuthSession.role ?? '').toUpperCase() == 'ADMIN') {
-        AuthSession.clear();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Admin accounts must sign in using the dedicated Admin Portal.'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
         );
         return;
       }

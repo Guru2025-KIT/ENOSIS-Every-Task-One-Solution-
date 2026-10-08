@@ -91,17 +91,19 @@ class _StudentAnalyticsDetailScreenState extends State<StudentAnalyticsDetailScr
                 )
               : student == null
                   ? const Center(child: Text('Student profile data unavailable.'))
-                  : SingleChildScrollView(
+                  : ResponsiveCenter(
+                      maxWidth: 860,
                       padding: EdgeInsets.all(isMobile ? 16 : 24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildProfileHeader(student),
-                          const SizedBox(height: 20),
-                          if (student.mlPrediction != null) ...[
-                            MlRiskCard(prediction: student.mlPrediction!),
-                            const SizedBox(height: 14),
-                          ],
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildProfileHeader(student),
+                            const SizedBox(height: 20),
+                            if (student.mlPrediction != null) ...[
+                              MlRiskCard(prediction: student.mlPrediction!),
+                              const SizedBox(height: 14),
+                            ],
                           _buildInterventionActionBar(student, isMobile),
                           const SizedBox(height: 20),
                           _buildInterventionHistorySection(student),
@@ -224,6 +226,7 @@ class _StudentAnalyticsDetailScreenState extends State<StudentAnalyticsDetailScr
                         ],
                       ),
                     ),
+                  ),
     );
   }
 
@@ -296,6 +299,7 @@ class _StudentAnalyticsDetailScreenState extends State<StudentAnalyticsDetailScr
 
   Widget _buildStageChip(String label, bool completed) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
           completed ? Icons.check_circle : Icons.radio_button_unchecked,
@@ -366,15 +370,15 @@ class _StudentAnalyticsDetailScreenState extends State<StudentAnalyticsDetailScr
             ],
           ),
           const SizedBox(height: 8),
-          Row(
+          Wrap(
+            spacing: 12,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text('PRE: ${t.preConfidence ?? "—"}/5', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              const SizedBox(width: 14),
               Text('MID: ${t.midConfidence ?? "—"}/5', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              const SizedBox(width: 14),
               Text('END: ${t.endConfidence ?? "—"}/5', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-              if (t.confidenceDeltaEndPre != null) ...[
-                const Spacer(),
+              if (t.confidenceDeltaEndPre != null)
                 Text(
                   'Δ ${t.confidenceDeltaEndPre! >= 0 ? "+" : ""}${t.confidenceDeltaEndPre}',
                   style: TextStyle(
@@ -383,7 +387,6 @@ class _StudentAnalyticsDetailScreenState extends State<StudentAnalyticsDetailScr
                     color: t.confidenceDeltaEndPre! >= 0 ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
                   ),
                 ),
-              ],
             ],
           ),
           const SizedBox(height: 8),
@@ -789,12 +792,15 @@ class _StudentAnalyticsDetailScreenState extends State<StudentAnalyticsDetailScr
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                inv.interventionType,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+              Expanded(
+                child: Text(
+                  inv.interventionType,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(

@@ -168,15 +168,27 @@ If no constraint can be parsed, return parsed_successfully=false.
 Return ONLY valid JSON, no markdown formatting blocks, no explanations outside JSON.
 """
         client = Groq(api_key=settings.GROQ_API_KEY)
-        response = client.chat.completions.create(
-            model=settings.GROQ_MODEL,
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": system_instruction},
-                {"role": "user", "content": f"Speech: \"{speech_text}\""}
-            ],
-            temperature=0.0
-        )
+        candidate_models = [settings.GROQ_MODEL, "openai/gpt-oss-20b", "qwen/qwen3.8-27b", "openai/gpt-oss-120b"]
+        models_to_try = list(dict.fromkeys(candidate_models))
+        response = None
+        for m in models_to_try:
+            try:
+                response = client.chat.completions.create(
+                    model=m,
+                    response_format={"type": "json_object"},
+                    messages=[
+                        {"role": "system", "content": system_instruction},
+                        {"role": "user", "content": f"Speech: \"{speech_text}\""}
+                    ],
+                    temperature=0.0
+                )
+                if response and response.choices:
+                    break
+            except Exception as mex:
+                logger.warning(f"Groq model {m} failed for voice constraint parser: {mex}. Trying next...")
+
+        if not response or not response.choices:
+            raise RuntimeError("All Groq candidate models failed.")
         
         reply_content = response.choices[0].message.content
         data = json.loads(reply_content)

@@ -208,6 +208,9 @@ class MlRiskCard extends StatelessWidget {
               runSpacing: 8,
               children: prediction.topRiskFactors.map((factor) {
                 return Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width - 72,
+                  ),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFEF2F2),
@@ -216,15 +219,22 @@ class MlRiskCard extends StatelessWidget {
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.warning_amber_rounded, size: 14, color: Color(0xFFDC2626)),
+                      const Padding(
+                        padding: EdgeInsets.only(top: 2),
+                        child: Icon(Icons.warning_amber_rounded, size: 14, color: Color(0xFFDC2626)),
+                      ),
                       const SizedBox(width: 6),
-                      Text(
-                        factor,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF991B1B),
+                      Flexible(
+                        child: Text(
+                          factor,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF991B1B),
+                          ),
+                          softWrap: true,
                         ),
                       ),
                     ],

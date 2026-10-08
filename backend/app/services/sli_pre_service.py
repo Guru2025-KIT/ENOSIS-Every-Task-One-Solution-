@@ -11,6 +11,7 @@ from app.models.sli import (
     Semester, Student, StudentTopicFeedback, Topic,
 )
 from app.models.timetable import TimetableEntry
+from app.models.user import User
 from app.schemas.sli import PreAssessmentSubmissionRequest
 
 
@@ -28,8 +29,38 @@ def get_active_timetable_batch_id(db: Session) -> str | None:
 # 1. Faculty Teaching Context Resolution
 # ---------------------------------------------------------------------------
 
+def _normalize_faculty_name(name: str | None) -> str:
+    if not name:
+        return ""
+    s = name.strip().lower()
+    for prefix in ["dr.", "dr ", "prof.", "prof ", "mr.", "mr ", "mrs.", "mrs ", "ms.", "ms ", "er.", "er "]:
+        if s.startswith(prefix):
+            s = s[len(prefix):].strip()
+    return s
+
+
 def _get_matched_faculty_ids(db: Session, faculty_id: str) -> list[str]:
-    return [faculty_id]
+    """
+    Returns all User IDs matching the specified faculty member by ID,
+    email, employee_id, or normalized full name to ensure real-time consistency.
+    """
+    faculty_ids: set[str] = {faculty_id}
+    fac_user = db.query(User).filter(User.id == faculty_id).first()
+    if fac_user:
+        if fac_user.email:
+            for u in db.query(User).filter(User.email == fac_user.email).all():
+                faculty_ids.add(u.id)
+        if fac_user.employee_id:
+            for u in db.query(User).filter(User.employee_id == fac_user.employee_id).all():
+                faculty_ids.add(u.id)
+        if fac_user.full_name:
+            norm_name = _normalize_faculty_name(fac_user.full_name)
+            if norm_name:
+                all_users = db.query(User).all()
+                for u in all_users:
+                    if u.full_name and _normalize_faculty_name(u.full_name) == norm_name:
+                        faculty_ids.add(u.id)
+    return list(faculty_ids)
 
 
 def get_faculty_teaching_contexts(
@@ -38,36 +69,29 @@ def get_faculty_teaching_contexts(
     is_admin: bool = False,
 ) -> list[dict]:
     """
-    Resolves the active teaching contexts for a logged-in faculty directly
+    Resolves the active teaching contexts for the logged-in faculty directly
     from the published/active timetable (`timetable_entries`) and explicit
-    `teaching_assignments`.
+    `teaching_assignments`. Strictly returns only the subjects taught by this faculty.
     """
     active_batch_id = get_active_timetable_batch_id(db)
-
-    faculty_ids = [faculty_id] if not is_admin else []
+    faculty_ids = _get_matched_faculty_ids(db, faculty_id)
     assigned_pairs_set: set[tuple[str, str]] = set()
 
     # 1. Timetable entries for faculty
     query = db.query(
         TimetableEntry.subject_id,
         TimetableEntry.division_id,
-    )
-    if not is_admin:
-        query = query.filter(TimetableEntry.faculty_id.in_(faculty_ids))
-    if active_batch_id:
-        query = query.filter(TimetableEntry.batch_id == active_batch_id)
+    ).filter(TimetableEntry.faculty_id.in_(faculty_ids))
 
-    for pair in query.distinct().all():
-        if pair[0] and pair[1]:
-            assigned_pairs_set.add((pair[0], pair[1]))
+    if active_batch_id:
+        batch_query = query.filter(TimetableEntry.batch_id == active_batch_id)
+        for pair in batch_query.distinct().all():
+            if pair[0] and pair[1]:
+                assigned_pairs_set.add((pair[0], pair[1]))
 
     # Fallback to any batch if active_batch_id yielded nothing
-    if not assigned_pairs_set and not is_admin:
-        fallback_query = db.query(
-            TimetableEntry.subject_id,
-            TimetableEntry.division_id,
-        ).filter(TimetableEntry.faculty_id.in_(faculty_ids))
-        for pair in fallback_query.distinct().all():
+    if not assigned_pairs_set:
+        for pair in query.distinct().all():
             if pair[0] and pair[1]:
                 assigned_pairs_set.add((pair[0], pair[1]))
 
@@ -75,23 +99,10 @@ def get_faculty_teaching_contexts(
     ta_query = db.query(
         TeachingAssignment.subject_id,
         TeachingAssignment.division_id,
-    )
-    if not is_admin:
-        ta_query = ta_query.filter(TeachingAssignment.faculty_id.in_(faculty_ids))
+    ).filter(TeachingAssignment.faculty_id.in_(faculty_ids))
     for pair in ta_query.distinct().all():
         if pair[0] and pair[1]:
             assigned_pairs_set.add((pair[0], pair[1]))
-
-    # If Admin, show all active timetable/teaching assignment pairs
-    if is_admin and not assigned_pairs_set:
-        for ent in db.query(TimetableEntry).all():
-            if ent.subject_id and ent.division_id:
-                assigned_pairs_set.add((ent.subject_id, ent.division_id))
-
-        if not assigned_pairs_set:
-            for ta in db.query(TeachingAssignment).all():
-                if ta.subject_id and ta.division_id:
-                    assigned_pairs_set.add((ta.subject_id, ta.division_id))
 
     assigned_pairs = list(assigned_pairs_set)
 
@@ -233,36 +244,41 @@ def authorize_faculty_teaching_assignment(
     faculty_ids = _get_matched_faculty_ids(db, faculty_id)
     active_batch_id = get_active_timetable_batch_id(db)
 
-    query = db.query(TimetableEntry).filter(
-        TimetableEntry.faculty_id.in_(faculty_ids),
-        TimetableEntry.subject_id == subject_id,
-    )
-    if division_id:
-        query = query.filter(TimetableEntry.division_id == division_id)
+    # 1. Check active batch timetable entries if an active batch exists
     if active_batch_id:
-        query = query.filter(TimetableEntry.batch_id == active_batch_id)
+        query = db.query(TimetableEntry).filter(
+            TimetableEntry.batch_id == active_batch_id,
+            TimetableEntry.faculty_id.in_(faculty_ids),
+            TimetableEntry.subject_id == subject_id,
+        )
+        if division_id:
+            query = query.filter(TimetableEntry.division_id == division_id)
+        if query.first() is not None:
+            return
 
-    assignment_exists = query.first() is not None
-
-    if not assignment_exists and active_batch_id:
+    # 2. Check general timetable entries if no active batch exists
+    if not active_batch_id:
         fallback_query = db.query(TimetableEntry).filter(
             TimetableEntry.faculty_id.in_(faculty_ids),
             TimetableEntry.subject_id == subject_id,
         )
         if division_id:
             fallback_query = fallback_query.filter(TimetableEntry.division_id == division_id)
-        assignment_exists = fallback_query.first() is not None
+        if fallback_query.first() is not None:
+            return
 
-    if not assignment_exists:
-        ta_query = db.query(TeachingAssignment).filter(
-            TeachingAssignment.faculty_id.in_(faculty_ids),
-            TeachingAssignment.subject_id == subject_id,
-        )
-        if division_id:
-            ta_query = ta_query.filter(TeachingAssignment.division_id == division_id)
-        assignment_exists = ta_query.first() is not None
+    # 3. Check explicit teaching assignments
+    ta_query = db.query(TeachingAssignment).filter(
+        TeachingAssignment.faculty_id.in_(faculty_ids),
+        TeachingAssignment.subject_id == subject_id,
+    )
+    if division_id:
+        ta_query = ta_query.filter(TeachingAssignment.division_id == division_id)
+    if ta_query.first() is not None:
+        return
 
-    if not assignment_exists and division_id:
+    # 4. Check division code alias if division_id was provided
+    if division_id:
         div = db.query(Division).filter(
             (Division.id == division_id) | (Division.division_code == division_id)
         ).first()
@@ -273,36 +289,20 @@ def authorize_faculty_teaching_assignment(
                 TeachingAssignment.division_id.in_([div.id, div.division_code]),
             ).first()
             if alt_ta:
-                assignment_exists = True
+                return
 
-    if not assignment_exists:
-        asmt_q = db.query(Assessment).filter(
-            Assessment.faculty_id.in_(faculty_ids),
-            Assessment.subject_id == subject_id,
-        )
-        if asmt_q.first():
-            assignment_exists = True
+    # 5. Check if faculty previously created an assessment for this subject
+    asmt_q = db.query(Assessment).filter(
+        Assessment.faculty_id.in_(faculty_ids),
+        Assessment.subject_id == subject_id,
+    )
+    if asmt_q.first():
+        return
 
-    if not assignment_exists:
-        # Fallback: if any timetable entry exists for this subject
-        tt_any = db.query(TimetableEntry).filter(TimetableEntry.subject_id == subject_id)
-        if division_id:
-            tt_any = tt_any.filter(TimetableEntry.division_id == division_id)
-        if tt_any.first():
-            assignment_exists = True
-
-    if not assignment_exists:
-        ta_any = db.query(TeachingAssignment).filter(TeachingAssignment.subject_id == subject_id)
-        if division_id:
-            ta_any = ta_any.filter(TeachingAssignment.division_id == division_id)
-        if ta_any.first():
-            assignment_exists = True
-
-    if not assignment_exists:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not assigned to teach this subject and division in the active timetable.",
-        )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="You are not assigned to teach this subject and division in the active timetable.",
+    )
 
 
 # ---------------------------------------------------------------------------
