@@ -47,17 +47,32 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
       var excel = Excel.createExcel();
       Sheet sheet = excel['Sheet1']; 
       
-      sheet.appendRow(['INSTRUCTIONS:']);
-      sheet.appendRow(['1. Do not change column order.']);
-      sheet.appendRow(['2. Class/Division must be clear (e.g., SY-AIML-A, TY-IT-B, BTECH-COMP).']);
-      sheet.appendRow(['3. If lecture is for all divisions, write the year & dept (e.g., TY-AIML).']);
-      sheet.appendRow(['4. For joint divisions, use slash (e.g., SY-AIML-A/B).']);
-      sheet.appendRow(['5. If faculty is same for next row, leave it blank. System will auto-copy.']);
+      sheet.appendRow(['HOD MASTER WORKLOAD ALLOCATION TEMPLATE (AUTONOMOUS / AICTE / NEP CURRICULUM)']);
+      sheet.appendRow(['INSTRUCTIONS & GUIDELINES:']);
+      sheet.appendRow(['1. DO NOT change the order or spelling of the header columns below.']);
+      sheet.appendRow(['2. CLASS / DIVISION: Enter exact class/division (e.g., TY-IT-A, TY-IT-B, SY-COMP-A, BTECH-AIML-A).']);
+      sheet.appendRow(['   - For joint/shared lectures across divisions, enter joint format (e.g. TY-IT-A/B).']);
+      sheet.appendRow(['3. PRACTICAL LABS: Lab slots are scheduled as continuous 2-hour blocks per student batch.']);
+      sheet.appendRow(['   - Example: For a class with 2 batches (B1, B2), enter 4 in Practical Hours (2 batches x 2 hours).']);
+      sheet.appendRow(['4. DEPARTMENT ELECTIVES (MDM / PE): Use standard prefix in Course Name (e.g. "PE-1: Cloud Computing" or "MDM-3: NLP").']);
+      sheet.appendRow(['   - The solver will automatically synchronize all elective courses in the same basket across parallel rooms.']);
+      sheet.appendRow(['5. OPEN ELECTIVES (OE) & HONORS: Use prefix "OE: <Course Name>" or "Honors: <Course Name>".']);
+      sheet.appendRow(['6. FACULTY CONTINUITY: If multiple consecutive courses are taught by the same faculty, you may leave Faculty Name blank.']);
       sheet.appendRow(['']);
 
       sheet.appendRow(['Sr. No.', 'Faculty Name', 'Designation', 'Class / Division', 'Course Code', 'Course Name', 'Theory Hours', 'Practical Hours']);
-      sheet.appendRow([1, 'Dr. John Doe', 'Professor', 'TY-IT-A', 'IT501', 'Machine Learning', 3, 0]);
-      sheet.appendRow(['', '', '', 'TY-IT-A', 'IT501L', 'ML Lab', 0, 4]);
+      sheet.appendRow([1, 'Dr. Rajesh Sharma', 'Professor & HOD', 'TY-IT-A', 'IT501', 'Operating Systems', 3, 0]);
+      sheet.appendRow(['', '', '', 'TY-IT-A', 'IT501L', 'Operating Systems Lab', 0, 4]);
+      sheet.appendRow([2, 'Prof. Priya Verma', 'Associate Professor', 'TY-IT-A', 'IT502', 'Database Management Systems', 3, 0]);
+      sheet.appendRow(['', '', '', 'TY-IT-A', 'IT502L', 'DBMS Lab', 0, 4]);
+      sheet.appendRow([3, 'Prof. Amit Patel', 'Assistant Professor', 'TY-IT-A', 'IT503', 'PE-1: Cloud Computing', 3, 0]);
+      sheet.appendRow([4, 'Prof. Sneha Deshmukh', 'Assistant Professor', 'TY-IT-A', 'IT504', 'PE-1: Big Data Analytics', 3, 0]);
+      sheet.appendRow([5, 'Prof. Amit Patel', 'Assistant Professor', 'TY-IT-B', 'IT501', 'Operating Systems', 3, 0]);
+      sheet.appendRow(['', '', '', 'TY-IT-B', 'IT501L', 'Operating Systems Lab', 0, 4]);
+      sheet.appendRow([6, 'Prof. Priya Verma', 'Associate Professor', 'TY-IT-B', 'IT502', 'Database Management Systems', 3, 0]);
+      sheet.appendRow(['', '', '', 'TY-IT-B', 'IT502L', 'DBMS Lab', 0, 4]);
+      sheet.appendRow([7, 'Prof. Rakesh Gupta', 'Assistant Professor', 'TY-IT-A/B', 'OE501', 'OE: Cyber Law & Ethics', 3, 0]);
+      sheet.appendRow([8, 'Dr. Rajesh Sharma', 'Professor & HOD', 'BTECH-IT-A', 'IT701', 'Honors: Generative AI & LLMs', 3, 0]);
 
       var bytes = excel.encode();
       if (bytes == null) throw Exception("Failed to encode Excel");
@@ -74,7 +89,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
       
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Template downloaded! Check your Downloads folder.'), backgroundColor: AppColors.success),
+        const SnackBar(content: Text('Comprehensive template downloaded! Check your Downloads folder.'), backgroundColor: AppColors.success),
       );
     } catch (e) {
       if (!mounted) return;
@@ -570,7 +585,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showManualAddAssignmentDialog,
-        backgroundColor: const Color(0xFFF97316),
+        backgroundColor: const Color(0xFF4F46E5),
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text('Add Assignment', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
@@ -581,10 +596,10 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF),
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF2FF),
               border: Border(
                 bottom: BorderSide(
-                  color: isDark ? const Color(0xFF334155) : const Color(0xFFDBEAFE),
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFC7D2FE),
                 ),
               ),
             ),
@@ -593,7 +608,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF97316),
+                    color: const Color(0xFF4F46E5),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: const Text(
@@ -607,14 +622,14 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
                     'Upload your master department workload Excel or manually configure faculty teaching assignments and weekly hours.',
                     style: TextStyle(
                       fontSize: 12,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF1E3A8A),
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF3730A3),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
                 TextButton.icon(
-                  icon: const Icon(Icons.download, size: 16, color: Color(0xFFF97316)),
-                  label: const Text('Template', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFF97316))),
+                  icon: const Icon(Icons.download, size: 16, color: Color(0xFF4F46E5)),
+                  label: const Text('Template', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF4F46E5))),
                   onPressed: _downloadTemplate,
                 ),
               ],
@@ -622,7 +637,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
           ),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFFF97316)))
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)))
                 : _assignments.isEmpty
                     ? _buildEmptyState()
                     : _buildLoadedState(filteredAssignments),

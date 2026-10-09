@@ -1,6 +1,7 @@
 import uuid
 import io
 import csv
+import re
 import logging
 import openpyxl
 from collections import defaultdict
@@ -58,6 +59,79 @@ def _clean_title(name_str: str) -> str:
         if s.startswith(prefix):
             s = s[len(prefix):].strip()
     return s
+
+
+def _match_or_create_faculty_user(
+    fac_name: str,
+    user_cache: dict[str, User],
+    all_existing_users: list[User],
+    db: Session,
+) -> User:
+    """
+    Find or create a faculty user. Strictly matches by exact or normalized name.
+    Guarantees no accidental assignment to arbitrary users or logged-in users.
+    """
+    clean_fac = (fac_name or "").strip()
+    if not clean_fac or clean_fac.lower() in ("-", "tba", "staff", "none", "null", "free", "break"):
+        # Unassigned placeholder
+        unassigned = user_cache.get("__unassigned__")
+        if not unassigned:
+            unassigned = db.query(User).filter(User.full_name == "Unassigned Faculty").first()
+            if not unassigned:
+                unassigned = User(
+                    id=str(uuid.uuid4()),
+                    email="unassigned.faculty@enosis.edu",
+                    full_name="Unassigned Faculty",
+                    hashed_password="hashed_placeholder_pw",
+                    role=UserRole.FACULTY,
+                )
+                db.add(unassigned)
+                db.flush()
+            user_cache["__unassigned__"] = unassigned
+        return unassigned
+
+    fac_lower = clean_fac.lower()
+    fac_title_clean = _clean_title(clean_fac)
+
+    # 1. Exact or cleaned in cache
+    if fac_lower in user_cache:
+        return user_cache[fac_lower]
+    if fac_title_clean and fac_title_clean in user_cache:
+        return user_cache[fac_title_clean]
+
+    # 2. Strict match against existing users list
+    for u in all_existing_users:
+        if not u.full_name or not u.full_name.strip():
+            continue
+        u_lower = u.full_name.strip().lower()
+        u_clean = _clean_title(u.full_name)
+        if fac_lower == u_lower or (fac_title_clean and u_clean and fac_title_clean == u_clean):
+            user_cache[fac_lower] = u
+            if fac_title_clean:
+                user_cache[fac_title_clean] = u
+            return u
+
+    # 3. Create a new user specifically for this faculty name
+    email_prefix = fac_title_clean.replace(" ", ".").replace("..", ".") if fac_title_clean else f"faculty_{uuid.uuid4().hex[:6]}"
+    email_prefix = re.sub(r'[^a-zA-Z0-9.]', '', email_prefix).strip('.') or f"faculty_{uuid.uuid4().hex[:6]}"
+    fac_email = f"{email_prefix}@enosis.edu"
+    if db.query(User).filter(User.email == fac_email).first():
+        fac_email = f"{email_prefix}_{uuid.uuid4().hex[:4]}@enosis.edu"
+
+    new_user = User(
+        id=str(uuid.uuid4()),
+        email=fac_email,
+        full_name=clean_fac,
+        hashed_password="hashed_placeholder_pw",
+        role=UserRole.FACULTY,
+    )
+    db.add(new_user)
+    db.flush()
+    all_existing_users.append(new_user)
+    user_cache[fac_lower] = new_user
+    if fac_title_clean:
+        user_cache[fac_title_clean] = new_user
+    return new_user
 
 
 router = APIRouter(prefix="/timetable", tags=["timetable"])
@@ -528,6 +602,17 @@ def update_room(
     db.commit()
     db.refresh(room)
     return room
+
+
+@router.delete("/rooms/clear-all")
+def clear_all_rooms(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_timetable_manager)
+):
+    """Deletes all configured rooms/labs so faculty start with a 100% clean state."""
+    db.query(Room).delete()
+    db.commit()
+    return {"status": "cleared", "message": "All rooms and laboratories cleared."}
 
 
 @router.delete("/rooms/{room_id}")
@@ -1295,7 +1380,7 @@ def publish_timetable(
 
     dept = db.query(Department).first()
     if not dept:
-        dept = Department(department_id=1, name="Computer Science & Engineering", code="CSE")
+        dept = Department(department_id=1, department_name="Computer Science & Engineering", department_code="CSE")
         db.add(dept)
         db.flush()
     dept_id = dept.department_id
@@ -1400,42 +1485,7 @@ def publish_timetable(
                 db.flush()
 
             # Match Faculty User
-            fac_clean = _clean_title(a_fac)
-            fac_tokens = set(fac_clean.replace(".", " ").split())
-            fac_user = user_cache.get(a_fac.lower())
-            if not fac_user and fac_clean:
-                if current_user and current_user.full_name:
-                    cur_clean = _clean_title(current_user.full_name)
-                    cur_tokens = set(cur_clean.replace(".", " ").split())
-                    if fac_clean in cur_clean or cur_clean in fac_clean or (fac_tokens and fac_tokens.intersection(cur_tokens)):
-                        fac_user = current_user
-                if not fac_user:
-                    for u in all_existing_users:
-                        if not u.full_name:
-                            continue
-                        u_clean = _clean_title(u.full_name)
-                        u_tokens = set(u_clean.replace(".", " ").split())
-                        if fac_clean == u_clean or fac_clean in u_clean or u_clean in fac_clean or (fac_tokens and fac_tokens.intersection(u_tokens)):
-                            fac_user = u
-                            break
-            if not fac_user:
-                email_prefix = fac_clean.replace(' ', '.').replace('..', '.') if fac_clean else f"faculty_{uuid.uuid4().hex[:6]}"
-                fac_email = f"{email_prefix}@enosis.edu"
-                if db.query(User).filter(User.email == fac_email).first():
-                    fac_email = f"{email_prefix}_{uuid.uuid4().hex[:4]}@enosis.edu"
-                fac_user = User(
-                    id=str(uuid.uuid4()),
-                    email=fac_email,
-                    full_name=a_fac or "Faculty Member",
-                    hashed_password="hashed_placeholder_pw",
-                    role=UserRole.FACULTY,
-                )
-                db.add(fac_user)
-                db.flush()
-                all_existing_users.append(fac_user)
-                user_cache[a_fac.lower()] = fac_user
-                if fac_user.full_name:
-                    user_cache[fac_user.full_name.lower()] = fac_user
+            fac_user = _match_or_create_faculty_user(a_fac, user_cache, all_existing_users, db)
 
             # Upsert TeachingAssignment
             ta = db.query(TeachingAssignment).filter(
@@ -1456,29 +1506,6 @@ def publish_timetable(
                 )
                 db.add(ta)
                 db.flush()
-
-            # Ensure current logged-in faculty also gets teaching assignment if matching or author
-            if current_user and current_user.id != fac_user.id:
-                cur_clean = _clean_title(current_user.full_name or "")
-                cur_tokens = set(cur_clean.replace(".", " ").split())
-                if fac_clean in cur_clean or cur_clean in fac_clean or (fac_tokens and fac_tokens.intersection(cur_tokens)):
-                    cur_ta = db.query(TeachingAssignment).filter(
-                        TeachingAssignment.faculty_id == current_user.id,
-                        TeachingAssignment.subject_id == sub.id,
-                        TeachingAssignment.division_id == div.id,
-                    ).first()
-                    if not cur_ta:
-                        cur_ta = TeachingAssignment(
-                            id=str(uuid.uuid4()),
-                            faculty_id=current_user.id,
-                            subject_id=sub.id,
-                            division_id=div.id,
-                            session_type=a_type,
-                            weekly_count=a_hours,
-                            batch_name=a_batch,
-                        )
-                        db.add(cur_ta)
-                        db.flush()
 
     # Clear old timetable entries
     db.query(TimetableEntry).delete()
@@ -1534,68 +1561,34 @@ def publish_timetable(
                 db.flush()
                 sub_cache[subj_name.lower()] = sub
 
-            fac_clean = _clean_title(fac_name)
-            fac_tokens = set(fac_clean.replace(".", " ").split())
+            fac_user = _match_or_create_faculty_user(fac_name, user_cache, all_existing_users, db)
 
-            fac_user = user_cache.get(fac_name.lower())
-            if not fac_user and fac_clean:
-                # Check current_user first
-                if current_user and current_user.full_name:
-                    cur_clean = _clean_title(current_user.full_name)
-                    cur_tokens = set(cur_clean.replace(".", " ").split())
-                    if fac_clean in cur_clean or cur_clean in fac_clean or (fac_tokens and fac_tokens.intersection(cur_tokens)):
-                        fac_user = current_user
-
-                # Search all existing users
-                if not fac_user:
-                    for u in all_existing_users:
-                        if not u.full_name:
-                            continue
-                        u_clean = _clean_title(u.full_name)
-                        u_tokens = set(u_clean.replace(".", " ").split())
-                        if fac_clean == u_clean or fac_clean in u_clean or u_clean in fac_clean or (fac_tokens and fac_tokens.intersection(u_tokens)):
-                            fac_user = u
-                            break
-
-            if not fac_user:
-                email_prefix = fac_clean.replace(' ', '.').replace('..', '.') if fac_clean else f"faculty_{uuid.uuid4().hex[:6]}"
-                fac_email = f"{email_prefix}@enosis.edu"
-                if db.query(User).filter(User.email == fac_email).first():
-                    fac_email = f"{email_prefix}_{uuid.uuid4().hex[:4]}@enosis.edu"
-                fac_user = User(
-                    id=str(uuid.uuid4()),
-                    email=fac_email,
-                    full_name=fac_name or "Faculty Member",
-                    hashed_password="hashed_placeholder_pw",
-                    role=UserRole.FACULTY,
-                )
-                db.add(fac_user)
-                db.flush()
-                all_existing_users.append(fac_user)
-                user_cache[fac_name.lower()] = fac_user
-                if fac_user.full_name:
-                    user_cache[fac_user.full_name.lower()] = fac_user
-
-            # If current_user is creating timetable and matches fac_name, ensure fac_user is current_user
-            if current_user and current_user.full_name:
-                cur_clean = _clean_title(current_user.full_name)
-                cur_tokens = set(cur_clean.replace(".", " ").split())
-                if fac_clean in cur_clean or cur_clean in fac_clean or (fac_tokens and fac_tokens.intersection(cur_tokens)):
-                    fac_user = current_user
-
-            room = room_cache.get(room_name.lower()) if room_name else None
+            room = room_cache.get(room_name.lower().strip()) if room_name else None
             if not room:
                 is_lab_room = "lab" in subj_name.lower() or "lab" in room_name.lower()
-                room = Room(
-                    id=str(uuid.uuid4()),
-                    name=room_name or ("Lab 1" if is_lab_room else "Classroom 1"),
-                    type=RoomType.LAB if is_lab_room else RoomType.LECTURE,
-                    capacity=60,
-                )
-                db.add(room)
-                db.flush()
+                target_room_name = room_name.strip() if room_name.strip() else ("Lab 1" if is_lab_room else "Classroom 1")
+                
+                # Check DB case-insensitively first
+                existing_room = db.query(Room).filter(Room.name.ilike(target_room_name)).first()
+                if existing_room:
+                    room = existing_room
+                else:
+                    # Fallback to any existing room of matching type in DB
+                    existing_by_type = db.query(Room).filter(Room.type == (RoomType.LAB if is_lab_room else RoomType.LECTURE)).first()
+                    if existing_by_type:
+                        room = existing_by_type
+                    else:
+                        room = Room(
+                            id=str(uuid.uuid4()),
+                            name=target_room_name,
+                            type=RoomType.LAB if is_lab_room else RoomType.LECTURE,
+                            capacity=60,
+                        )
+                        db.add(room)
+                        db.flush()
+                
                 if room_name:
-                    room_cache[room_name.lower()] = room
+                    room_cache[room_name.lower().strip()] = room
 
             is_lab = "lab" in subj_name.lower() or "practical" in subj_name.lower()
 

@@ -310,6 +310,11 @@ class TimetableRepository {
     return response.statusCode == 200;
   }
 
+  Future<bool> clearAllRooms() async {
+    final response = await ApiClient.delete('/timetable/rooms/clear-all');
+    return response.statusCode == 200;
+  }
+
   Future<List<int>> downloadRoomExcelTemplate() async {
     final response = await ApiClient.get('/timetable/rooms/template-excel');
     if (response.statusCode == 200) {

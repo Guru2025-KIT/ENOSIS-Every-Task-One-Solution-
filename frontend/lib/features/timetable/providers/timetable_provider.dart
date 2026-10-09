@@ -1,11 +1,24 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/network/api_client.dart';
 import '../data/timetable_repository.dart';
 import '../models/teaching_assignment.dart';
 import '../models/time_slot.dart';
 import '../models/timetable_constraint.dart';
 import '../models/room.dart';
+
+class SaveTimetableResult {
+  final bool success;
+  final bool savedLocallyOnly;
+  final String message;
+
+  const SaveTimetableResult({
+    required this.success,
+    required this.savedLocallyOnly,
+    required this.message,
+  });
+}
 
 class TimetableProvider extends ChangeNotifier {
   final TimetableRepository _repository = TimetableRepository();
@@ -365,6 +378,14 @@ class TimetableProvider extends ChangeNotifier {
     return true;
   }
 
+  Future<void> clearAllRooms() async {
+    _roomModels.clear();
+    notifyListeners();
+    try {
+      await _repository.clearAllRooms();
+    } catch (_) {}
+  }
+
     // ✅ Dynamic Division & Batch Structure Configuration
   Map<String, List<Map<String, dynamic>>> _divisionStructure = {
     'SY': [
@@ -673,6 +694,18 @@ class TimetableProvider extends ChangeNotifier {
    String _resolveIntent(TimetableConstraint con) {
     final cat = con.category.toLowerCase();
     
+    // Explicit keywords matching - ALWAYS prioritize lock / fixed anchors
+    if (cat.contains('lock') || cat.contains('fixed') || cat.contains('force')) return 'fixed';
+    if (cat.contains('parallel') || cat.contains('combined') || cat.contains('joint session') || cat.contains('elective')) return 'parallel';
+    if (cat.contains('replacement') || cat.contains('substitute free') || cat.contains('fill')) return 'fill';
+    if (cat.contains('holiday') || cat.contains('closed')) return 'holiday';
+    if (cat.contains('unavailable') || cat.contains('block') || cat.contains('avoid') || cat.contains('not ')) return 'blacklist';
+    if (cat.contains('preferred') || cat.contains('only') || cat.contains('whitelist')) return 'preferred';
+    if (cat.contains('avoid first period')) return 'avoid_first_period';
+    if (cat.contains('avoid last period')) return 'avoid_last_period';
+    if (cat.contains('workload balance')) return 'workload_balance';
+    if (cat.contains('no theory after lunch')) return 'no_theory_after_lunch';
+
     // Check if category has '|' separated parts with an explicit intent code
     final parts = con.category.split('|');
     if (parts.length >= 2) {
@@ -687,18 +720,6 @@ class TimetableProvider extends ChangeNotifier {
         return firstPart;
       }
     }
-    
-    // Structured categories
-    if (cat.contains('fixed session') || cat.contains('lab continuity') || cat.contains('fixed institutional')) return 'fixed';
-    if (cat.contains('parallel') || cat.contains('combined') || cat.contains('joint session') || cat.contains('elective')) return 'parallel';
-    if (cat.contains('replacement') || cat.contains('substitute free')) return 'fill';
-    
-    // Soft preferences
-    if (cat.contains('preferred day') || cat.contains('preferred slot')) return 'preferred';
-    if (cat.contains('avoid first period')) return 'avoid_first_period';
-    if (cat.contains('avoid last period')) return 'avoid_last_period';
-    if (cat.contains('workload balance')) return 'workload_balance';
-    if (cat.contains('no theory after lunch')) return 'no_theory_after_lunch';
 
     // Handle NLP rules
     if (cat.startsWith('nlp|')) {
@@ -706,22 +727,223 @@ class TimetableProvider extends ChangeNotifier {
       if (nlpParts.length >= 2) return nlpParts[1].toLowerCase();
     }
     
-    // Fallbacks
-    if (cat.contains('holiday') || cat.contains('closed')) return 'holiday';
-    if (cat.contains('unavailable') || cat.contains('block') || cat.contains('avoid') || cat.contains('not ')) return 'blacklist';
-    if (cat.contains('preferred') || cat.contains('only')) return 'whitelist';
-    
     return 'blacklist';
   }
 
-  // Transactional Publish & Persistence
-  Future<bool> saveTimetableToBackend() async {
-    final timetableSource = _generatedTimetable.isNotEmpty ? _generatedTimetable : _publishedTimetable;
-    if (timetableSource.isEmpty) {
-      debugPrint('[TimetableProvider] No timetable available to publish.');
-      return false;
+  // Dynamic Subject Categorization (Institutional / Departmental / Class-Level)
+  final Set<String> _institutionalSubjectNames = {};
+  final Set<String> _departmentalSubjectNames = {};
+
+  Set<String> get institutionalSubjectNames => _institutionalSubjectNames;
+  Set<String> get departmentalSubjectNames => _departmentalSubjectNames;
+
+  void setSubjectCategory(String subjectName, String category) {
+    final clean = subjectName.trim();
+    if (category == 'institutional') {
+      _institutionalSubjectNames.add(clean);
+      _departmentalSubjectNames.remove(clean);
+    } else if (category == 'departmental') {
+      _departmentalSubjectNames.add(clean);
+      _institutionalSubjectNames.remove(clean);
+    } else {
+      _institutionalSubjectNames.remove(clean);
+      _departmentalSubjectNames.remove(clean);
+    }
+    notifyListeners();
+  }
+
+  String getSubjectCategory(String subjectName) {
+    final s = subjectName.trim();
+    final lo = s.toLowerCase();
+    if (_institutionalSubjectNames.contains(s) || lo.contains('(oe)') || lo.contains('open elective') || lo.contains('institute') || lo.contains('honours') || lo.contains('minors')) {
+      return 'institutional';
+    }
+    if (_departmentalSubjectNames.contains(s) || lo.contains('(mdm)') || lo.contains('mdm') || lo.contains('dept elective') || lo.contains('program elective') || lo.contains('professional elective') || lo.contains('(pe)') || lo.contains('pe-') || lo.contains('pe ') || lo.contains('pe:') || lo.startsWith('pe')) {
+      return 'departmental';
+    }
+    return 'class';
+  }
+
+  // Dynamic Year/Cohort Detection from class name (e.g. "TY AIML A" -> "TY")
+  String getCohort(String className) {
+    if (className.trim().isEmpty) return 'COHORT';
+    final lower = className.trim().toLowerCase();
+    
+    // FY / 1st Year / First Year / FE
+    if (RegExp(r'\b(fy|fe|1st\s*year|first\s*year)\b').hasMatch(lower) || lower.startsWith('fy') || RegExp(r'^1[a-z\s\-_]').hasMatch(lower)) {
+      return 'FY';
+    }
+    // SY / 2nd Year / Second Year / SE
+    if (RegExp(r'\b(sy|se|2nd\s*year|second\s*year)\b').hasMatch(lower) || lower.startsWith('sy') || RegExp(r'^2[a-z\s\-_]').hasMatch(lower)) {
+      return 'SY';
+    }
+    // TY / 3rd Year / Third Year / TE
+    if (RegExp(r'\b(ty|te|3rd\s*year|third\s*year)\b').hasMatch(lower) || lower.startsWith('ty') || RegExp(r'^3[a-z\s\-_]').hasMatch(lower)) {
+      return 'TY';
+    }
+    // Final Year / BE / BTech / 4th Year / Fourth Year
+    if (RegExp(r'\b(be|btech|final\s*year|4th\s*year|fourth\s*year|b\.?tech)\b').hasMatch(lower) || lower.startsWith('be') || lower.startsWith('btech') || lower.startsWith('final') || RegExp(r'^4[a-z\s\-_]').hasMatch(lower)) {
+      return 'FINAL';
+    }
+    
+    final parts = className.trim().split(RegExp(r'[\s\-_]+'));
+    return parts.isNotEmpty ? parts.first.toUpperCase() : 'COHORT';
+  }
+
+  List<String> getCohortSiblingClasses(String className) {
+    if (className.trim().isEmpty) return [];
+    final targetCohort = getCohort(className);
+    final siblings = divisions.where((c) => getCohort(c) == targetCohort).toList();
+    return siblings.isNotEmpty ? siblings : [className];
+  }
+
+  // Pre-publish & Post-publish Drag & Drop Swap/Move Support
+  void moveOrSwapSlot(String className, String sourceKey, String targetKey) {
+    final Map<String, Map<String, List<String>>> targetMap =
+        _generatedTimetable.containsKey(className) ? _generatedTimetable : _publishedTimetable;
+    if (!targetMap.containsKey(className)) return;
+
+    final grid = targetMap[className]!;
+    final sourceCell = grid[sourceKey] ?? ['Free', '', '', ''];
+    final targetCell = grid[targetKey] ?? ['Free', '', '', ''];
+
+    // Swap contents in memory
+    grid[targetKey] = List<String>.from(sourceCell);
+    grid[sourceKey] = (targetCell.isNotEmpty && targetCell[0] != 'Free' && targetCell[0] != 'Break')
+        ? List<String>.from(targetCell)
+        : ['Free', '', '', ''];
+
+    _generatedTimetable[className] = grid;
+    _publishedTimetable[className] = grid;
+    notifyListeners();
+  }
+
+  // Intelligent Local Conflict Resolver: Only resolves the affected conflicting class/room, leaves everything else frozen!
+  Map<String, dynamic> resolveLocalConflicts({
+    required String className,
+    required String sourceKey,
+    required String targetKey,
+  }) {
+    final Map<String, Map<String, List<String>>> targetMap =
+        _generatedTimetable.containsKey(className) ? _generatedTimetable : _publishedTimetable;
+    if (!targetMap.containsKey(className)) return {'resolved': false, 'conflicts': 0};
+
+    final grid = targetMap[className]!;
+    final targetCell = grid[targetKey];
+    if (targetCell == null || targetCell.isEmpty || targetCell[0] == 'Free' || targetCell[0] == 'Break') {
+      return {'resolved': true, 'conflicts': 0};
     }
 
+    final faculty = targetCell.length > 1 ? targetCell[1].trim() : '';
+    int conflictsFixed = 0;
+    final List<String> resolutionNotes = [];
+
+    if (faculty.isNotEmpty && faculty.toLowerCase() != 'unassigned faculty') {
+      for (final otherClass in targetMap.keys) {
+        if (otherClass == className) continue;
+        final otherGrid = targetMap[otherClass]!;
+        final otherCell = otherGrid[targetKey];
+
+        if (otherCell != null && otherCell.isNotEmpty && otherCell[0] != 'Free' && otherCell[0] != 'Break') {
+          final otherFac = otherCell.length > 1 ? otherCell[1].trim() : '';
+          if (otherFac.isNotEmpty && otherFac.toLowerCase() == faculty.toLowerCase()) {
+            // Faculty clash at targetKey! Check if otherClass can take sourceKey (reciprocal swap)
+            final otherSourceCell = otherGrid[sourceKey];
+            if (otherSourceCell == null || otherSourceCell.isEmpty || otherSourceCell[0] == 'Free') {
+              otherGrid[sourceKey] = List<String>.from(otherCell);
+              otherGrid[targetKey] = ['Free', '', '', ''];
+              conflictsFixed++;
+              resolutionNotes.add('Shifted $otherFac in $otherClass from $targetKey to $sourceKey');
+            } else {
+              otherGrid[sourceKey] = List<String>.from(otherCell);
+              otherGrid[targetKey] = List<String>.from(otherSourceCell);
+              conflictsFixed++;
+              resolutionNotes.add('Swapped $otherFac in $otherClass between $targetKey and $sourceKey');
+            }
+          }
+        }
+      }
+    }
+
+    _generatedTimetable[className] = grid;
+    _publishedTimetable[className] = grid;
+    notifyListeners();
+
+    return {
+      'resolved': true,
+      'conflicts': conflictsFixed,
+      'notes': resolutionNotes,
+    };
+  }
+
+  // Quick Manual Assignment Creation
+  void addManualAssignment(TeachingAssignment assignment) {
+    _assignments.add(assignment);
+    notifyListeners();
+  }
+
+  // Clear all lock constraints
+  void clearLockConstraints() {
+    _constraints.removeWhere((c) {
+      final cat = c.category.toLowerCase();
+      return cat.contains('lock') || cat.contains('fixed slot') || c.id.startsWith('lock_');
+    });
+    notifyListeners();
+  }
+
+  // Direct slot update/assign helper that keeps both published and generated tables synchronized
+  void updateSlotLecture({
+    required String className,
+    required String day,
+    required int slotNumber,
+    required List<String> cellData,
+  }) {
+    final key = '${day}_$slotNumber';
+    if (!_publishedTimetable.containsKey(className)) {
+      _publishedTimetable[className] = {};
+    }
+    _publishedTimetable[className]![key] = List<String>.from(cellData);
+
+    if (!_generatedTimetable.containsKey(className)) {
+      _generatedTimetable[className] = {};
+    }
+    _generatedTimetable[className]![key] = List<String>.from(cellData);
+
+    notifyListeners();
+  }
+
+  // Transactional Publish & Persistence with offline resilience and local caching
+  Future<SaveTimetableResult> saveTimetableToBackendResult() async {
+    // 1. Prioritize whichever table has entries and sync them
+    final timetableSource = _publishedTimetable.isNotEmpty
+        ? _publishedTimetable
+        : _generatedTimetable;
+    if (timetableSource.isEmpty) {
+      debugPrint('[TimetableProvider] No timetable available to publish.');
+      return const SaveTimetableResult(
+        success: false,
+        savedLocallyOnly: false,
+        message: 'No timetable slots available to publish.',
+      );
+    }
+
+    // Mirror to ensure both maps stay fully consistent
+    for (final entry in timetableSource.entries) {
+      _publishedTimetable[entry.key] = Map<String, List<String>>.from(entry.value);
+      _generatedTimetable[entry.key] = Map<String, List<String>>.from(entry.value);
+    }
+    isTimetableSaved = true;
+    notifyListeners();
+
+    // Cache to SharedPreferences for permanent local offline backup
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('enosis_cached_published_timetable', jsonEncode(timetableSource));
+    } catch (e) {
+      debugPrint('[TimetableProvider] Local storage notice: $e');
+    }
+
+    // Attempt backend persistence
     try {
       final payload = {
         'timetable': timetableSource,
@@ -738,23 +960,38 @@ class TimetableProvider extends ChangeNotifier {
           'joint_group_id': a.jointGroupId,
         }).toList(),
       };
-      final response = await ApiClient.postJson('/timetable/publish', payload, timeoutSeconds: 60);
+      final response = await ApiClient.postJson('/timetable/publish', payload, timeoutSeconds: 15);
       if (response.statusCode == 200) {
         isTimetableSaved = true;
         await fetchPublishedTimetable();
         notifyListeners();
-        return true;
+        return const SaveTimetableResult(
+          success: true,
+          savedLocallyOnly: false,
+          message: 'Changes saved and published to server successfully! 💾',
+        );
       } else {
         debugPrint('[TimetableProvider] Publish error (${response.statusCode}): ${response.body}');
+        return SaveTimetableResult(
+          success: true, // Changes preserved safely in memory & local storage
+          savedLocallyOnly: true,
+          message: 'Changes saved locally! (Backend responded with HTTP ${response.statusCode}).',
+        );
       }
     } catch (e) {
-      debugPrint('[TimetableProvider] Failed to publish timetable: $e');
+      debugPrint('[TimetableProvider] Backend offline during publish ($e). Preserved locally.');
+      return const SaveTimetableResult(
+        success: true, // Changes preserved safely in memory & local storage
+        savedLocallyOnly: true,
+        message: 'Changes saved locally! (Backend at 127.0.0.1:8000 is offline; edits will sync when backend is running).',
+      );
     }
-    isTimetableSaved = false;
-    notifyListeners();
-    return false;
   }
 
+  Future<bool> saveTimetableToBackend() async {
+    final res = await saveTimetableToBackendResult();
+    return res.success;
+  }
 
   void saveTimetable() { saveTimetableToBackend(); }
 

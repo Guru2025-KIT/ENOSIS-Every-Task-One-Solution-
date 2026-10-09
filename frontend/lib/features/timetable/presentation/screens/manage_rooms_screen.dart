@@ -975,7 +975,66 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
             tooltip: 'Import Rooms from Excel',
             onPressed: _isImporting ? null : _pickAndImportExcel,
           ),
-          const SizedBox(width: 8),
+          PopupMenuButton<String>(
+            tooltip: 'Room Management Options',
+            icon: const Icon(Icons.more_vert, color: Colors.white70),
+            color: const Color(0xFF1E293B),
+            onSelected: (val) async {
+              if (val == 'clear_all') {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: const Color(0xFF0F172A),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: const BorderSide(color: Color(0xFF334155)),
+                    ),
+                    title: const Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: Color(0xFFF87171)),
+                        SizedBox(width: 8),
+                        Text('Clear All Rooms & Labs', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                      ],
+                    ),
+                    content: const Text(
+                      'This will delete all registered classrooms and laboratories so you start with an empty list. Continue?',
+                      style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 13),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancel', style: TextStyle(color: Color(0xFF94A3B8))),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Clear All', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true && mounted) {
+                  await context.read<TimetableProvider>().clearAllRooms();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('All classrooms and labs cleared.'), backgroundColor: Color(0xFFF97316)),
+                  );
+                }
+              }
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'clear_all',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_sweep, color: Color(0xFFF87171), size: 18),
+                    SizedBox(width: 8),
+                    Text('Clear All Rooms (Reset)', style: TextStyle(color: Color(0xFFF87171), fontSize: 12.5)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 4),
         ],
         bottom: TabBar(
           controller: _tabController,

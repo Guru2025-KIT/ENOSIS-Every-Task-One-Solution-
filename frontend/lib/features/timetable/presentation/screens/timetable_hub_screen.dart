@@ -183,9 +183,9 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
                         Icons.meeting_room_outlined,
                       ),
                       _buildHeaderBadge(
-                        'Constraints',
-                        '$constraintCount Rules',
-                        Icons.gavel_outlined,
+                        'Classes',
+                        '${provider.divisions.length} Divisions',
+                        Icons.groups_outlined,
                       ),
                     ],
                   ),
@@ -272,29 +272,12 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
 
             const SizedBox(height: 12),
 
-            // STEP 4: Constraints & Unavailability
+            // STEP 4: Interactive Slot Locking & Pre-Assignment Workbench
             _buildStepCard(
               context: context,
               stepNumber: 4,
-              title: 'Department & Faculty Constraints',
-              subtitle: 'Set faculty unavailability, fixed slots, spread rules, and lunch policies.',
-              badgeText: '$constraintCount Active Rules',
-              icon: Icons.rule_folder_outlined,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ConstraintBuilderScreen()),
-                );
-              },
-            ),
-
-            const SizedBox(height: 12),
-
-            // STEP 4.5: Interactive Slot Locking & AI Advisor Workbench
-            _buildStepCard(
-              context: context,
-              stepNumber: 5,
-              title: 'Interactive Slot Locking & Groq AI Workbench',
-              subtitle: 'Drag-and-drop Open Electives, MDM courses, and lock slots with Groq AI advisor recommendations.',
+              title: 'Interactive Slot Locking & Pre-Assignment Workbench',
+              subtitle: 'Classify Open Electives, MDMs, and drag-and-drop locked slots across cohorts before solving.',
               badgeText: 'Priority Locking 🔒',
               icon: Icons.lock_clock_outlined,
               isHighlighted: true,
@@ -307,12 +290,12 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
 
             const SizedBox(height: 12),
 
-            // STEP 6: Generate & Publish Timetable
+            // STEP 5: Generate & Publish Timetable
             _buildStepCard(
               context: context,
-              stepNumber: 6,
+              stepNumber: 5,
               title: 'Generate & Publish Timetable',
-              subtitle: 'Run CP-SAT solver with automated relaxation to produce a complete schedule.',
+              subtitle: 'Run CP-SAT solver, fine-tune with drag & drop, and publish schedules to faculty dashboards.',
               badgeText: hasPublished ? 'Schedule Ready' : 'Ready to Solve',
               icon: Icons.auto_awesome,
               isHighlighted: false,
