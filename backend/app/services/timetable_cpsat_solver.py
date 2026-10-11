@@ -65,15 +65,15 @@ class Constraint:
 @dataclass
 class SolverSession:
     session_id: str
-    faculty: str       # Single faculty per session; "FacA | FacB" only for display merges
-    subject: str       # Specific subject this session teaches
+    faculty: str       # "FacA | FacB" for merged parallel-elective sessions
+    subject: str       # "SubA | SubB" for merged parallel-elective sessions
     subject_code: str
     type: str          # "Theory" | "Lab"
     batch: str         # "-" / "All" for theory; "Batch 1", "Batch 2" … for labs
     classes: List[str]
     duration: int      # consecutive teaching slots required
     session_index: int
-    parallel_group: Optional[str] = None  # Non-None → must share (day, slot) with all sessions in same group+index
+    joint_group_id: Optional[str] = None
 
 
 @dataclass
@@ -144,9 +144,14 @@ class TimetableCpSatSolver:
             for c in group:
                 self.group_lookup[c] = group
 
-    # -------------------------------------------------------------- #
-    # Helpers                                                          #
-    # -------------------------------------------------------------- #
+        all_cls_names = sorted(list({a.class_name for a in self.assignments if a.class_name}))
+        self.home_classrooms: Dict[str, str] = {}
+        for c_idx, c_name in enumerate(all_cls_names):
+            if self.classrooms:
+                self.home_classrooms[c_name] = self.classrooms[c_idx % len(self.classrooms)].get("name", f"Classroom {c_idx + 1}")
+            else:
+                self.home_classrooms[c_name] = f"Room {101 + c_idx}"
+
 
     # -------------------------------------------------------------- #
     # Helpers                                                          #
@@ -155,84 +160,182 @@ class TimetableCpSatSolver:
     def _normalize(self, text: str) -> str:
         return text.strip().lower()
 
+    def _parse_time_to_minutes(self, time_str: str) -> Optional[int]:
+        if not time_str or not time_str.strip():
+            return None
+        t = time_str.strip().upper()
+        m = re.search(r"(\d{1,2}):(\d{2})\s*(AM|PM)?", t)
+        if not m:
+            return None
+        hours = int(m.group(1))
+        mins = int(m.group(2))
+        period = m.group(3)
+        if period == "PM" and hours != 12:
+            hours += 12
+        elif period == "AM" and hours == 12:
+            hours = 0
+        return hours * 60 + mins
+
+    def _is_contiguous_block(self, block: List[TimeSlot]) -> bool:
+        if len(block) <= 1:
+            return True
+        slot_obj_idx = {id(s): idx for idx, s in enumerate(self.time_slots)}
+        for k in range(1, len(block)):
+            curr = block[k]
+            prev = block[k - 1]
+            if curr.is_break or prev.is_break:
+                return False
+            # 1. Must be directly adjacent in the full chronological time_slots list
+            idx_curr = slot_obj_idx.get(id(curr))
+            idx_prev = slot_obj_idx.get(id(prev))
+            if idx_curr is not None and idx_prev is not None:
+                if idx_curr != idx_prev + 1:
+                    return False
+            # 2. Check timestamps if available: no break gap allowed between prev end and curr start
+            curr_start = self._parse_time_to_minutes(curr.start_time)
+            prev_end = self._parse_time_to_minutes(prev.end_time)
+            if curr_start is not None and prev_end is not None:
+                if curr_start > prev_end:  # Gap in time (recess/lunch/break)
+                    return False
+            # 3. Slot numbers check
+            if curr.slot_number in self.break_slots or prev.slot_number in self.break_slots:
+                return False
+        return True
+
     def _string_match(self, pattern: str, target: str) -> bool:
         if not pattern or not target:
             return False
-        p = pattern.strip().lower()
-        t = target.strip().lower()
-        if p == t:
+        p, t = pattern.lower().strip(), target.lower().strip()
+        if p == t or p in t or t in p:
             return True
-
-        # Clean common faculty titles (Dr., Prof., Mr., etc.)
-        p_clean = re.sub(r"^(dr\.?|prof\.?|mr\.?|mrs\.?|ms\.?)\s+", "", p)
-        t_clean = re.sub(r"^(dr\.?|prof\.?|mr\.?|mrs\.?|ms\.?)\s+", "", t)
-        if p_clean == t_clean:
-            return True
-
-        # Strip parenthetical annotations e.g. '(MDM)', '(PE-II)'
-        pp = re.sub(r"\(.*?\)", "", p_clean).strip()
-        tp = re.sub(r"\(.*?\)", "", t_clean).strip()
-        if pp and tp and pp == tp:
-            return True
-
-        # Substring match if sufficiently distinctive (at least 4 chars)
-        shorter = min(len(p_clean), len(t_clean))
-        if shorter >= 4:
-            if p_clean == t_clean or p_clean in t_clean or t_clean in p_clean:
-                return True
-
-        # Handle compound faculty / subject lists separated by ' / ', ' | ', or ','
-        if " / " in pattern or " | " in pattern or "," in pattern:
-            candidates = [c.strip() for c in re.split(r"\s+[/\|]\s+|,", pattern) if c.strip()]
-            for c in candidates:
-                if self._string_match(c, target):
-                    return True
-
-        return False
+        pt = set(re.findall(r"\b[a-zA-Z0-9]{3,}\b", p))
+        tt = set(re.findall(r"\b[a-zA-Z0-9]{3,}\b", t))
+        return bool(pt and tt and pt & tt)
 
     def _class_match(self, c1: str, c2: str) -> bool:
         if not c1 or not c2:
             return False
         n1 = c1.upper().replace("-", " ").strip()
         n2 = c2.upper().replace("-", " ").strip()
-        if n1 == n2:
-            return True
-        # Allow prefix match only if one is general (e.g. 'TY AIML' matches 'TY AIML A')
-        # but NOT 'TY AIML A' matching 'TY AIML B'
-        if (n1.startswith(n2) or n2.startswith(n1)) and (n1.rsplit(" ", 1)[-1] != n2.rsplit(" ", 1)[-1] or len(n1.split()) == len(n2.split())):
-            return n1 == n2
-        return n1.startswith(n2) or n2.startswith(n1)
+        return n1 == n2 or n1.startswith(n2) or n2.startswith(n1)
+
+    def _get_cohort(self, class_name: str) -> str:
+        if not class_name or not class_name.strip():
+            return "COHORT"
+        cn = class_name.lower().strip()
+        if re.search(r"\b(fy|fe|1st\s*year|first\s*year)\b", cn) or cn.startswith("fy") or re.match(r"^1[a-z\s\-_]", cn):
+            return "FY"
+        if re.search(r"\b(sy|se|2nd\s*year|second\s*year)\b", cn) or cn.startswith("sy") or re.match(r"^2[a-z\s\-_]", cn):
+            return "SY"
+        if re.search(r"\b(ty|te|3rd\s*year|third\s*year)\b", cn) or cn.startswith("ty") or re.match(r"^3[a-z\s\-_]", cn):
+            return "TY"
+        if re.search(r"\b(be|btech|final\s*year|4th\s*year|fourth\s*year|b\.?tech)\b", cn) or cn.startswith("be") or cn.startswith("btech") or cn.startswith("final") or re.match(r"^4[a-z\s\-_]", cn):
+            return "FINAL"
+        parts = re.split(r"[\s\-_]+", class_name.strip())
+        return parts[0].upper() if parts else "COHORT"
+
+    def _get_cohort_siblings(self, class_name: str) -> List[str]:
+        if not class_name:
+            return []
+        target_cohort = self._get_cohort(class_name)
+        all_cls = sorted(list({a.class_name for a in self.assignments if a.class_name}))
+        siblings = [c for c in all_cls if self._get_cohort(c) == target_cohort]
+        return siblings if siblings else [class_name]
+
+    def _extract_elective_basket(self, subject_name: str, category: str = "") -> Tuple[str, str]:
+        """
+        Extracts the elective basket family and unique basket identifier.
+        Families: MDM, PE, OE, HONORS, ELECTIVE, CORE
+        Basket ID: e.g. 'MDM-3', 'PE-1', 'OE-2', 'HONORS', 'CORE'
+        """
+        sn = (subject_name or "").strip()
+        cat = (category or "").strip()
+        sn_lo = sn.lower()
+        cat_lo = cat.lower()
+
+        # 1. Honors / Honours
+        if "honor" in sn_lo or "honour" in sn_lo or "honor" in cat_lo or "honour" in cat_lo:
+            m = re.search(r"\b(honou?rs?[\s\-_]*\d*)\b", sn_lo)
+            basket_id = m.group(1).upper().replace(" ", "-") if m else "HONORS"
+            return "HONORS", basket_id
+
+        # 2. MDM / EMDM / Multidisciplinary Minor
+        if (
+            re.search(r"\b(e?mdm|multidisciplinary\s*minor)\b", sn_lo)
+            or re.search(r"\b(e?mdm|multidisciplinary\s*minor)\b", cat_lo)
+        ):
+            m = re.search(r"\b(e?mdm[\s\-_]*\d+)\b", sn_lo) or re.search(r"\b(e?mdm[\s\-_]*\d+)\b", cat_lo)
+            basket_id = m.group(1).upper().replace(" ", "-") if m else "MDM"
+            return "MDM", basket_id
+
+        # 3. OE / Open Elective / Institute Elective
+        if (
+            re.search(r"\b(oe|open\s*elective|institute\s*elective)\b", sn_lo)
+            or re.search(r"\b(oe|open\s*elective|institute\s*elective)\b", cat_lo)
+        ):
+            m = re.search(r"\b(oe[\s\-_]*\d+)\b", sn_lo) or re.search(r"\b(open\s*elective[\s\-_]*\d+)\b", sn_lo) or re.search(r"\b(oe[\s\-_]*\d+)\b", cat_lo)
+            basket_id = m.group(1).upper().replace(" ", "-") if m else "OE"
+            return "OE", basket_id
+
+        # 4. PE / Professional Elective / Department Elective / Program Elective
+        if (
+            re.search(r"\b(pe|dept\s*elective|department\s*elective|program\s*elective|professional\s*elective)\b", sn_lo)
+            or re.search(r"\b(pe|dept\s*elective|department\s*elective|program\s*elective|professional\s*elective)\b", cat_lo)
+        ):
+            m = re.search(r"\b(pe[\s\-_]*\d+)\b", sn_lo) or re.search(r"\b(professional\s*elective[\s\-_]*\d+)\b", sn_lo) or re.search(r"\b(dept\s*elective[\s\-_]*\d+)\b", sn_lo) or re.search(r"\b(pe[\s\-_]*\d+)\b", cat_lo)
+            basket_id = m.group(1).upper().replace(" ", "-") if m else "PE"
+            return "PE", basket_id
+
+        # 5. Generic Elective if explicitly named
+        if "elective" in sn_lo or "elective" in cat_lo:
+            return "ELECTIVE", "ELECTIVE"
+
+        return "CORE", "CORE"
+
+    def _get_home_classroom(self, class_name: str) -> str:
+        if not class_name:
+            return self.classrooms[0].get("name", "Classroom 1") if self.classrooms else "Room 101"
+        if class_name in self.home_classrooms:
+            return self.home_classrooms[class_name]
+        if self.classrooms:
+            idx = abs(hash(class_name)) % len(self.classrooms)
+            rm = self.classrooms[idx].get("name", f"Classroom {idx + 1}")
+        else:
+            rm = f"Room {101 + (abs(hash(class_name)) % 50)}"
+        self.home_classrooms[class_name] = rm
+        return rm
+
 
     def _intent_from_raw(self, intent_raw: str, category_raw: str) -> str:
-        """Normalise intent regardless of how Flutter or NLP encoded it."""
+        """Normalise intent regardless of how Flutter encoded it."""
         intent = (intent_raw or "").lower().strip()
         cat = (category_raw or "").lower()
 
-        # Check category keywords first for high-level semantic rules
-        if any(kw in cat for kw in ("parallel", "mdm", "oe", "elective")):
-            return "parallel"
-        if any(kw in cat for kw in ("combined", "joint", "merged")):
-            return "joint"
-        if "holiday" in cat or "college closed" in cat:
-            return "holiday"
-        if "no theory after lunch" in cat:
-            return "no_theory_after_lunch"
-        if "fill" in cat or "replace" in cat:
-            return "fill"
+        # ALWAYS prioritize lock / fixed anchors
+        if "lock" in intent or "fixed" in intent or "force" in intent or "lock" in cat or "fixed" in cat or "force" in cat:
+            return "fixed"
 
         if intent == "blacklist":
             return "avoid"
         if intent in ("avoid", "fixed", "force", "whitelist", "fill",
-                      "holiday", "no_theory_after_lunch", "parallel", "joint", "preferred"):
+                      "holiday", "no_theory_after_lunch", "parallel", "preferred"):
             return intent
 
         # Derive from category string when intent is blank or general
-        if "fixed" in cat or "force" in cat:
-            return "fixed"
-        if "whitelist" in cat or "only" in cat:
-            return "whitelist"
-        if "preferred" in cat:
-            return "preferred"
+        if not intent:
+            if "no theory after lunch" in cat:
+                return "no_theory_after_lunch"
+            if "whitelist" in cat or "only" in cat:
+                return "whitelist"
+            if "preferred" in cat:
+                return "preferred"
+            if "fill" in cat or "replace" in cat:
+                return "fill"
+            if "holiday" in cat or "college closed" in cat:
+                return "holiday"
+            if "parallel" in cat or "elective" in cat:
+                return "parallel"
+            return "avoid"
         return "avoid"
 
     def _is_hard_constraint(self, con: Constraint) -> bool:
@@ -241,7 +344,7 @@ class TimetableCpSatSolver:
         or Soft (preference / objective penalty).
         """
         cat = (con.category or "").lower()
-        intent = self._intent_from_raw(con.intent, con.category)
+        intent = (con.intent or "").lower()
 
         # Explicit UI tags
         if "hard|" in cat or cat.startswith("hard"):
@@ -250,10 +353,9 @@ class TimetableCpSatSolver:
             return False
 
         # Structural hard constraints
-        if intent in ("fixed", "force", "holiday", "parallel", "joint", "whitelist"):
+        if intent in ("fixed", "force", "holiday"):
             return True
-        if any(kw in cat for kw in ("fixed", "force", "holiday", "closed",
-                                    "parallel", "elective", "joint", "combined", "mdm", "oe")):
+        if any(kw in cat for kw in ("fixed", "force", "holiday", "closed")):
             return True
 
         # Faculty unavailable / class unavailable / room unavailable is always HARD
@@ -264,11 +366,14 @@ class TimetableCpSatSolver:
 
         # Soft preferences
         if intent in ("no_theory_after_lunch", "avoid_first_period", "avoid_last_period",
-                      "preferred", "preferred_slot", "preferred_day_time", "workload_balance", "minimize_room_swaps"):
+                      "preferred", "preferred_slot", "preferred_day_time", "workload_balance"):
             return False
         if any(kw in cat for kw in ("preferred", "balance", "swap", "after lunch",
                                    "first period", "last period")):
             return False
+
+        if intent == "whitelist":
+            return True
 
         return True
 
@@ -330,8 +435,7 @@ class TimetableCpSatSolver:
                 return False
         if con.class_names:
             has_filter = True
-            if not any(any(self._class_match(cn, cls) for cn in con.class_names)
-                        for cls in sess.classes):
+            if not any(self._class_match(cn, cls) for cn in con.class_names for cls in sess.classes):
                 return False
         if not has_filter:
             if not con.days and not con.slot_numbers:
@@ -342,136 +446,156 @@ class TimetableCpSatSolver:
     # Session building                                                  #
     # -------------------------------------------------------------- #
 
-    def _find_parallel_group(self, assignment: Assignment) -> Optional[str]:
-        """
-        Return the parallel-elective group ID if this subject belongs to an explicit
-        parallel constraint or an automatic elective (MDM/OE/Minor) pattern.
-        """
-        if assignment.type.lower() != "theory":
-            return None
-
-        # 1. Explicit Parallel Elective Constraint
-        for con in self.constraints:
-            intent = self._intent_from_raw(con.intent, con.category)
-            if intent == "parallel":
-                match_subj = (
-                    not con.subject_names
-                    or any(self._string_match(sn, assignment.subject) for sn in con.subject_names)
-                )
-                match_cls = (
-                    not con.class_names
-                    or any(self._class_match(cn, assignment.class_name) for cn in con.class_names)
-                )
-                if match_subj and match_cls:
-                    con_key = con.id or "_".join(sorted(con.subject_names)) or "parallel"
-                    return f"par_{con_key}"
-
-        # 2. Auto-detect MDM / OE / Minor electives across divisions of same year
-        s_norm = assignment.subject.lower()
-        if any(kw in s_norm for kw in ("mdm", "open elective", "oe-", "oe ", "(oe)", "minor-", "elective")):
-            # Extract year from class_name e.g. SY, TY, BTECH, FY
-            c_upper = assignment.class_name.upper()
-            year = "GEN"
-            for y in ("BTECH", "TY", "SY", "FY"):
-                if y in c_upper:
-                    year = y
-                    break
-            elec_type = "mdm" if "mdm" in s_norm or "minor" in s_norm else "oe"
-            return f"par_auto_{year}_{elec_type}"
-
-        return None
-
     def _build_sessions(self) -> List[SolverSession]:
-        """
-        Build SolverSessions from assignments respecting:
-        1. Parallel Electives (MDM/OE): Each division keeps its OWN separate session
-           (own faculty, own room) but ALL sessions in the same parallel group share
-           the SAME (day, slot) — enforced by CP-SAT hard linking constraints.
-        2. Combined/Joint Sessions: Multiple classes share ONE session with a single
-           faculty — triggered by the 'Combined / Joint Session' constraint or
-           by assignment-level joint_group_id.
-        3. Independent Divisions: All other divisions remain fully independent.
-        """
         sessions: List[SolverSession] = []
-        consumed_indices: Set[int] = set()
+        joint_theory: Dict[str, List[Assignment]] = defaultdict(list)
+        parallel_elective: Dict[str, List[Assignment]] = defaultdict(list)
+        individual: List[Assignment] = []
 
-        # ── 1. Combined / Joint sessions from assignment-level joint_group_id
-        jgid_groups: Dict[str, List[Tuple[int, Assignment]]] = defaultdict(list)
-        for idx, a in enumerate(self.assignments):
-            if a.type.lower() == "theory" and a.joint_group_id:
-                jgid_groups[f"jgid_{a.joint_group_id}_{self._normalize(a.subject)}"].append((idx, a))
-                consumed_indices.add(idx)
+        # 1. Map constraints category to subjects if any
+        subject_constraint_cats = defaultdict(list)
+        for c in self.constraints:
+            for sn in c.subject_names:
+                subject_constraint_cats[self._normalize(sn)].append(c.category)
 
-        for key, group_items in jgid_groups.items():
-            group = [item[1] for item in group_items]
-            first = group[0]
-            all_cls = sorted({a.class_name for a in group})
-            hours = max(a.weekly_hours for a in group)
-            fac = first.faculty
-            for h in range(hours):
-                sessions.append(SolverSession(
-                    session_id=f"{key}_h{h}", faculty=fac,
-                    subject=first.subject, subject_code=first.subject_code,
-                    type="Theory", batch="-", classes=all_cls,
-                    duration=1, session_index=h, parallel_group=None,
-                ))
+        # 2. Classify elective baskets per cohort
+        # Key: (cohort, basket_family, basket_id) -> list of assignments
+        # Also track (cohort, basket_family) -> list of assignments
+        cohort_baskets = defaultdict(list)
+        cohort_family_baskets = defaultdict(list)
+        for a in self.assignments:
+            if a.type.lower() == "theory":
+                cats = " ".join(subject_constraint_cats.get(self._normalize(a.subject), []))
+                family, basket_id = self._extract_elective_basket(a.subject, cats)
+                if family in ("MDM", "PE", "OE", "ELECTIVE"):
+                    cohort = self._get_cohort(a.class_name)
+                    cohort_baskets[(cohort, family, basket_id)].append(a)
+                    cohort_family_baskets[(cohort, family)].append(a)
 
-        # ── 2. Combined / Joint sessions from explicit Combined/Joint constraints
-        for con in self.constraints:
-            intent = self._intent_from_raw(con.intent, con.category)
-            if intent != "joint":
-                continue
-
-            matched_items: List[Tuple[int, Assignment]] = []
-            for idx, a in enumerate(self.assignments):
-                if idx in consumed_indices or a.type.lower() != "theory":
-                    continue
-                match_subj = (
-                    not con.subject_names
-                    or any(self._string_match(sn, a.subject) for sn in con.subject_names)
-                )
-                match_fac = (
-                    not con.faculty_names
-                    or any(self._string_match(fn, a.faculty) for fn in con.faculty_names)
-                )
-                match_cls = (
-                    not con.class_names
-                    or any(self._class_match(cn, a.class_name) for cn in con.class_names)
-                )
-                if match_subj and match_fac and match_cls:
-                    matched_items.append((idx, a))
-
-            if matched_items:
-                for idx, _ in matched_items:
-                    consumed_indices.add(idx)
-                group = [item[1] for item in matched_items]
-                first = group[0]
-                all_cls = sorted({a.class_name for a in group})
-                hours = max(a.weekly_hours for a in group)
-                fac = con.faculty_names[0] if con.faculty_names else first.faculty
-                key = f"jcon_{con.id or '_'.join(all_cls)}_{self._normalize(first.subject)}"
-                for h in range(hours):
-                    sessions.append(SolverSession(
-                        session_id=f"{key}_h{h}", faculty=fac,
-                        subject=first.subject, subject_code=first.subject_code,
-                        type="Theory", batch="-", classes=all_cls,
-                        duration=1, session_index=h, parallel_group=None,
-                    ))
-
-        # ── 3. Individual sessions (parallel electives get tagged, rest are fully independent)
-        for idx, a in enumerate(self.assignments):
-            if idx in consumed_indices:
-                continue
+        for a in self.assignments:
             t = a.type.lower()
             if t == "theory":
-                par_gid = self._find_parallel_group(a)
+                # Check explicit parallel constraints first
+                par_id = None
+                for con in self.constraints:
+                    if ("parallel" in (con.intent or "").lower()
+                            or "parallel" in con.category.lower()) and con.subject_names:
+                        if any(self._string_match(sn, a.subject) for sn in con.subject_names):
+                            par_id = f"par_{self._normalize(con.subject_names[0])}"
+                            break
+                if par_id:
+                    parallel_elective[par_id].append(a)
+                    continue
+
+                # Check elective basket parallel grouping (e.g. MDM-3 options together, PE-1 options together)
+                cohort = self._get_cohort(a.class_name)
+                cats = " ".join(subject_constraint_cats.get(self._normalize(a.subject), []))
+                family, basket_id = self._extract_elective_basket(a.subject, cats)
+
+                if family in ("MDM", "PE", "OE", "ELECTIVE"):
+                    # 1. First check if this specific basket has 2+ distinct subjects (e.g. MDM-3: A, MDM-3: B)
+                    basket_group = cohort_baskets.get((cohort, family, basket_id), [])
+                    distinct_subs = {self._normalize(x.subject) for x in basket_group}
+                    if len(distinct_subs) >= 2:
+                        par_basket_key = f"par_{cohort.lower()}_{family.lower()}_{basket_id.lower()}"
+                        parallel_elective[par_basket_key].append(a)
+                        continue
+
+                    # 2. Otherwise check if the broader family for this cohort has 2+ distinct subjects (e.g. PE-1: A, PE-2: B)
+                    fam_group = cohort_family_baskets.get((cohort, family), [])
+                    distinct_fam_subs = {self._normalize(x.subject) for x in fam_group}
+                    if len(distinct_fam_subs) >= 2:
+                        par_basket_key = f"par_{cohort.lower()}_{family.lower()}"
+                        parallel_elective[par_basket_key].append(a)
+                        continue
+
+                # Merge into joint theory if explicitly tagged or part of combined_groups with matching subject+faculty
+                if a.joint_group_id:
+                    joint_theory[f"jg_{a.joint_group_id}"].append(a)
+                    continue
+
+                # Check if this subject is an Honors course shared across departments/classes
+                if family == "HONORS":
+                    # Honors course with same subject & faculty is scheduled ONCE for the combined cohort
+                    joint_theory[f"honors_{self._normalize(a.subject)}_{self._normalize(a.faculty)}"].append(a)
+                    continue
+
+                # Check if this subject is locked synchronously across multiple classes in the same cohort
+                cohort_lock_key = None
+                for con in self.constraints:
+                    con_cat = con.category.lower()
+                    con_intent = (con.intent or "").lower()
+                    if "lock" in con_intent or "fixed" in con_intent or "lock" in con_cat or "fixed" in con_cat or "institutional" in con_cat or "departmental" in con_cat:
+                        if con.subject_names and any(self._string_match(sn, a.subject) for sn in con.subject_names):
+                            if con.days and con.slot_numbers:
+                                cohort_lock_key = f"lock_{cohort}_{self._normalize(a.subject)}_{con.days[0]}_{con.slot_numbers[0]}"
+                                break
+                if cohort_lock_key:
+                    joint_theory[cohort_lock_key].append(a)
+                    continue
+
+                grp = self.group_lookup.get(a.class_name)
+                if grp and any(o.faculty == a.faculty and o.subject == a.subject and o.class_name in grp for o in self.assignments if o != a):
+                    joint_theory[f"cg_{self._normalize(a.subject)}_{self._normalize(a.faculty)}"].append(a)
+                    continue
+
+                # Standard class/division theory assignments remain independent per division.
+                # The CP-SAT solver ensures faculty are never double-booked and divisions have distinct timetables.
+                individual.append(a)
+            else:
+                individual.append(a)
+
+        # 1. Joint theory groups (explicitly linked cohorts, e.g. Open Elective or Combined Dept)
+        for key, group in joint_theory.items():
+            first = group[0]
+            all_cls: Set[str] = {a.class_name for a in group if a.class_name}
+            hours = max(a.weekly_hours for a in group)
+            for h in range(hours):
+                sessions.append(SolverSession(
+                    session_id=f"{key}_h{h}", faculty=first.faculty,
+                    subject=first.subject, subject_code=first.subject_code,
+                    type="Theory", batch="-", classes=sorted(all_cls),
+                    duration=1, session_index=h, joint_group_id=first.joint_group_id,
+                ))
+
+        # 2. Parallel electives: merge into ONE slot (different faculty teach
+        # different tracks simultaneously in the same time-slot across the cohort)
+        for p_id, group in parallel_elective.items():
+            unique_tracks = {}
+            for a in group:
+                track_k = (self._normalize(a.subject), self._normalize(a.faculty))
+                if track_k not in unique_tracks:
+                    unique_tracks[track_k] = a
+
+            track_assignments = list(unique_tracks.values())
+            subj = " | ".join(a.subject for a in track_assignments)
+            fac  = " | ".join(a.faculty for a in track_assignments)
+            code = " | ".join(a.subject_code or a.subject for a in track_assignments)
+            hours = max(a.weekly_hours for a in track_assignments)
+
+            # Strictly restrict parallel elective divisions to ONLY the target cohort year (e.g. TY only to TY)
+            target_cohort = self._get_cohort(track_assignments[0].class_name if track_assignments else "")
+            all_classes_set = {a.class_name for a in group if a.class_name and self._get_cohort(a.class_name) == target_cohort}
+            cohort_siblings = [c for c in self._get_cohort_siblings(track_assignments[0].class_name if track_assignments else "") if self._get_cohort(c) == target_cohort]
+            classes = sorted(list(all_classes_set | set(cohort_siblings)))
+
+            for h in range(hours):
+                sessions.append(SolverSession(
+                    session_id=f"{p_id}_h{h}", faculty=fac,
+                    subject=subj, subject_code=code, type="Theory",
+                    batch="-", classes=classes, duration=1, session_index=h,
+                ))
+
+        # 3. Individual (division-specific theory + labs)
+        for idx, a in enumerate(individual):
+            t = a.type.lower()
+            if t == "theory":
                 for h in range(a.weekly_hours):
                     sessions.append(SolverSession(
                         session_id=f"th_{idx}_h{h}", faculty=a.faculty,
                         subject=a.subject, subject_code=a.subject_code,
                         type="Theory", batch="-", classes=[a.class_name],
                         duration=1, session_index=h,
-                        parallel_group=par_gid,  # None for normal theory
                     ))
             elif t == "lab":
                 lab_slots = self.lab_slots_per_session
@@ -485,7 +609,6 @@ class TimetableCpSatSolver:
                         subject=a.subject, subject_code=a.subject_code,
                         type="Lab", batch=batch_label,
                         classes=[a.class_name], duration=lab_slots, session_index=b,
-                        parallel_group=None,
                     ))
 
         return sessions
@@ -506,6 +629,7 @@ class TimetableCpSatSolver:
         time_limit: Optional[float] = None,
         pre_assigned_faculty_busy: Optional[Set[Tuple[str, str, int]]] = None,
         pre_assigned_class_busy: Optional[Set[Tuple[str, str, int]]] = None,
+        pre_assigned_room_busy: Optional[Set[Tuple[str, str, int]]] = None,
     ) -> Optional[SolverResult]:
 
         if not sessions:
@@ -518,6 +642,7 @@ class TimetableCpSatSolver:
 
         pre_fac = pre_assigned_faculty_busy or set()
         pre_cls = pre_assigned_class_busy or set()
+        pre_rm_set = pre_assigned_room_busy or set()
 
         teaching_slots = [s for s in self.time_slots if not s.is_break and s.slot_number > 0]
         if not teaching_slots:
@@ -530,7 +655,7 @@ class TimetableCpSatSolver:
         for sess in sessions:
             opts: List[SessionOption] = []
             duration = sess.duration
-            fac_parts = [f.strip() for f in sess.faculty.split("|")]
+            fac_parts = [self._normalize(f) for f in sess.faculty.split("|") if f.strip()]
 
             for day in available_days:
                 for i, ts in enumerate(teaching_slots):
@@ -539,21 +664,22 @@ class TimetableCpSatSolver:
                     block = teaching_slots[i : i + duration]
                     block_slots = [b.slot_number for b in block]
 
-                    # Labs must be contiguous with no break inside
+                    # Labs must be strictly contiguous with no break / recess / lunch inside
                     if duration > 1:
-                        ok = all(
-                            block_slots[k] == block_slots[k - 1] + 1
-                            and block_slots[k] not in self.break_slots
-                            for k in range(1, duration)
-                        )
-                        if not ok:
+                        if not self._is_contiguous_block(block):
                             continue
 
                     # Skip pre-assigned busy
                     if any((fp, day, s) in pre_fac for fp in fac_parts for s in block_slots):
                         continue
-                    if any((cls, day, s) in pre_cls for cls in sess.classes for s in block_slots):
+                    if any((self._normalize(cls), day, s) in pre_cls for cls in sess.classes for s in block_slots):
                         continue
+
+                    # For single division theory, ensure division's home room isn't pre-assigned busy
+                    if sess.type == "Theory" and len(sess.classes) == 1:
+                        home_rm = self._normalize(self._get_home_classroom(sess.classes[0]))
+                        if any((home_rm, day, s) in pre_rm_set for s in block_slots):
+                            continue
 
                     penalty = 0
                     reasons: List[str] = []
@@ -601,7 +727,7 @@ class TimetableCpSatSolver:
                                 else:
                                     penalty += 1500
                                     reasons.append(f"Preference: outside preferred {day} {block_slots}")
-                        elif con.intent in ("fixed", "force") or (con.intent in ("parallel", "joint") and (con.days or con.slot_numbers)):
+                        elif con.intent in ("fixed", "force"):
                             if not (day_ok and slot_ok):
                                 valid = False
                                 break
@@ -641,10 +767,10 @@ class TimetableCpSatSolver:
                 sched_vars.append(sv)
                 model.Add(sum(row) == sv) if row else model.Add(sv == 0)
 
-        # Faculty: at most one session per (faculty_part, day, slot)
+        # Faculty: strictly at most one session per (normalized_faculty_part, day, slot)
         fac_slot: Dict[Tuple[str, str, int], List] = defaultdict(list)
         for i, (sess, opts) in enumerate(zip(sessions, session_options)):
-            fps = [f.strip() for f in sess.faculty.split("|")]
+            fps = [self._normalize(f) for f in sess.faculty.split("|") if f.strip()]
             for j, opt in enumerate(opts):
                 for fp in fps:
                     for s in opt.slots:
@@ -664,11 +790,12 @@ class TimetableCpSatSolver:
             for j, opt in enumerate(opts):
                 v = choice_vars[i][j]
                 for cls in sess.classes:
+                    norm_cls = self._normalize(cls)
                     for s in opt.slots:
                         if whole:
-                            th_vars[(cls, opt.day, s)].append(v)
+                            th_vars[(norm_cls, opt.day, s)].append(v)
                         else:
-                            bt_vars[(cls, opt.day, s, sess.batch)].append(v)
+                            bt_vars[(norm_cls, opt.day, s, sess.batch)].append(v)
 
         for vl in th_vars.values():
             if len(vl) > 1:
@@ -682,17 +809,57 @@ class TimetableCpSatSolver:
             if len(bvl) > 1:
                 model.AddAtMostOne(bvl)
 
+        # Home Classroom separation: No two single-division theory sessions using the same Home Classroom
+        home_room_slot: Dict[Tuple[str, str, int], List] = defaultdict(list)
+        for i, (sess, opts) in enumerate(zip(sessions, session_options)):
+            if sess.type == "Theory" and len(sess.classes) == 1:
+                hrm = self._normalize(self._get_home_classroom(sess.classes[0]))
+                for j, opt in enumerate(opts):
+                    for s in opt.slots:
+                        home_room_slot[(hrm, opt.day, s)].append(choice_vars[i][j])
+        for vl in home_room_slot.values():
+            if len(vl) > 1:
+                model.AddAtMostOne(vl)
+
         # Same subject taught at most once per (class, day) for theory
         sd_vars: Dict[Tuple[str, str, str], List] = defaultdict(list)
         for i, (sess, opts) in enumerate(zip(sessions, session_options)):
             if sess.type != "Theory":
                 continue
             for cls in sess.classes:
+                norm_cls = self._normalize(cls)
                 for j, opt in enumerate(opts):
-                    sd_vars[(cls, sess.subject, opt.day)].append(choice_vars[i][j])
+                    sd_vars[(norm_cls, sess.subject, opt.day)].append(choice_vars[i][j])
         for vl in sd_vars.values():
             if len(vl) > 1:
                 model.AddAtMostOne(vl)
+
+        # Simultaneous Theory & Lab Room constraints to guarantee zero classroom/lab double-booking
+        if self.classrooms:
+            max_classrooms = len(self.classrooms)
+            theory_slot_vars: Dict[Tuple[str, int], List] = defaultdict(list)
+            for i, (sess, opts) in enumerate(zip(sessions, session_options)):
+                if sess.type == "Theory":
+                    for j, opt in enumerate(opts):
+                        v = choice_vars[i][j]
+                        for s in opt.slots:
+                            theory_slot_vars[(opt.day, s)].append(v)
+            for (day, slot), tvl in theory_slot_vars.items():
+                if len(tvl) > max_classrooms:
+                    model.Add(sum(tvl) <= max_classrooms)
+
+        if self.labs_pool:
+            max_labs = len(self.labs_pool)
+            lab_slot_vars: Dict[Tuple[str, int], List] = defaultdict(list)
+            for i, (sess, opts) in enumerate(zip(sessions, session_options)):
+                if sess.type == "Lab":
+                    for j, opt in enumerate(opts):
+                        v = choice_vars[i][j]
+                        for s in opt.slots:
+                            lab_slot_vars[(opt.day, s)].append(v)
+            for (day, slot), lvl in lab_slot_vars.items():
+                if len(lvl) > max_labs:
+                    model.Add(sum(lvl) <= max_labs)
 
         # Daily workload spread (soft penalty to avoid clustering on one day)
         cd_vars: Dict[Tuple[str, str], List] = defaultdict(list)
@@ -728,56 +895,6 @@ class TimetableCpSatSolver:
                         model.Add(sum(vl) - max_d <= excess_var)
                         pen.append(excess_var * 200)
 
-        # ── Parallel Elective Hard Constraint ─────────────────────────────────────
-        # Sessions in the same parallel_group AND same session_index MUST be placed
-        # at the exact same (day, start_slot). This ensures MDM and OE (for example)
-        # happen simultaneously across divisions, with each division's own faculty.
-        par_grp_sessions: Dict[Tuple[str, int], List[Tuple[int, List[SessionOption]]]] = \
-            defaultdict(list)
-        for i, (sess, opts) in enumerate(zip(sessions, session_options)):
-            if sess.parallel_group is not None:
-                par_grp_sessions[(sess.parallel_group, sess.session_index)].append((i, opts))
-
-        for (pg, sidx), grp_list in par_grp_sessions.items():
-            if len(grp_list) < 2:
-                continue  # Nothing to link if only one session in group
-            # Collect the union of (day, start_slot) possibilities across all sessions in group
-            all_ds: Set[Tuple[str, int]] = set()
-            for (si, si_opts) in grp_list:
-                for opt in si_opts:
-                    all_ds.add((opt.day, opt.start_slot))
-
-            # Reference session is grp_list[0]; all others must share its (day, start_slot)
-            (si_ref, opts_ref) = grp_list[0]
-            ref_classes = set(sessions[si_ref].classes)
-            for (si_other, opts_other) in grp_list[1:]:
-                other_classes = set(sessions[si_other].classes)
-                # Only link parallel sessions across distinct divisions
-                if ref_classes & other_classes:
-                    continue
-                for (day, start_slot) in all_ds:
-                    ref_here = [
-                        choice_vars[si_ref][j]
-                        for j, opt in enumerate(opts_ref)
-                        if opt.day == day and opt.start_slot == start_slot
-                    ]
-                    other_here = [
-                        choice_vars[si_other][j]
-                        for j, opt in enumerate(opts_other)
-                        if opt.day == day and opt.start_slot == start_slot
-                    ]
-                    if ref_here and other_here:
-                        # Both have options here → enforce equality
-                        model.Add(sum(ref_here) == sum(other_here))
-                    elif ref_here and not other_here:
-                        # Ref can't pick this slot because other has no option for it
-                        for v in ref_here:
-                            model.Add(v == 0)
-                    elif other_here and not ref_here:
-                        # Other can't pick this slot because ref has no option for it
-                        for v in other_here:
-                            model.Add(v == 0)
-
         # Synchronize parallel lab batches for the same class
         # When Batch 1 and Batch 2 are scheduled in the same slot, reward (+500)
         lab_class_slot_batches: Dict[Tuple[str, str, int], Dict[str, List]] = defaultdict(lambda: defaultdict(list))
@@ -799,6 +916,88 @@ class TimetableCpSatSolver:
                     model.Add(sum(b1_list) >= sync_var)
                     model.Add(sum(b2_list) >= sync_var)
                     rew.append(sync_var * 500)
+
+        # Schedule Compaction & Gap Minimization (strictly eliminate free holes/empty periods in the middle of a class day)
+        valid_slots = sorted([ts.slot_number for ts in self.time_slots if not ts.is_break])
+        cls_day_slot_active: Dict[Tuple[str, str, int], List] = defaultdict(list)
+        for i, (sess, opts) in enumerate(zip(sessions, session_options)):
+            for j, opt in enumerate(opts):
+                v = choice_vars[i][j]
+                for cls in sess.classes:
+                    norm_cls = self._normalize(cls)
+                    for s in opt.slots:
+                        if s in valid_slots:
+                            cls_day_slot_active[(norm_cls, opt.day, s)].append(v)
+
+        for cls in {self._normalize(c) for s in sessions for c in s.classes}:
+            for day in available_days:
+                slot_active_vars = {}
+                for s in valid_slots:
+                    v_list = cls_day_slot_active[(cls, day, s)]
+                    if v_list:
+                        act_v = model.NewBoolVar(f"act_{cls}_{day}_{s}")
+                        model.Add(sum(v_list) >= act_v)
+                        model.Add(sum(v_list) <= len(v_list) * act_v)
+                        slot_active_vars[s] = act_v
+
+                # For any pair of active slots s_start < s_end, penalize every empty intermediate slot s_mid
+                for i_s in range(len(valid_slots)):
+                    s_start = valid_slots[i_s]
+                    if s_start not in slot_active_vars:
+                        continue
+                    for i_e in range(i_s + 2, len(valid_slots)):
+                        s_end = valid_slots[i_e]
+                        if s_end not in slot_active_vars:
+                            continue
+                        for i_m in range(i_s + 1, i_e):
+                            s_mid = valid_slots[i_m]
+                            v_mid = slot_active_vars.get(s_mid)
+                            gap_var = model.NewBoolVar(f"gap_{cls}_{day}_{s_start}_{s_mid}_{s_end}")
+                            if v_mid is not None:
+                                model.Add(gap_var >= slot_active_vars[s_start] + slot_active_vars[s_end] - v_mid - 1)
+                            else:
+                                model.Add(gap_var >= slot_active_vars[s_start] + slot_active_vars[s_end] - 1)
+                            pen.append(gap_var * 2500)
+
+        # Faculty Gap Minimization: avoid idle gaps between lectures for faculty members
+        all_fac_set = {self._normalize(f) for sess in sessions for f in sess.faculty.split("|") if f.strip()}
+        fac_day_slot_active: Dict[Tuple[str, str, int], List] = defaultdict(list)
+        for i, (sess, opts) in enumerate(zip(sessions, session_options)):
+            fps = [self._normalize(f) for f in sess.faculty.split("|") if f.strip()]
+            for j, opt in enumerate(opts):
+                v = choice_vars[i][j]
+                for fp in fps:
+                    for s in opt.slots:
+                        if s in valid_slots:
+                            fac_day_slot_active[(fp, opt.day, s)].append(v)
+
+        for fp in all_fac_set:
+            for day in available_days:
+                fac_active_vars = {}
+                for s in valid_slots:
+                    fv_list = fac_day_slot_active[(fp, day, s)]
+                    if fv_list:
+                        fac_act_v = model.NewBoolVar(f"fac_act_{fp}_{day}_{s}")
+                        model.Add(sum(fv_list) >= fac_act_v)
+                        model.Add(sum(fv_list) <= len(fv_list) * fac_act_v)
+                        fac_active_vars[s] = fac_act_v
+                for i_s in range(len(valid_slots)):
+                    s_start = valid_slots[i_s]
+                    if s_start not in fac_active_vars:
+                        continue
+                    for i_e in range(i_s + 2, len(valid_slots)):
+                        s_end = valid_slots[i_e]
+                        if s_end not in fac_active_vars:
+                            continue
+                        for i_m in range(i_s + 1, i_e):
+                            s_mid = valid_slots[i_m]
+                            v_mid = fac_active_vars.get(s_mid)
+                            f_gap = model.NewBoolVar(f"fgap_{fp}_{day}_{s_start}_{s_mid}_{s_end}")
+                            if v_mid is not None:
+                                model.Add(f_gap >= fac_active_vars[s_start] + fac_active_vars[s_end] - v_mid - 1)
+                            else:
+                                model.Add(f_gap >= fac_active_vars[s_start] + fac_active_vars[s_end] - 1)
+                            pen.append(f_gap * 800)
 
         if rew or pen:
             model.Maximize(sum(rew) - sum(pen))
@@ -839,6 +1038,8 @@ class TimetableCpSatSolver:
 
         rel_notes, unsched, sched_cnt = [], [], 0
         room_use: Dict[Tuple[str, int], Set[str]] = defaultdict(set)
+        for (p_rm, p_day, p_s) in pre_rm_set:
+            room_use[(p_day, p_s)].add(p_rm)
 
         for i, (sess, opts) in enumerate(zip(sessions, session_options)):
             placed = False
@@ -847,59 +1048,167 @@ class TimetableCpSatSolver:
                     placed = True
                     sched_cnt += 1
                     bl = "All" if sess.type == "Theory" else (sess.batch or "Batch 1")
-                    pool = self.labs_pool if sess.type == "Lab" else self.classrooms
                     rm = ""
-                    for r in pool:
-                        rn = r.get("name", "")
-                        if rn and rn not in room_use[(opt.day, opt.slots[0])]:
-                            rm = rn
-                            room_use[(opt.day, opt.slots[0])].add(rn)
-                            break
-                    if not rm:
-                        used_count = len(room_use[(opt.day, opt.slots[0])]) + 1
-                        rm = f"Lab {used_count}" if sess.type == "Lab" else f"Classroom {used_count}"
-                        room_use[(opt.day, opt.slots[0])].add(rm)
 
-                    for cls in sess.classes:
+                    # 1. Lab Practical Sessions: assign from lab pool
+                    if sess.type == "Lab":
+                        for r in self.labs_pool:
+                            rn = r.get("name", "")
+                            if rn and all(rn not in room_use[(opt.day, s)] for s in opt.slots):
+                                rm = rn
+                                break
+                        if not rm:
+                            l_idx = 1
+                            while any(f"Lab {l_idx}" in room_use[(opt.day, s)] for s in opt.slots):
+                                l_idx += 1
+                            rm = f"Lab {l_idx}"
                         for s in opt.slots:
-                            key = f"{opt.day}_{s}"
-                            rtt[cls][key].append([sess.subject, sess.faculty, rm, bl])
-                            existing = rdt[cls].get(key, {})
-                            if not existing or existing.get("subject") in ("Free", "Break", "Holiday"):
+                            room_use[(opt.day, s)].add(rm)
+
+                    # 2. Theory Sessions:
+                    else:
+                        if " | " in sess.subject:
+                            # Multi-track Parallel Electives (e.g. PE-1 | PE-2 | PE-3 or MDM-1 | MDM-2):
+                            # Assign each track to a separate classroom so all tracks run simultaneously in separate rooms
+                            sub_tracks = [st.strip() for st in sess.subject.split(" | ")]
+                            assigned_rooms = []
+
+                            # 1. Use the cohort divisions' home classrooms first (e.g. Room 301 for Div A, Room 302 for Div B, Room 303 for Div C)
+                            for cls_n in sess.classes:
+                                if len(assigned_rooms) >= len(sub_tracks):
+                                    break
+                                home_rm = self._get_home_classroom(cls_n)
+                                if home_rm and all(home_rm not in room_use[(opt.day, s)] for s in opt.slots) and home_rm not in assigned_rooms:
+                                    assigned_rooms.append(home_rm)
+
+                            # 2. If more tracks than assigned rooms, assign from available classrooms pool
+                            for r in self.classrooms:
+                                if len(assigned_rooms) >= len(sub_tracks):
+                                    break
+                                rn = r.get("name", "")
+                                if rn and all(rn not in room_use[(opt.day, s)] for s in opt.slots) and rn not in assigned_rooms:
+                                    assigned_rooms.append(rn)
+
+                            # 3. Fallback numbering if pool is smaller
+                            c_idx = 1
+                            while len(assigned_rooms) < len(sub_tracks):
+                                candidate = f"Room {300 + c_idx}"
+                                if all(candidate not in room_use[(opt.day, s)] for s in opt.slots) and candidate not in assigned_rooms:
+                                    assigned_rooms.append(candidate)
+                                c_idx += 1
+
+                            for r_assigned in assigned_rooms:
+                                for s in opt.slots:
+                                    room_use[(opt.day, s)].add(r_assigned)
+
+                            rm = " | ".join(assigned_rooms)
+                        elif len(sess.classes) > 1 or sess.joint_group_id:
+                            # Single joint subject across multiple classes in a shared hall
+                            for r in self.classrooms:
+                                rn = r.get("name", "")
+                                if rn and all(rn not in room_use[(opt.day, s)] for s in opt.slots):
+                                    rm = rn
+                                    break
+                            if not rm:
+                                c_idx = 1
+                                while any(f"Shared Hall {c_idx}" in room_use[(opt.day, s)] for s in opt.slots):
+                                    c_idx += 1
+                                rm = f"Shared Hall {c_idx}"
+                            for s in opt.slots:
+                                room_use[(opt.day, s)].add(rm)
+                        else:
+                            # Single class-level theory lecture: MUST strictly use the division's dedicated HOME CLASSROOM
+                            cls_name = sess.classes[0] if sess.classes else ""
+                            candidate_home = self._get_home_classroom(cls_name)
+                            if candidate_home and all(candidate_home not in room_use[(opt.day, s)] for s in opt.slots):
+                                rm = candidate_home
+                            else:
+                                for r in self.classrooms:
+                                    rn = r.get("name", "")
+                                    if rn and all(rn not in room_use[(opt.day, s)] for s in opt.slots):
+                                        rm = rn
+                                        break
+                                if not rm:
+                                    c_idx = 1
+                                    while any(f"Classroom {c_idx}" in room_use[(opt.day, s)] for s in opt.slots):
+                                        c_idx += 1
+                                    rm = f"Classroom {c_idx}"
+                            for s in opt.slots:
+                                room_use[(opt.day, s)].add(rm)
+
+                    # Build detailed batch & track mappings
+                    if " | " in sess.subject:
+                        sub_tracks = [st.strip() for st in sess.subject.split(" | ")]
+                        fac_tracks = [ft.strip() for ft in sess.faculty.split(" | ")]
+                        rm_tracks = [rt.strip() for rt in rm.split(" | ")]
+                        code_tracks = [ct.strip() for ct in sess.subject_code.split(" | ")]
+
+                        batches_list = []
+                        for idx_t, sub_t in enumerate(sub_tracks):
+                            batches_list.append({
+                                "subject": sub_t,
+                                "faculty": fac_tracks[idx_t] if idx_t < len(fac_tracks) else "",
+                                "room": rm_tracks[idx_t] if idx_t < len(rm_tracks) else (rm_tracks[0] if rm_tracks else ""),
+                                "batch": f"Track {idx_t + 1}",
+                                "type": "Elective",
+                                "code": code_tracks[idx_t] if idx_t < len(code_tracks) else "",
+                            })
+
+                        for cls in sess.classes:
+                            for s in opt.slots:
+                                key = f"{opt.day}_{s}"
+                                rtt[cls][key].append([sess.subject, sess.faculty, rm, bl])
                                 rdt[cls][key] = {
-                                    "subject": sess.subject, "faculty": sess.faculty,
-                                    "room": rm, "batch": bl, "type": sess.type,
-                                    "is_joint": len(sess.classes) > 1, "code": sess.subject_code,
-                                    "batches": [{
+                                    "subject": sess.subject,
+                                    "faculty": sess.faculty,
+                                    "room": rm,
+                                    "batch": bl,
+                                    "type": "Elective",
+                                    "is_joint": True,
+                                    "code": sess.subject_code,
+                                    "batches": batches_list,
+                                }
+                    else:
+                        for cls in sess.classes:
+                            for s in opt.slots:
+                                key = f"{opt.day}_{s}"
+                                rtt[cls][key].append([sess.subject, sess.faculty, rm, bl])
+                                existing = rdt[cls].get(key, {})
+                                if not existing or existing.get("subject") in ("Free", "Break", "Holiday"):
+                                    rdt[cls][key] = {
+                                        "subject": sess.subject, "faculty": sess.faculty,
+                                        "room": rm, "batch": bl, "type": sess.type,
+                                        "is_joint": len(sess.classes) > 1, "code": sess.subject_code,
+                                        "batches": [{
+                                            "subject": sess.subject, "faculty": sess.faculty,
+                                            "room": rm, "batch": bl, "type": sess.type,
+                                            "code": sess.subject_code,
+                                        }],
+                                    }
+                                else:
+                                    prev_batches = existing.get("batches", [{
+                                        "subject": existing.get("subject", ""),
+                                        "faculty": existing.get("faculty", ""),
+                                        "room": existing.get("room", ""),
+                                        "batch": existing.get("batch", ""),
+                                        "type": existing.get("type", ""),
+                                        "code": existing.get("code", ""),
+                                    }])
+                                    prev_batches.append({
                                         "subject": sess.subject, "faculty": sess.faculty,
                                         "room": rm, "batch": bl, "type": sess.type,
                                         "code": sess.subject_code,
-                                    }],
-                                }
-                            else:
-                                prev_batches = existing.get("batches", [{
-                                    "subject": existing.get("subject", ""),
-                                    "faculty": existing.get("faculty", ""),
-                                    "room": existing.get("room", ""),
-                                    "batch": existing.get("batch", ""),
-                                    "type": existing.get("type", ""),
-                                    "code": existing.get("code", ""),
-                                }])
-                                prev_batches.append({
-                                    "subject": sess.subject, "faculty": sess.faculty,
-                                    "room": rm, "batch": bl, "type": sess.type,
-                                    "code": sess.subject_code,
-                                })
-                                rdt[cls][key] = {
-                                    "subject": " | ".join(b["subject"] for b in prev_batches),
-                                    "faculty": " | ".join(b["faculty"] for b in prev_batches),
-                                    "room": " | ".join(b["room"] for b in prev_batches if b.get("room")),
-                                    "batch": " | ".join(b["batch"] for b in prev_batches if b.get("batch")),
-                                    "type": "Lab" if any(b.get("type") == "Lab" for b in prev_batches) else sess.type,
-                                    "is_joint": len(sess.classes) > 1,
-                                    "code": " | ".join(b["code"] for b in prev_batches if b.get("code")),
-                                    "batches": prev_batches,
-                                }
+                                    })
+                                    rdt[cls][key] = {
+                                        "subject": " | ".join(b["subject"] for b in prev_batches),
+                                        "faculty": " | ".join(b["faculty"] for b in prev_batches),
+                                        "room": " | ".join(b["room"] for b in prev_batches if b.get("room")),
+                                        "batch": " | ".join(b["batch"] for b in prev_batches if b.get("batch")),
+                                        "type": "Lab" if any(b.get("type") == "Lab" for b in prev_batches) else sess.type,
+                                        "is_joint": len(sess.classes) > 1,
+                                        "code": " | ".join(b["code"] for b in prev_batches if b.get("code")),
+                                        "batches": prev_batches,
+                                    }
                     for r in opt.penalty_reasons:
                         rel_notes.append(f"{sess.subject}: {r}")
                     break
@@ -976,6 +1285,7 @@ class TimetableCpSatSolver:
         pre_dt: Dict[str, Dict[str, Any]] = {c: {} for c in all_classes}
         fac_busy: Set[Tuple[str, str, int]] = set()
         cls_busy: Set[Tuple[str, str, int]] = set()
+        room_busy: Set[Tuple[str, str, int]] = set()
         ts_nums = {ts.slot_number for ts in self.time_slots}
 
         for c_name in all_classes:
@@ -992,8 +1302,10 @@ class TimetableCpSatSolver:
                         pre_tt[c_name][key] = []
                         pre_dt[c_name][key] = {"subject": "Free", "faculty": "", "batch": "", "type": "Free"}
 
+        used_fixed_slots: Set[Tuple[int, str, int]] = set()
+
         def try_place_fixed(sess: SolverSession) -> bool:
-            fps = [f.strip() for f in sess.faculty.split("|")]
+            fps = [self._normalize(f) for f in sess.faculty.split("|") if f.strip()]
             for con in fixed_cons:
                 if not self._constraint_matches_session(con, sess):
                     continue
@@ -1002,20 +1314,57 @@ class TimetableCpSatSolver:
                     continue
                 for day in tgt_days:
                     for sn in con.slot_numbers:
+                        if (id(con), day, sn) in used_fixed_slots:
+                            continue
                         block = [sn] if sess.duration == 1 else list(range(sn, sn + sess.duration))
                         if not all(s in ts_nums and s not in self.break_slots for s in block):
                             continue
+                        if sess.duration > 1:
+                            block_slot_objs = [s for s in self.time_slots if s.slot_number in block and not s.is_break]
+                            if len(block_slot_objs) != len(block) or not self._is_contiguous_block(block_slot_objs):
+                                continue
                         if any((fp, day, s) in fac_busy for fp in fps for s in block):
                             continue
-                        if any((cls, day, s) in cls_busy for cls in sess.classes for s in block):
+                        if any((self._normalize(cls), day, s) in cls_busy for cls in sess.classes for s in block):
                             continue
+
+                        # Determine unique non-colliding fixed room
+                        fixed_rm = ""
+                        if sess.type == "Theory":
+                            if len(sess.classes) == 1:
+                                cand_rm = self._get_home_classroom(sess.classes[0])
+                                if all((cand_rm, day, s) not in room_busy for s in block):
+                                    fixed_rm = cand_rm
+                            if not fixed_rm:
+                                for r in self.classrooms:
+                                    rn = r.get("name", "")
+                                    if rn and all((rn, day, s) not in room_busy for s in block):
+                                        fixed_rm = rn
+                                        break
+                            if not fixed_rm:
+                                c_idx = 1
+                                while any((f"Classroom {c_idx}", day, s) in room_busy for s in block):
+                                    c_idx += 1
+                                fixed_rm = f"Classroom {c_idx}"
+                        else:
+                            for r in self.labs_pool:
+                                rn = r.get("name", "")
+                                if rn and all((rn, day, s) not in room_busy for s in block):
+                                    fixed_rm = rn
+                                    break
+                            if not fixed_rm:
+                                l_idx = 1
+                                while any((f"Lab {l_idx}", day, s) in room_busy for s in block):
+                                    l_idx += 1
+                                fixed_rm = f"Lab {l_idx}"
+
                         for cls in sess.classes:
                             for s in block:
                                 key = f"{day}_{s}"
-                                pre_tt[cls][key].append([sess.subject, sess.faculty, "", "All"])
+                                pre_tt[cls][key].append([sess.subject, sess.faculty, fixed_rm, "All"])
                                 pre_dt[cls][key] = {
                                     "subject": sess.subject, "faculty": sess.faculty,
-                                    "room": "", "batch": "All", "type": sess.type,
+                                    "room": fixed_rm, "batch": "All", "type": sess.type,
                                     "is_joint": len(sess.classes) > 1, "code": sess.subject_code,
                                 }
                         for fp in fps:
@@ -1023,7 +1372,10 @@ class TimetableCpSatSolver:
                                 fac_busy.add((fp, day, s))
                         for cls in sess.classes:
                             for s in block:
-                                cls_busy.add((cls, day, s))
+                                cls_busy.add((self._normalize(cls), day, s))
+                        for s in block:
+                            room_busy.add((fixed_rm, day, s))
+                        used_fixed_slots.add((id(con), day, sn))
                         return True
             return False
 
@@ -1032,44 +1384,51 @@ class TimetableCpSatSolver:
             if not try_place_fixed(sess):
                 remaining.append(sess)
 
+        # Remaining sessions are flexible; strip fixed/force constraints so they can use any free slot
+        remaining_constraints = [c for c in active_constraints if c.intent not in ("fixed", "force")]
+
         # ---- Phase 2: Multi-stage CP-SAT ----------------------------- #
         p_time = max(5.0, self.time_limit_seconds * 0.5)
 
         # Stage 1: Try 100% Hard + Strict Soft + 100% Hours
         res = self._solve_model(
-            sessions=remaining, active_constraints=active_constraints,
+            sessions=remaining, active_constraints=remaining_constraints,
             holidays=holidays, available_days=available_days,
             strict_soft=True, require_all_sessions=True,
             start_time=start_time, time_limit=p_time,
             pre_assigned_faculty_busy=fac_busy,
             pre_assigned_class_busy=cls_busy,
+            pre_assigned_room_busy=room_busy,
         )
 
         # Stage 2: Optimize Soft constraints while keeping 100% Hard + 100% Hours
         if res is None:
             elapsed = time.monotonic() - start_time
             res = self._solve_model(
-                sessions=remaining, active_constraints=active_constraints,
+                sessions=remaining, active_constraints=remaining_constraints,
                 holidays=holidays, available_days=available_days,
                 strict_soft=False, require_all_sessions=True,
                 start_time=start_time,
                 time_limit=max(5.0, self.time_limit_seconds - elapsed),
                 pre_assigned_faculty_busy=fac_busy,
                 pre_assigned_class_busy=cls_busy,
+                pre_assigned_room_busy=room_busy,
             )
 
         # Stage 3: Diagnostic fallback if hard constraints themselves physically collide
         if res is None:
             elapsed = time.monotonic() - start_time
             res = self._solve_model(
-                sessions=remaining, active_constraints=active_constraints,
+                sessions=remaining, active_constraints=remaining_constraints,
                 holidays=holidays, available_days=available_days,
                 strict_soft=False, require_all_sessions=False,
                 start_time=start_time,
                 time_limit=max(5.0, self.time_limit_seconds - elapsed),
                 pre_assigned_faculty_busy=fac_busy,
                 pre_assigned_class_busy=cls_busy,
+                pre_assigned_room_busy=room_busy,
             )
+
 
         if res is None or res.status not in ("OPTIMAL", "FEASIBLE"):
             return SolverResult(

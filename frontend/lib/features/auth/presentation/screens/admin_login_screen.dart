@@ -25,7 +25,7 @@ class AdminLoginScreen extends StatefulWidget {
 
 class _AdminLoginScreenState extends State<AdminLoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController(text: 'admin@enosis.edu.in');
+  final _emailController = TextEditingController(text: 'enosissofficial@gmail.com');
   final _passwordController = TextEditingController();
   final _authRepository = AuthRepository();
   bool _obscurePassword = true;
@@ -112,26 +112,28 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
               Text('Admin Password Reset', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ],
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Enter your registered Administrator email address. A new secure temporary password will be dispatched to your inbox.',
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: resetEmailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Admin Email Address',
-                  hintText: 'admin@enosis.edu.in',
-                  prefixIcon: Icon(Icons.email_outlined),
-                  border: OutlineInputBorder(),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Enter your registered Administrator email address. A new secure temporary password will be dispatched to your inbox.',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+                TextField(
+                  controller: resetEmailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Admin Email Address',
+                    hintText: 'enosissofficial@gmail.com',
+                    prefixIcon: Icon(Icons.email_outlined),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -334,7 +336,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         // Admin Email Field
                         AppTextField(
                           label: 'Admin Email ID',
-                          hint: 'admin@enosis.edu.in',
+                          hint: 'enosissofficial@gmail.com',
                           controller: _emailController,
                           prefixIcon: Icons.badge_outlined,
                           keyboardType: TextInputType.emailAddress,

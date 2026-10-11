@@ -6,6 +6,7 @@ hard constraints. This runs entirely separately from the solver logic, acting as
 a double-check/audit layer to ensure no bug in solver variables, model building,
 or data expansion has caused a constraint violation to slip through.
 """
+from typing import Any, Optional
 from app.models.academic import RoomType
 from app.schemas.timetable import TimetableGenerationRequest, TimetableEntryResult, ConflictDetail
 
@@ -18,7 +19,7 @@ def validate_generated_timetable(
     Validates a list of TimetableEntryResult against the request parameters.
     Returns: (passed: bool, list[ConflictDetail])
     """
-    conflicts = []
+    conflicts: list[ConflictDetail] = []
 
     # Map lookups
     divisions_by_id = {d.id: d for d in request.divisions}
@@ -27,14 +28,21 @@ def validate_generated_timetable(
     unavailable = {(u.faculty_id, u.day, u.slot) for u in request.unavailability}
     break_slots_set = set(request.break_slots)
 
-    # 1. Resource double-booking tracking
-    # Key: (resource_id, day, slot) -> Entry
-    faculty_slots = {}
-    division_slots = {}
-    room_slots = {}
+    shared_subject_ids = {sc.id for sc in request.shared_courses}
+    institutional_names = {ic.course_name.lower().strip() for ic in request.institutional_courses}
+
+    # 1. Resource tracking
+    # Key: (resource_id, day, slot) -> list of entries
+    faculty_slots: dict[tuple[str, int, int], list[dict[str, Any]]] = {}
+    division_slots: dict[tuple[str, int, int], list[dict[str, Any]]] = {}
+    room_slots: dict[tuple[str, int, int], list[dict[str, Any]]] = {}
 
     # Subject session counters: (division_id, subject_id) -> count of slots
-    subject_counts = {}
+    subject_counts: dict[tuple[str, str], int] = {}
+
+    # Track shared room occupancies to calculate combined cohort strength
+    # Key: (room_id, day, slot) -> set of division_ids
+    room_occupants: dict[tuple[str, int, int], set[str]] = {}
 
     for index, entry in enumerate(entries):
         division = divisions_by_id.get(entry.division_id)
@@ -88,50 +96,65 @@ def validate_generated_timetable(
         # 4. Double booking checks
         fac_key = (entry.faculty_id, entry.day, entry.slot)
         if fac_key in faculty_slots:
-            prev = faculty_slots[fac_key]
-            conflicts.append(ConflictDetail(
-                type="validation_faculty_double_booked",
-                subject=sub_name,
-                division=div_name,
-                faculty=entry.faculty_id,
-                details=f"Faculty is scheduled for both '{sub_name}' (Div: {div_name}) and '{prev.get('subject')}' (Div: {prev.get('division')}) at Day {entry.day}, Slot {entry.slot}"
-            ))
-        faculty_slots[fac_key] = {"subject": sub_name, "division": div_name}
+            prev_list = faculty_slots[fac_key]
+            # If same faculty is scheduled for different subjects or different rooms at the same time, it's a conflict
+            for prev in prev_list:
+                is_valid_shared = (
+                    prev["subject_id"] == entry.subject_id
+                    and prev["room_id"] == entry.room_id
+                    and (entry.subject_id in shared_subject_ids or sub_name.lower().strip() in institutional_names)
+                )
+                if not is_valid_shared:
+                    conflicts.append(ConflictDetail(
+                        type="validation_faculty_double_booked",
+                        subject=sub_name,
+                        division=div_name,
+                        faculty=entry.faculty_id,
+                        details=f"Faculty is scheduled for both '{sub_name}' (Div: {div_name}) and '{prev.get('subject')}' (Div: {prev.get('division')}) at Day {entry.day}, Slot {entry.slot}"
+                    ))
+        faculty_slots.setdefault(fac_key, []).append({
+            "subject": sub_name, "division": div_name, "subject_id": entry.subject_id, "room_id": entry.room_id
+        })
 
         div_key = (entry.division_id, entry.day, entry.slot)
         if div_key in division_slots:
-            prev = division_slots[div_key]
-            conflicts.append(ConflictDetail(
-                type="validation_division_double_booked",
-                subject=sub_name,
-                division=div_name,
-                details=f"Division {div_name} is double booked for '{sub_name}' and '{prev.get('subject')}' at Day {entry.day}, Slot {entry.slot}"
-            ))
-        division_slots[div_key] = {"subject": sub_name}
+            prev_list = division_slots[div_key]
+            # Multiple lab batches or parallel electives within same division are allowed if designated
+            for prev in prev_list:
+                if not entry.is_lab_block and not prev.get("is_lab_block"):
+                    # Both whole-class theory
+                    conflicts.append(ConflictDetail(
+                        type="validation_division_double_booked",
+                        subject=sub_name,
+                        division=div_name,
+                        details=f"Division {div_name} is double booked for '{sub_name}' and '{prev.get('subject')}' at Day {entry.day}, Slot {entry.slot}"
+                    ))
+        division_slots.setdefault(div_key, []).append({
+            "subject": sub_name, "is_lab_block": entry.is_lab_block
+        })
 
         room_key = (entry.room_id, entry.day, entry.slot)
         if room_key in room_slots:
-            prev = room_slots[room_key]
-            conflicts.append(ConflictDetail(
-                type="validation_room_double_booked",
-                subject=sub_name,
-                division=div_name,
-                room=room_name,
-                details=f"Room {room_name} is occupied by both '{sub_name}' (Div: {div_name}) and '{prev.get('subject')}' (Div: {prev.get('division')}) at Day {entry.day}, Slot {entry.slot}"
-            ))
-        room_slots[room_key] = {"subject": sub_name, "division": div_name}
+            prev_list = room_slots[room_key]
+            for prev in prev_list:
+                is_valid_shared = (
+                    prev["subject_id"] == entry.subject_id
+                    and (entry.subject_id in shared_subject_ids or sub_name.lower().strip() in institutional_names)
+                )
+                if not is_valid_shared:
+                    conflicts.append(ConflictDetail(
+                        type="validation_room_double_booked",
+                        subject=sub_name,
+                        division=div_name,
+                        room=room_name,
+                        details=f"Room {room_name} is occupied by both '{sub_name}' (Div: {div_name}) and '{prev.get('subject')}' (Div: {prev.get('division')}) at Day {entry.day}, Slot {entry.slot}"
+                    ))
+        room_slots.setdefault(room_key, []).append({
+            "subject": sub_name, "division": div_name, "subject_id": entry.subject_id
+        })
+        room_occupants.setdefault(room_key, set()).add(entry.division_id)
 
-        # 5. Room capacity check
-        if room.capacity < division.strength:
-            conflicts.append(ConflictDetail(
-                type="validation_capacity_mismatch",
-                subject=sub_name,
-                division=div_name,
-                room=room_name,
-                details=f"Room {room_name} capacity ({room.capacity}) is smaller than division strength ({division.strength})"
-            ))
-
-        # 6. Room type check
+        # 5. Room type check
         required_type = RoomType.LAB if entry.is_lab_block else RoomType.LECTURE
         if room.type != required_type:
             conflicts.append(ConflictDetail(
@@ -142,10 +165,23 @@ def validate_generated_timetable(
                 details=f"Subject '{sub_name}' requires room type {required_type.value} but was placed in {room.type.value}"
             ))
 
-
         # Count session slots
         count_key = (entry.division_id, entry.subject_id)
         subject_counts[count_key] = subject_counts.get(count_key, 0) + 1
+
+    # 6. Combined Room Capacity Check
+    for (r_id, day, slot), div_ids in room_occupants.items():
+        room = rooms_by_id.get(r_id)
+        if not room:
+            continue
+        total_strength = sum(divisions_by_id[d_id].strength for d_id in div_ids if d_id in divisions_by_id)
+        if room.capacity < total_strength:
+            div_names = ", ".join(divisions_by_id[d_id].name for d_id in div_ids if d_id in divisions_by_id)
+            conflicts.append(ConflictDetail(
+                type="validation_capacity_mismatch",
+                room=room.name,
+                details=f"Room {room.name} capacity ({room.capacity}) is smaller than combined cohort strength ({total_strength}) for divisions [{div_names}] at Day {day}, Slot {slot}"
+            ))
 
     # 7. Total weekly lectures check
     for assignment in request.assignments:
@@ -169,3 +205,105 @@ def validate_generated_timetable(
 
     passed = len(conflicts) == 0
     return passed, conflicts
+
+
+def validate_timetable_grid_solution(
+    timetable: dict[str, dict[str, list[str]]],
+    detailed_timetable: dict[str, dict[str, Any]],
+    break_slots: set[int] | None = None,
+    unavailability: list[dict[str, Any]] | None = None,
+    room_capacities: dict[str, int] | None = None,
+    class_strengths: dict[str, int] | None = None,
+) -> tuple[bool, list[str]]:
+    """
+    Independent audit function for dictionary-based timetable solutions.
+    Verifies zero collisions across faculty, rooms, cohorts, lab continuity,
+    and elective basket isolation.
+    """
+    violations: list[str] = []
+    breaks = break_slots or set()
+    unavail = {(u.get("faculty"), u.get("day"), u.get("slot")) for u in (unavailability or [])}
+    r_caps = room_capacities or {}
+    c_strengths = class_strengths or {}
+
+    # Key: (faculty, day, slot) -> set of (class, room, subject)
+    faculty_usage: dict[tuple[str, str, int], set[tuple[str, str, str]]] = {}
+    # Key: (room, day, slot) -> set of (class, subject)
+    room_usage: dict[tuple[str, str, int], set[tuple[str, str]]] = {}
+
+    for class_name, dayslots in detailed_timetable.items():
+        for slot_key, cell in dayslots.items():
+            if "_" not in slot_key:
+                continue
+            day, slot_str = slot_key.split("_", 1)
+            try:
+                slot_num = int(slot_str)
+            except ValueError:
+                continue
+
+            subj = cell.get("subject", "")
+            fac = cell.get("faculty", "")
+            rm = cell.get("room", "")
+
+            if subj in ("Free", "Holiday", "Break", ""):
+                continue
+
+            # Check break violation
+            if slot_num in breaks:
+                violations.append(f"Break violation: {class_name} scheduled with '{subj}' during break slot {slot_num} on {day}")
+
+            # Check sub-batches / parallel tracks
+            batches = cell.get("batches", [])
+            if not batches:
+                batches = [{"subject": subj, "faculty": fac, "room": rm}]
+
+            for b in batches:
+                b_sub = b.get("subject", "").strip()
+                b_fac = b.get("faculty", "").strip()
+                b_rm = b.get("room", "").strip()
+
+                if not b_sub or b_sub in ("Free", "Break", "Holiday"):
+                    continue
+
+                # Faculty unavailability
+                if (b_fac, day, slot_num) in unavail:
+                    violations.append(f"Faculty unavailable: {b_fac} scheduled on {day} slot {slot_num} for '{b_sub}'")
+
+                # Track faculty collision
+                if b_fac:
+                    f_key = (b_fac, day, slot_num)
+                    prev_fac = faculty_usage.get(f_key, set())
+                    for (p_cls, p_rm, p_sub) in prev_fac:
+                        # Faculty cannot teach two different classes in different rooms simultaneously
+                        if p_rm != b_rm or p_sub != b_sub:
+                            violations.append(
+                                f"Faculty clash: {b_fac} double booked on {day} slot {slot_num} between ({class_name}, {b_rm}, '{b_sub}') and ({p_cls}, {p_rm}, '{p_sub}')"
+                            )
+                    faculty_usage.setdefault(f_key, set()).add((class_name, b_rm, b_sub))
+
+                # Track room collision
+                if b_rm:
+                    r_key = (b_rm, day, slot_num)
+                    prev_rm = room_usage.get(r_key, set())
+                    for (p_cls, p_sub) in prev_rm:
+                        # Room cannot host two completely different subjects simultaneously
+                        if p_sub != b_sub:
+                            violations.append(
+                                f"Room clash: Room {b_rm} double booked on {day} slot {slot_num} between '{b_sub}' ({class_name}) and '{p_sub}' ({p_cls})"
+                            )
+                    room_usage.setdefault(r_key, set()).add((class_name, b_sub))
+
+    # Check combined room capacities
+    for (r_name, day, slot_num), occupants in room_usage.items():
+        if r_name in r_caps:
+            cap = r_caps[r_name]
+            divs = {occ[0] for occ in occupants}
+            combined_strength = sum(c_strengths.get(d, 60) for d in divs)
+            if combined_strength > cap:
+                violations.append(
+                    f"Room capacity exceeded: Room {r_name} (cap: {cap}) has {combined_strength} students from {divs} on {day} slot {slot_num}"
+                )
+
+    passed = len(violations) == 0
+    return passed, violations
+

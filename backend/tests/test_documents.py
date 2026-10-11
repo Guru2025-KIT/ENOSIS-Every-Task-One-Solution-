@@ -30,14 +30,14 @@ def _auth_headers(token: str) -> dict:
 
 
 def test_upload_returns_503_when_not_configured(faculty_user):
-    """This is the REAL behavior right now, with no Cloudinary
-    credentials set — not a mock, an actual honest test of current state."""
+    """The route returns a clear error when storage is unavailable."""
     _, token = faculty_user
-    response = client.post(
-        "/documents/upload",
-        files={"file": ("test.pdf", io.BytesIO(b"fake pdf bytes"), "application/pdf")},
-        headers=_auth_headers(token),
-    )
+    with patch("app.api.routes.documents.is_configured", return_value=False):
+        response = client.post(
+            "/documents/upload",
+            files={"file": ("test.pdf", io.BytesIO(b"fake pdf bytes"), "application/pdf")},
+            headers=_auth_headers(token),
+        )
     assert response.status_code == 503
     assert "isn't configured" in response.json()["detail"].lower()
 

@@ -266,6 +266,14 @@ class _StudentTrajectoryChartCardState extends State<StudentTrajectoryChartCard>
   }
 }
 
+class _ChartNode {
+  final Offset point;
+  final double value;
+  final String label;
+
+  _ChartNode({required this.point, required this.value, required this.label});
+}
+
 class _StudentTrajectoryChartPainter extends CustomPainter {
   final MetricTrajectory trajectory;
   final Color color;
@@ -277,7 +285,7 @@ class _StudentTrajectoryChartPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    const leftPadding = 32.0;
+    const leftPadding = 36.0;
     const rightPadding = 24.0;
     const topPadding = 24.0;
     const bottomPadding = 32.0;
@@ -286,7 +294,7 @@ class _StudentTrajectoryChartPainter extends CustomPainter {
     final chartHeight = size.height - topPadding - bottomPadding;
 
     final gridPaint = Paint()
-      ..color = Colors.grey.withValues(alpha: 0.2)
+      ..color = Colors.grey.withValues(alpha: 0.18)
       ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke;
 
@@ -306,10 +314,11 @@ class _StudentTrajectoryChartPainter extends CustomPainter {
       textPainter.paint(canvas, Offset(leftPadding - textPainter.width - 6, y - textPainter.height / 2));
     }
 
+    // Symmetrical coordinates across chart width
     final xCoords = [
-      leftPadding + chartWidth * 0.15,
+      leftPadding + chartWidth * 0.16,
       leftPadding + chartWidth * 0.50,
-      leftPadding + chartWidth * 0.85,
+      leftPadding + chartWidth * 0.84,
     ];
 
     final xLabels = ['PRE Baseline', 'MID Progress', 'END Outcome'];
@@ -328,7 +337,7 @@ class _StudentTrajectoryChartPainter extends CustomPainter {
       textPainter.paint(canvas, Offset(xCoords[i] - textPainter.width / 2, size.height - bottomPadding + 10));
     }
 
-    final points = <Offset>[];
+    final nodes = <_ChartNode>[];
     final values = [trajectory.pre, trajectory.mid, trajectory.end];
 
     for (int i = 0; i < 3; i++) {
@@ -336,13 +345,17 @@ class _StudentTrajectoryChartPainter extends CustomPainter {
       if (val != null) {
         final clamped = val.clamp(1.0, 5.0);
         final y = topPadding + chartHeight - ((clamped - 1.0) / 4.0) * chartHeight;
-        points.add(Offset(xCoords[i], y));
+        nodes.add(_ChartNode(
+          point: Offset(xCoords[i], y),
+          value: val,
+          label: xLabels[i],
+        ));
       }
     }
 
-    if (points.isEmpty) {
+    if (nodes.isEmpty) {
       const noDataSpan = TextSpan(
-        text: 'Assessment Data Incomplete',
+        text: 'Assessment Data Pending',
         style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontStyle: FontStyle.italic),
       );
       final noDataPainter = TextPainter(text: noDataSpan, textDirection: TextDirection.ltr);
@@ -351,20 +364,20 @@ class _StudentTrajectoryChartPainter extends CustomPainter {
       return;
     }
 
-    if (points.length >= 2) {
+    if (nodes.length >= 2) {
       final path = Path();
-      path.moveTo(points.first.dx, points.first.dy);
+      path.moveTo(nodes.first.point.dx, nodes.first.point.dy);
 
-      for (int i = 1; i < points.length; i++) {
-        final prev = points[i - 1];
-        final curr = points[i];
+      for (int i = 1; i < nodes.length; i++) {
+        final prev = nodes[i - 1].point;
+        final curr = nodes[i].point;
         final cx = (prev.dx + curr.dx) / 2;
         path.cubicTo(cx, prev.dy, cx, curr.dy, curr.dx, curr.dy);
       }
 
       final fillPath = Path.from(path);
-      fillPath.lineTo(points.last.dx, topPadding + chartHeight);
-      fillPath.lineTo(points.first.dx, topPadding + chartHeight);
+      fillPath.lineTo(nodes.last.point.dx, topPadding + chartHeight);
+      fillPath.lineTo(nodes.first.point.dx, topPadding + chartHeight);
       fillPath.close();
 
       final areaPaint = Paint()
@@ -390,9 +403,9 @@ class _StudentTrajectoryChartPainter extends CustomPainter {
       canvas.drawPath(path, strokePaint);
     }
 
-    for (int i = 0; i < points.length; i++) {
-      final pt = points[i];
-      final val = values[i]!;
+    for (final node in nodes) {
+      final pt = node.point;
+      final val = node.value;
 
       canvas.drawCircle(pt, 8.0, Paint()..color = color.withValues(alpha: 0.25));
       canvas.drawCircle(pt, 5.5, Paint()..color = color);

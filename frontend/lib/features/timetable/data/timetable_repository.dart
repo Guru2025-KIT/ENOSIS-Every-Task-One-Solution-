@@ -310,6 +310,11 @@ class TimetableRepository {
     return response.statusCode == 200;
   }
 
+  Future<bool> clearAllRooms() async {
+    final response = await ApiClient.delete('/timetable/rooms/clear-all');
+    return response.statusCode == 200;
+  }
+
   Future<List<int>> downloadRoomExcelTemplate() async {
     final response = await ApiClient.get('/timetable/rooms/template-excel');
     if (response.statusCode == 200) {
@@ -512,6 +517,26 @@ class TimetableRepository {
       return response.bodyBytes;
     }
     throw TimetableException('Failed to export Excel');
+  }
+
+  Future<Map<String, dynamic>> fetchAiAdvisor({
+    required List<dynamic> assignments,
+    required List<dynamic> lockedSlots,
+    required List<dynamic> divisions,
+    required List<String> workingDays,
+    required int periodsPerDay,
+  }) async {
+    final response = await ApiClient.postJson('/timetable/ai-advisor', {
+      'assignments': assignments,
+      'locked_slots': lockedSlots,
+      'divisions': divisions,
+      'working_days': workingDays,
+      'periods_per_day': periodsPerDay,
+    });
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw TimetableException('Failed to fetch AI Advisor recommendations');
   }
 }
 

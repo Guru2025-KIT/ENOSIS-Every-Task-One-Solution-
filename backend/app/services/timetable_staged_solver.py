@@ -249,6 +249,16 @@ class StagedTimetableSolver:
         if not self.lab_rooms:
             self.lab_rooms = list(self.rooms)
 
+        # Dedicated base/home classroom per division for all regular class-level theory lectures
+        self.home_rooms: dict[str, Room] = {}
+        sorted_divs = sorted(self.divisions, key=lambda d: d.name)
+        for i, d in enumerate(sorted_divs):
+            if self.lecture_rooms:
+                suitable_rooms = [r for r in self.lecture_rooms if r.capacity >= (d.strength or 0)]
+                if not suitable_rooms:
+                    suitable_rooms = self.lecture_rooms
+                self.home_rooms[d.id] = suitable_rooms[i % len(suitable_rooms)]
+
         # Faculty unavailable lookup: faculty_id -> set of (day, slot)
         self.faculty_unavail: dict[str, set[tuple[int, int]]] = defaultdict(set)
         for u in self.unavailabilities:
@@ -524,21 +534,24 @@ class StagedTimetableSolver:
                 )
             model.Add(sum(v_list) == 1)
 
-        # Constraint 2: Parallel lab batches must start at identical (day, slot) in DIFFERENT rooms
+        # Constraint 2: Parallel lab batches can start at identical (day, slot) in DIFFERENT rooms ONLY if they have distinct faculty
         for key, batch_sessions in parallel_groups.items():
             if len(batch_sessions) > 1:
-                ref = batch_sessions[0]
-                for other in batch_sessions[1:]:
-                    for day in range(self.working_days):
-                        for slot in range(self.periods_per_day):
-                            ref_vars = [vars_map[(ref.id, day, slot, r)] for (d, s_slot, r) in session_valid_placements[ref.id] if d == day and s_slot == slot]
-                            oth_vars = [vars_map[(other.id, day, slot, r)] for (d, s_slot, r) in session_valid_placements[other.id] if d == day and s_slot == slot]
-                            if ref_vars and oth_vars:
-                                model.Add(sum(ref_vars) == sum(oth_vars))
-                            elif ref_vars and not oth_vars:
-                                model.Add(sum(ref_vars) == 0)
-                            elif oth_vars and not ref_vars:
-                                model.Add(sum(oth_vars) == 0)
+                fac_set = {b.faculty_id for b in batch_sessions}
+                # If all batches have distinct faculty, encourage / require parallel scheduling
+                if len(fac_set) == len(batch_sessions):
+                    ref = batch_sessions[0]
+                    for other in batch_sessions[1:]:
+                        for day in range(self.working_days):
+                            for slot in range(self.periods_per_day):
+                                ref_vars = [vars_map[(ref.id, day, slot, r)] for (d, s_slot, r) in session_valid_placements[ref.id] if d == day and s_slot == slot]
+                                oth_vars = [vars_map[(other.id, day, slot, r)] for (d, s_slot, r) in session_valid_placements[other.id] if d == day and s_slot == slot]
+                                if ref_vars and oth_vars:
+                                    model.Add(sum(ref_vars) == sum(oth_vars))
+                                elif ref_vars and not oth_vars:
+                                    model.Add(sum(ref_vars) == 0)
+                                elif oth_vars and not ref_vars:
+                                    model.Add(sum(oth_vars) == 0)
 
         # Constraint 3: No room double-booking in Stage 2
         for room in self.rooms:
@@ -568,10 +581,9 @@ class StagedTimetableSolver:
                     if len(covering_vars) > 1:
                         model.Add(sum(covering_vars) <= 1)
 
-        # Constraint 5: lab_daily (at most 1 lab block per division per day)
+        # Constraint 5: lab_daily (at most 2 lab blocks per division per day)
         for div in self.divisions:
             div_labs = [s for s in lab_and_shared if s.session_type == "lab" and s.division_ids[0] == div.id]
-            # Group by parallel batches to count 1 per lab block
             unique_blocks: dict[tuple[str, int], StagedSession] = {}
             for s in div_labs:
                 unique_blocks[(s.subject_id, s.occurrence_index)] = s
@@ -582,8 +594,8 @@ class StagedTimetableSolver:
                     for (d, slot, r) in session_valid_placements[s.id]:
                         if d == day:
                             day_vars.append(vars_map[(s.id, d, slot, r)])
-                if len(day_vars) > 1:
-                    model.Add(sum(day_vars) <= 1)
+                if len(day_vars) > 2:
+                    model.Add(sum(day_vars) <= 2)
 
         # Solve Stage 2
         solver = cp_model.CpSolver()
@@ -668,6 +680,8 @@ class StagedTimetableSolver:
             valid_opts: dict[str, list[tuple[int, int, str]]] = defaultdict(list)
             penalties: list[cp_model.LinearExpr] = []
 
+            home_room = self.home_rooms.get(div_id)
+
             for s in div_sessions:
                 for (day, slot) in free_slots:
                     # Check faculty unavail
@@ -688,6 +702,10 @@ class StagedTimetableSolver:
                         var = model.NewBoolVar(f"Y_{s.id}_{day}_{slot}_{room.id}")
                         y_vars[var_key] = var
                         valid_opts[s.id].append((day, slot, room.id))
+
+                        # Home classroom preference (penalize non-home room so all class-level lectures stay in 1 room)
+                        if home_room and room.id != home_room.id:
+                            penalties.append(var * 500)
 
                         # Soft penalties (e.g. displacement penalty in regeneration)
                         if self.locked_hint_entries:

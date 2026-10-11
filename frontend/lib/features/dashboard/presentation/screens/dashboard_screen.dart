@@ -290,7 +290,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               crossAxisCount: 2,
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
-              childAspectRatio: 1.35,
+              childAspectRatio: 1.22,
             ),
             itemCount: summaryMetrics.length,
             itemBuilder: (context, index) {
@@ -1154,7 +1154,7 @@ class _SummaryMetricCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),

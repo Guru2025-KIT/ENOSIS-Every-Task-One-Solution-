@@ -1,72 +1,72 @@
-"""
-Thin wrapper around the Groq SDK (free-tier, fast Llama inference).
-Deliberately minimal — this is groundwork for the future Conversational
-AI Assistant module (Phase 17+ in the original plan), NOT the assistant
-itself. No tool-calling, no agent orchestration, no memory — just "can we
-send a message and get a real LLM response back." Everything else in the
-original AI Assistant spec (tool calling, Gmail integration, document
-generation, etc.) builds on top of this later, deliberately not now.
-"""
+import logging
 from groq import Groq
 
 from app.core.config import settings
 
+logger = logging.getLogger("ai_client")
+
 
 def is_configured() -> bool:
-    """Every route touching this checks first — see documents.py's
-    is_configured() for the same pattern and why."""
+    """Return whether a server-side Groq API key is configured."""
     return bool(settings.GROQ_API_KEY)
 
 
-def send_chat_message(message: str, timetable_context: str = "") -> str:
-    """
-    Sends a user message to Groq's chat completion API instructing it
-    to return a JSON object with a friendly explanation and structured
-    swap delta parameters, using the active database timetable state as context.
-    """
-    client = Groq(api_key=settings.GROQ_API_KEY)
-    
-    system_prompt = (
-        "You are the ENOSIS Timetable Assistant. You help college faculty swap classes.\n"
-        "Here is the CURRENT active timetable schedule locked in the database:\n"
-        "=========================================\n"
-        f"{timetable_context}\n"
-        "=========================================\n\n"
-        "You MUST respond with a JSON object containing two fields:\n"
-        "1. 'reply': A friendly, concise message explaining the response.\n"
-        "2. 'delta': If the user asks to move, shift, reschedule, or swap a class, "
-        "provide a dictionary with the following keys:\n"
-        "   - 'course_name': name of the course/subject to swap\n"
-        "   - 'day_from': current day index (0 for Mon, 1 for Tue, 2 for Wed, 3 for Thu, 4 for Fri, 5 for Sat)\n"
-        "   - 'slot_from': current slot index (0 to 7)\n"
-        "   - 'day_to': target day index (0 to 5)\n"
-        "   - 'slot_to': target slot index (0 to 7)\n"
-        "   - 'division': division code (e.g. 'A' or 'B')\n"
-        "If the user is NOT requesting a reschedule/swap, set 'delta' to null.\n"
-        "Ensure that course_name, day_from, slot_from, and division match the actual current schedule provided in the context above!\n"
-        "Example JSON:\n"
-        "{\n"
-        "  \"reply\": \"I propose shifting DAA from Tuesday Slot 1 to Friday Slot 4.\",\n"
-        "  \"delta\": {\n"
-        "    \"course_name\": \"DAA\",\n"
-        "    \"day_from\": 1,\n"
-        "    \"slot_from\": 0,\n"
-        "    \"day_to\": 4,\n"
-        "    \"slot_to\": 3,\n"
-        "    \"division\": \"A\"\n"
-        "  }\n"
-        "}"
+def send_chat_message(messages: list[dict[str, str]]) -> str:
+    """Send one bounded conversation to Groq with automatic fallback models and token compression."""
+    client = Groq(
+        api_key=settings.GROQ_API_KEY,
+        timeout=max(settings.AI_REQUEST_TIMEOUT_SECONDS, 45),
+        max_retries=2,
     )
+    candidate_models = [
+        settings.GROQ_MODEL,
+        "openai/gpt-oss-20b",
+        "qwen/qwen3.8-27b",
+        "openai/gpt-oss-120b",
+        "allam-2-7b",
+    ]
+    # Remove duplicates preserving order
+    models_to_try = [m for m in dict.fromkeys(candidate_models) if m]
 
-    response = client.chat.completions.create(
-        model=settings.GROQ_MODEL,
-        response_format={"type": "json_object"},
-        messages=[
-            {
-                "role": "system",
-                "content": system_prompt,
-            },
-            {"role": "user", "content": message},
-        ],
-    )
-    return response.choices[0].message.content
+    def _execute_chat(msg_list: list[dict[str, str]]) -> str:
+        last_error = None
+        for model in models_to_try:
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=msg_list,
+                    temperature=0.3,
+                )
+                content = response.choices[0].message.content or ""
+                if content.strip():
+                    return content
+            except Exception as e:
+                last_error = e
+                logger.warning("Groq chat attempt with model %s failed: %s. Trying fallback...", model, e)
+        if last_error:
+            raise last_error
+        return ""
+
+    try:
+        return _execute_chat(messages)
+    except Exception as error:
+        err_str = str(error).lower()
+        if "413" in err_str or "rate_limit" in err_str or "too large" in err_str or "tokens" in err_str:
+            logger.warning("Groq rate/token limit error (%s). Compressing messages and retrying...", error)
+            compressed_msgs: list[dict[str, str]] = []
+            for msg in messages:
+                if msg.get("role") == "system":
+                    content = msg.get("content", "")
+                    if len(content) > 4000:
+                        content = content[:4000] + "\n[Context trimmed for token budget]\n"
+                    compressed_msgs.append({"role": "system", "content": content})
+            # Only keep the last user query
+            last_user_msg = messages[-1] if messages else {"role": "user", "content": ""}
+            compressed_msgs.append(last_user_msg)
+            try:
+                return _execute_chat(compressed_msgs)
+            except Exception as retry_err:
+                logger.error("Compressed chat retry also failed: %s", retry_err)
+                raise retry_err from error
+        raise error
+

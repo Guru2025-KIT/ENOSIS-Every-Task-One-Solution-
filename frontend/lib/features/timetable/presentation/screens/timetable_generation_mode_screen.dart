@@ -12,6 +12,7 @@ import '../../data/constraint_repository.dart';
 import 'generate_timetable_screen.dart';
 import 'manage_timetable_data_screen.dart';
 import 'constraint_builder_screen.dart';
+import 'interactive_slot_locking_workbench_screen.dart';
 
 class TimetableGenerationModeScreen extends StatefulWidget {
   const TimetableGenerationModeScreen({super.key});
@@ -887,18 +888,19 @@ class _TimetableGenerationModeScreenState extends State<TimetableGenerationModeS
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
-            icon: const Icon(Icons.tune_outlined, size: 18),
-            label: const Text('Add Solver Availability Constraints'),
+            icon: const Icon(Icons.lock_clock_outlined, size: 18),
+            label: const Text('Priority Slot Locking & AI Advisor 🔒'),
             onPressed: () async {
               await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const ConstraintBuilderScreen()),
+                MaterialPageRoute(builder: (_) => const InteractiveSlotLockingWorkbenchScreen()),
               );
               _loadStatsAndConfig();
             },
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 44),
-              side: const BorderSide(color: AppColors.primary),
+              side: const BorderSide(color: Color(0xFFF97316)),
+              foregroundColor: const Color(0xFFEA580C),
             ),
           ),
           const SizedBox(height: 20),

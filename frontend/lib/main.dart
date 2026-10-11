@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'app/app.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +13,41 @@ import 'core/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Filter known framework MouseTracker assertion noise caused by pointer tracking / mirroring
+  final originalOnError = FlutterError.onError;
+  FlutterError.onError = (FlutterErrorDetails details) {
+    final msg = details.exception.toString();
+    final stack = details.stack?.toString() ?? '';
+    if (details.exception is AssertionError &&
+        (msg.contains('mouse_tracker.dart') ||
+         stack.contains('mouse_tracker.dart') ||
+         msg.contains('PointerAddedEvent') ||
+         msg.contains('PointerRemovedEvent') ||
+         msg.contains('_debugDuringDeviceUpdate'))) {
+      return;
+    }
+    if (originalOnError != null) {
+      originalOnError(details);
+    } else {
+      FlutterError.presentError(details);
+    }
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    final msg = error.toString();
+    final stackStr = stack.toString();
+    if (error is AssertionError &&
+        (msg.contains('mouse_tracker.dart') ||
+         stackStr.contains('mouse_tracker.dart') ||
+         msg.contains('PointerAddedEvent') ||
+         msg.contains('PointerRemovedEvent') ||
+         msg.contains('_debugDuringDeviceUpdate'))) {
+      return true; // Handled
+    }
+    return false;
+  };
+
   await NotificationService().initialize();
   
   runApp(

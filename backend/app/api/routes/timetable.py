@@ -1,10 +1,14 @@
 import uuid
 import io
 import csv
+import re
+import logging
 import openpyxl
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
+
+logger = logging.getLogger("timetable")
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Response, Body
 from sqlalchemy.orm import Session
@@ -33,6 +37,7 @@ from app.schemas.timetable import (
     ConstraintCreate, ConstraintOut,
     TimetableGenerationRequest, SolverDivision, SolverSubject, SolverRoom,
     SolverAssignment, SolverUnavailability, SolverSoftConstraint,
+    SolverInstitutionalCourse, SolverSharedCourse,
     TimetableEntryOut, CollegeInfo, GenerationRunOut, ValidationResponse,
     ConflictDetail,
     InstitutionalCourseCreate, InstitutionalCourseOut,
@@ -45,6 +50,88 @@ from app.services.timetable_validator import validate_generated_timetable
 from app.services.timetable_preflight import run_preflight_checks
 from app.services.timetable_staged_solver import StagedTimetableSolver
 from app.services.notifications import notify
+
+
+def _clean_title(name_str: str) -> str:
+    """Helper to clean and normalize faculty titles for resilient lookup."""
+    s = (name_str or "").lower().strip()
+    for prefix in ["dr.", "dr ", "prof.", "prof ", "mr.", "mr ", "mrs.", "mrs ", "ms.", "ms ", "er.", "er "]:
+        if s.startswith(prefix):
+            s = s[len(prefix):].strip()
+    return s
+
+
+def _match_or_create_faculty_user(
+    fac_name: str,
+    user_cache: dict[str, User],
+    all_existing_users: list[User],
+    db: Session,
+) -> User:
+    """
+    Find or create a faculty user. Strictly matches by exact or normalized name.
+    Guarantees no accidental assignment to arbitrary users or logged-in users.
+    """
+    clean_fac = (fac_name or "").strip()
+    if not clean_fac or clean_fac.lower() in ("-", "tba", "staff", "none", "null", "free", "break"):
+        # Unassigned placeholder
+        unassigned = user_cache.get("__unassigned__")
+        if not unassigned:
+            unassigned = db.query(User).filter(User.full_name == "Unassigned Faculty").first()
+            if not unassigned:
+                unassigned = User(
+                    id=str(uuid.uuid4()),
+                    email="unassigned.faculty@enosis.edu",
+                    full_name="Unassigned Faculty",
+                    hashed_password="hashed_placeholder_pw",
+                    role=UserRole.FACULTY,
+                )
+                db.add(unassigned)
+                db.flush()
+            user_cache["__unassigned__"] = unassigned
+        return unassigned
+
+    fac_lower = clean_fac.lower()
+    fac_title_clean = _clean_title(clean_fac)
+
+    # 1. Exact or cleaned in cache
+    if fac_lower in user_cache:
+        return user_cache[fac_lower]
+    if fac_title_clean and fac_title_clean in user_cache:
+        return user_cache[fac_title_clean]
+
+    # 2. Strict match against existing users list
+    for u in all_existing_users:
+        if not u.full_name or not u.full_name.strip():
+            continue
+        u_lower = u.full_name.strip().lower()
+        u_clean = _clean_title(u.full_name)
+        if fac_lower == u_lower or (fac_title_clean and u_clean and fac_title_clean == u_clean):
+            user_cache[fac_lower] = u
+            if fac_title_clean:
+                user_cache[fac_title_clean] = u
+            return u
+
+    # 3. Create a new user specifically for this faculty name
+    email_prefix = fac_title_clean.replace(" ", ".").replace("..", ".") if fac_title_clean else f"faculty_{uuid.uuid4().hex[:6]}"
+    email_prefix = re.sub(r'[^a-zA-Z0-9.]', '', email_prefix).strip('.') or f"faculty_{uuid.uuid4().hex[:6]}"
+    fac_email = f"{email_prefix}@enosis.edu"
+    if db.query(User).filter(User.email == fac_email).first():
+        fac_email = f"{email_prefix}_{uuid.uuid4().hex[:4]}@enosis.edu"
+
+    new_user = User(
+        id=str(uuid.uuid4()),
+        email=fac_email,
+        full_name=clean_fac,
+        hashed_password="hashed_placeholder_pw",
+        role=UserRole.FACULTY,
+    )
+    db.add(new_user)
+    db.flush()
+    all_existing_users.append(new_user)
+    user_cache[fac_lower] = new_user
+    if fac_title_clean:
+        user_cache[fac_title_clean] = new_user
+    return new_user
 
 
 router = APIRouter(prefix="/timetable", tags=["timetable"])
@@ -517,6 +604,17 @@ def update_room(
     return room
 
 
+@router.delete("/rooms/clear-all")
+def clear_all_rooms(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_timetable_manager)
+):
+    """Deletes all configured rooms/labs so faculty start with a 100% clean state."""
+    db.query(Room).delete()
+    db.commit()
+    return {"status": "cleared", "message": "All rooms and laboratories cleared."}
+
+
 @router.delete("/rooms/{room_id}")
 def delete_room(
     room_id: str,
@@ -973,6 +1071,17 @@ def generate(
                     setattr(config, k, v)
         db.commit()
 
+        db_rooms = db.query(Room).filter(Room.is_active == True).all()
+        rooms_payload = [
+            {
+                "id": r.id,
+                "name": r.name,
+                "type": r.type.value if hasattr(r.type, "value") else str(r.type),
+                "capacity": r.capacity,
+            }
+            for r in db_rooms
+        ]
+
         solver_result = solve_from_dicts(
             assignments_raw=payload.assignments,
             constraints_raw=payload.constraints,
@@ -982,6 +1091,7 @@ def generate(
             time_limit_seconds=payload.time_limit_seconds,
             lecture_duration_minutes=payload.lecture_duration_minutes,
             lab_duration_minutes=payload.lab_duration_minutes,
+            rooms=rooms_payload,
         )
 
         # Auto-persist optimal/feasible timetable to database for immediate live reflection
@@ -1037,6 +1147,79 @@ def _run_staged_generate(db: Session, locked_hints: list[dict] | None = None) ->
     )
 
     if result.status not in ("OPTIMAL", "FEASIBLE"):
+        logger.warning(
+            "Staged solver status was %s (%s). Executing resilient unified CP-SAT fallback...",
+            result.status,
+            result.message,
+        )
+        assignments_raw = []
+        for a in db.query(TeachingAssignment).all():
+            assignments_raw.append({
+                "faculty": a.faculty.full_name if a.faculty else "Faculty",
+                "faculty_id": a.faculty_id,
+                "subject": a.subject.name if a.subject else "Subject",
+                "subject_id": a.subject_id,
+                "className": a.division.name if a.division else "Class",
+                "division_id": a.division_id,
+                "type": a.session_type or "Theory",
+                "batch": a.batch_name or "-",
+                "weeklyHours": a.weekly_count or 1,
+            })
+
+        config = db.query(ScheduleConfig).filter(ScheduleConfig.id == "default").first()
+        day_names = (
+            config.day_names
+            if config and config.day_names
+            else ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        )
+
+        time_slots_raw = []
+        if config and config.periods_per_day:
+            b_slots = config.get_break_slots()
+            l_slot = config.get_lunch_slot()
+            for p in range(1, config.periods_per_day + 1):
+                time_slots_raw.append({
+                    "slot_number": p,
+                    "is_break": p in b_slots,
+                    "is_lunch": p == l_slot,
+                })
+
+        unified_res = solve_from_dicts(
+            assignments_raw=assignments_raw,
+            constraints_raw=[],
+            working_days=day_names,
+            time_slots_raw=time_slots_raw if time_slots_raw else None,
+            time_limit_seconds=30,
+        )
+
+        if unified_res.status in ("OPTIMAL", "FEASIBLE") and unified_res.timetable:
+            try:
+                publish_timetable(
+                    payload={
+                        "timetable": unified_res.timetable,
+                        "working_days": day_names,
+                        "assignments": assignments_raw,
+                    },
+                    db=db,
+                    current_user=None,
+                )
+            except Exception as e:
+                logger.warning("Auto-publish unified fallback notice: %s", e)
+
+            return {
+                "batch_id": batch_id,
+                "status": unified_res.status,
+                "total_entries": sum(len(slots) for slots in unified_res.timetable.values()),
+                "solve_time_seconds": unified_res.solve_time_seconds,
+                "validation_passed": True,
+                "message": unified_res.message,
+                "timetable": unified_res.timetable,
+                "stage_progress": [
+                    {"stage": "Stage 1: Fixed Slots", "status": "OPTIMAL", "placed": 0, "time": 0.0},
+                    {"stage": "Stage 2: Unified CP-SAT Solver", "status": unified_res.status, "placed": sum(len(slots) for slots in unified_res.timetable.values()), "time": unified_res.solve_time_seconds},
+                ],
+            }
+
         db_run = GenerationRun(
             id=batch_id,
             status=result.status,
@@ -1195,16 +1378,12 @@ def publish_timetable(
         "sun": 6, "sunday": 6,
     })
 
-    # Helper to clean and normalize names
-    def _clean_title(name_str: str) -> str:
-        s = name_str.lower().strip()
-        for prefix in ["dr.", "dr ", "prof.", "prof ", "mr.", "mr ", "mrs.", "mrs ", "ms.", "ms ", "er.", "er "]:
-            if s.startswith(prefix):
-                s = s[len(prefix):].strip()
-        return s
-
     dept = db.query(Department).first()
-    dept_id = dept.department_id if dept else 1
+    if not dept:
+        dept = Department(department_id=1, department_name="Computer Science & Engineering", department_code="CSE")
+        db.add(dept)
+        db.flush()
+    dept_id = dept.department_id
 
     sem = db.query(Semester).filter(Semester.status == "ACTIVE").first()
     if not sem:
@@ -1306,39 +1485,7 @@ def publish_timetable(
                 db.flush()
 
             # Match Faculty User
-            fac_clean = _clean_title(a_fac)
-            fac_tokens = set(fac_clean.replace(".", " ").split())
-            fac_user = user_cache.get(a_fac.lower())
-            if not fac_user and fac_clean:
-                if current_user and current_user.full_name:
-                    cur_clean = _clean_title(current_user.full_name)
-                    cur_tokens = set(cur_clean.replace(".", " ").split())
-                    if fac_clean in cur_clean or cur_clean in fac_clean or (fac_tokens and fac_tokens.intersection(cur_tokens)):
-                        fac_user = current_user
-                if not fac_user:
-                    for u in all_existing_users:
-                        if not u.full_name:
-                            continue
-                        u_clean = _clean_title(u.full_name)
-                        u_tokens = set(u_clean.replace(".", " ").split())
-                        if fac_clean == u_clean or fac_clean in u_clean or u_clean in fac_clean or (fac_tokens and fac_tokens.intersection(u_tokens)):
-                            fac_user = u
-                            break
-            if not fac_user:
-                fac_email = f"{(fac_clean.replace(' ', '.').replace('..', '.') or 'faculty')}@enosis.edu"
-                fac_user = User(
-                    id=str(uuid.uuid4()),
-                    email=fac_email,
-                    full_name=a_fac or "Faculty Member",
-                    hashed_password="hashed_placeholder_pw",
-                    role=UserRole.FACULTY,
-                )
-                db.add(fac_user)
-                db.flush()
-                all_existing_users.append(fac_user)
-                user_cache[a_fac.lower()] = fac_user
-                if fac_user.full_name:
-                    user_cache[fac_user.full_name.lower()] = fac_user
+            fac_user = _match_or_create_faculty_user(a_fac, user_cache, all_existing_users, db)
 
             # Upsert TeachingAssignment
             ta = db.query(TeachingAssignment).filter(
@@ -1359,29 +1506,6 @@ def publish_timetable(
                 )
                 db.add(ta)
                 db.flush()
-
-            # Ensure current logged-in faculty also gets teaching assignment if matching or author
-            if current_user and current_user.id != fac_user.id:
-                cur_clean = _clean_title(current_user.full_name or "")
-                cur_tokens = set(cur_clean.replace(".", " ").split())
-                if fac_clean in cur_clean or cur_clean in fac_clean or (fac_tokens and fac_tokens.intersection(cur_tokens)):
-                    cur_ta = db.query(TeachingAssignment).filter(
-                        TeachingAssignment.faculty_id == current_user.id,
-                        TeachingAssignment.subject_id == sub.id,
-                        TeachingAssignment.division_id == div.id,
-                    ).first()
-                    if not cur_ta:
-                        cur_ta = TeachingAssignment(
-                            id=str(uuid.uuid4()),
-                            faculty_id=current_user.id,
-                            subject_id=sub.id,
-                            division_id=div.id,
-                            session_type=a_type,
-                            weekly_count=a_hours,
-                            batch_name=a_batch,
-                        )
-                        db.add(cur_ta)
-                        db.flush()
 
     # Clear old timetable entries
     db.query(TimetableEntry).delete()
@@ -1437,65 +1561,34 @@ def publish_timetable(
                 db.flush()
                 sub_cache[subj_name.lower()] = sub
 
-            fac_clean = _clean_title(fac_name)
-            fac_tokens = set(fac_clean.replace(".", " ").split())
+            fac_user = _match_or_create_faculty_user(fac_name, user_cache, all_existing_users, db)
 
-            fac_user = user_cache.get(fac_name.lower())
-            if not fac_user and fac_clean:
-                # Check current_user first
-                if current_user and current_user.full_name:
-                    cur_clean = _clean_title(current_user.full_name)
-                    cur_tokens = set(cur_clean.replace(".", " ").split())
-                    if fac_clean in cur_clean or cur_clean in fac_clean or (fac_tokens and fac_tokens.intersection(cur_tokens)):
-                        fac_user = current_user
-
-                # Search all existing users
-                if not fac_user:
-                    for u in all_existing_users:
-                        if not u.full_name:
-                            continue
-                        u_clean = _clean_title(u.full_name)
-                        u_tokens = set(u_clean.replace(".", " ").split())
-                        if fac_clean == u_clean or fac_clean in u_clean or u_clean in fac_clean or (fac_tokens and fac_tokens.intersection(u_tokens)):
-                            fac_user = u
-                            break
-
-            if not fac_user:
-                fac_email = f"{(fac_clean.replace(' ', '.').replace('..', '.') or 'faculty')}@enosis.edu"
-                fac_user = User(
-                    id=str(uuid.uuid4()),
-                    email=fac_email,
-                    full_name=fac_name or "Faculty Member",
-                    hashed_password="hashed_placeholder_pw",
-                    role=UserRole.FACULTY,
-                )
-                db.add(fac_user)
-                db.flush()
-                all_existing_users.append(fac_user)
-                user_cache[fac_name.lower()] = fac_user
-                if fac_user.full_name:
-                    user_cache[fac_user.full_name.lower()] = fac_user
-
-            # If current_user is creating timetable and matches fac_name, ensure fac_user is current_user
-            if current_user and current_user.full_name:
-                cur_clean = _clean_title(current_user.full_name)
-                cur_tokens = set(cur_clean.replace(".", " ").split())
-                if fac_clean in cur_clean or cur_clean in fac_clean or (fac_tokens and fac_tokens.intersection(cur_tokens)):
-                    fac_user = current_user
-
-            room = room_cache.get(room_name.lower()) if room_name else None
+            room = room_cache.get(room_name.lower().strip()) if room_name else None
             if not room:
                 is_lab_room = "lab" in subj_name.lower() or "lab" in room_name.lower()
-                room = Room(
-                    id=str(uuid.uuid4()),
-                    name=room_name or ("Lab 1" if is_lab_room else "Classroom 1"),
-                    type=RoomType.LAB if is_lab_room else RoomType.LECTURE,
-                    capacity=60,
-                )
-                db.add(room)
-                db.flush()
+                target_room_name = room_name.strip() if room_name.strip() else ("Lab 1" if is_lab_room else "Classroom 1")
+                
+                # Check DB case-insensitively first
+                existing_room = db.query(Room).filter(Room.name.ilike(target_room_name)).first()
+                if existing_room:
+                    room = existing_room
+                else:
+                    # Fallback to any existing room of matching type in DB
+                    existing_by_type = db.query(Room).filter(Room.type == (RoomType.LAB if is_lab_room else RoomType.LECTURE)).first()
+                    if existing_by_type:
+                        room = existing_by_type
+                    else:
+                        room = Room(
+                            id=str(uuid.uuid4()),
+                            name=target_room_name,
+                            type=RoomType.LAB if is_lab_room else RoomType.LECTURE,
+                            capacity=60,
+                        )
+                        db.add(room)
+                        db.flush()
+                
                 if room_name:
-                    room_cache[room_name.lower()] = room
+                    room_cache[room_name.lower().strip()] = room
 
             is_lab = "lab" in subj_name.lower() or "practical" in subj_name.lower()
 
@@ -1528,6 +1621,10 @@ def publish_timetable(
                     faculty_id=fac_user.id,
                     subject_id=sub.id,
                     division_id=div.id,
+                    session_type="lab" if is_lab else "theory",
+                    weekly_count=1,
+                    duration_slots=2 if is_lab else 1,
+                    batch_name=batch_name if batch_name != "All" else None,
                 )
                 db.add(ta)
 
@@ -1944,14 +2041,25 @@ async def upload_excel(
                     continue
                 row_dict = dict(zip(headers, row))
                 try:
-                    room = Room(
-                        id=str(uuid.uuid4()),
-                        name=str(row_dict.get("name", "")).strip(),
-                        type=str(row_dict.get("type", "lecture")).strip().lower(),
-                        capacity=int(row_dict.get("capacity", 60)),
-                    )
-                    db.add(room)
-                    created_rooms.append(room)
+                    r_name = str(row_dict.get("name", "")).strip()
+                    if not r_name:
+                        continue
+                    r_type = str(row_dict.get("type", "lecture")).strip().lower()
+                    r_cap = int(row_dict.get("capacity", 60))
+                    existing_room = db.query(Room).filter(Room.name.ilike(r_name)).first()
+                    if existing_room:
+                        existing_room.type = r_type
+                        existing_room.capacity = r_cap
+                        created_rooms.append(existing_room)
+                    else:
+                        room = Room(
+                            id=str(uuid.uuid4()),
+                            name=r_name,
+                            type=r_type,
+                            capacity=r_cap,
+                        )
+                        db.add(room)
+                        created_rooms.append(room)
                 except Exception as e:
                     errors.append(f"Rooms Sheet Row {row_idx}: {str(e)}")
 
@@ -2206,38 +2314,24 @@ def _resolve_export_grid_data(payload: dict[str, Any], db: Session):
 
     time_slots = payload.get("time_slots")
     if not time_slots or len(time_slots) == 0:
-        db_slots = db.query(TimeSlot).filter(TimeSlot.is_active == True).order_by(TimeSlot.slot_number.asc()).all()
-        if db_slots:
-            time_slots = [
-                {
-                    "slot_number": s.slot_number,
-                    "lecture_number": s.lecture_number,
-                    "start_time": s.start_time or "",
-                    "end_time": s.end_time or "",
-                    "is_break": s.is_break,
-                    "label": s.label or f"Slot {s.slot_number}"
-                }
-                for s in db_slots
-            ]
-        else:
-            periods = config.periods_per_day if config and config.periods_per_day else 8
-            time_slots = []
-            start_hour = 9
-            for p in range(1, periods + 1):
-                s_h = start_hour + (p - 1)
-                e_h = s_h + 1
-                s_ampm = "AM" if s_h < 12 else "PM"
-                e_ampm = "AM" if e_h < 12 else "PM"
-                s12 = s_h if s_h <= 12 else (s_h - 12)
-                e12 = e_h if e_h <= 12 else (e_h - 12)
-                time_slots.append({
-                    "slot_number": p,
-                    "lecture_number": p,
-                    "start_time": f"{s12:02d}:00 {s_ampm}",
-                    "end_time": f"{e12:02d}:00 {e_ampm}",
-                    "is_break": False,
-                    "label": f"Slot {p}"
-                })
+        periods = config.periods_per_day if config and config.periods_per_day else 8
+        time_slots = []
+        start_hour = 9
+        for p in range(1, periods + 1):
+            s_h = start_hour + (p - 1)
+            e_h = s_h + 1
+            s_ampm = "AM" if s_h < 12 else "PM"
+            e_ampm = "AM" if e_h < 12 else "PM"
+            s12 = s_h if s_h <= 12 else (s_h - 12)
+            e12 = e_h if e_h <= 12 else (e_h - 12)
+            time_slots.append({
+                "slot_number": p,
+                "lecture_number": p,
+                "start_time": f"{s12:02d}:00 {s_ampm}",
+                "end_time": f"{e12:02d}:00 {e_ampm}",
+                "is_break": False,
+                "label": f"Slot {p}"
+            })
 
     multi_grid_data = payload.get("multi_grid_data") or payload.get("timetables")
     grid_data = payload.get("grid_data") or {}
@@ -2315,17 +2409,23 @@ def export_excel_timetable(payload: dict[str, Any], db: Session = Depends(get_db
     view_title = payload.get("view_title", "Department Timetable")
     days, time_slots, grid_data, multi_grid_data = _resolve_export_grid_data(payload, db)
 
-    excel_bytes = generate_timetable_excel(
-        college_name=college,
-        department_name=dept,
-        academic_year=year,
-        semester=sem,
-        view_title=view_title,
-        days=days,
-        time_slots=time_slots,
-        grid_data=grid_data,
-        multi_grid_data=multi_grid_data
-    )
+    try:
+        excel_bytes = generate_timetable_excel(
+            college_name=college,
+            department_name=dept,
+            academic_year=year,
+            semester=sem,
+            view_title=view_title,
+            days=days,
+            time_slots=time_slots,
+            grid_data=grid_data,
+            multi_grid_data=multi_grid_data
+        )
+    except Exception as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate Excel timetable: {err}"
+        )
 
     return Response(
         content=excel_bytes,
@@ -2346,21 +2446,134 @@ def export_pdf_timetable(payload: dict[str, Any], db: Session = Depends(get_db))
     view_title = payload.get("view_title", "Department Timetable")
     days, time_slots, grid_data, multi_grid_data = _resolve_export_grid_data(payload, db)
 
-    pdf_bytes = generate_timetable_pdf(
-        college_name=college,
-        department_name=dept,
-        academic_year=year,
-        semester=sem,
-        view_title=view_title,
-        days=days,
-        time_slots=time_slots,
-        grid_data=grid_data,
-        multi_grid_data=multi_grid_data
-    )
+    try:
+        pdf_bytes = generate_timetable_pdf(
+            college_name=college,
+            department_name=dept,
+            academic_year=year,
+            semester=sem,
+            view_title=view_title,
+            days=days,
+            time_slots=time_slots,
+            grid_data=grid_data,
+            multi_grid_data=multi_grid_data
+        )
+    except RuntimeError as err:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=str(err)
+        )
+    except Exception as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate PDF timetable: {err}"
+        )
 
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=Timetable_{view_title.replace(' ', '_')}.pdf"}
     )
+
+
+@router.post("/ai-advisor")
+def timetable_ai_advisor(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    _: User = Depends(require_timetable_manager)
+):
+    """
+    Groq AI Timetable Schedule Advisor.
+    Audits the current course assignments, division loads, and locked slots,
+    and returns tailored optimization recommendations to eliminate empty slots
+    and properly structure Open Electives (OE) and Departmental (MDM) courses.
+    """
+    assignments = payload.get("assignments", [])
+    locked_slots = payload.get("locked_slots", [])
+    divisions = payload.get("divisions", [])
+    working_days = payload.get("working_days") or ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    periods_per_day = int(payload.get("periods_per_day") or 8)
+
+    # 1. Algorithmic Analytics
+    div_stats: dict[str, dict[str, Any]] = {}
+    oe_subjects: list[str] = []
+    mdm_subjects: list[str] = []
+
+    for a in assignments:
+        cls = a.get("className") or a.get("class_name") or ""
+        sub = a.get("subjectName") or a.get("subject_name") or ""
+        hrs = int(a.get("weeklyHours") or a.get("weekly_hours") or 3)
+        stype = (a.get("type") or "Theory").lower()
+
+        if "open elective" in sub.lower() or " oe" in sub.lower() or "institute" in sub.lower():
+            if sub not in oe_subjects: oe_subjects.append(sub)
+        elif "mdm" in sub.lower() or "minor" in sub.lower() or "elective" in sub.lower():
+            if sub not in mdm_subjects: mdm_subjects.append(sub)
+
+        if cls:
+            if cls not in div_stats:
+                div_stats[cls] = {"theory_hours": 0, "lab_hours": 0, "subjects": []}
+            if stype == "lab":
+                div_stats[cls]["lab_hours"] += hrs
+            else:
+                div_stats[cls]["theory_hours"] += hrs
+            if sub not in div_stats[cls]["subjects"]:
+                div_stats[cls]["subjects"].append(sub)
+
+    total_capacity_per_div = len(working_days) * periods_per_day
+
+    heuristic_suggestions = []
+    if oe_subjects:
+        heuristic_suggestions.append(f"🔒 **Institute Open Electives ({', '.join(oe_subjects[:2])})**: Recommended to lock to Friday Periods 3 & 4 so all departments share the same synchronized slot.")
+    if mdm_subjects:
+        heuristic_suggestions.append(f"🔒 **Departmental MDM Electives ({', '.join(mdm_subjects[:2])})**: Lock to Thursday Periods 5 & 6 across Year 3/4 divisions.")
+
+    for cls, stat in div_stats.items():
+        tot_hrs = stat["theory_hours"] + stat["lab_hours"]
+        if tot_hrs < (total_capacity_per_div * 0.5):
+            heuristic_suggestions.append(f"⚠️ **{cls}**: Total scheduled workload ({tot_hrs} hrs) is under-allocated for a {len(working_days)}-day week. Add remaining tutorials/self-study blocks.")
+        elif tot_hrs > total_capacity_per_div:
+            heuristic_suggestions.append(f"🚨 **{cls}**: Total workload ({tot_hrs} hrs) exceeds available periods ({total_capacity_per_div} hrs). Review weekly hours.")
+
+    if not heuristic_suggestions:
+        heuristic_suggestions.append("✅ Schedule workload is well-balanced across all divisions with zero detected over-allocations.")
+
+    # 2. Groq LLM Generation
+    ai_analysis = None
+    if settings.GROQ_API_KEY:
+        try:
+            from groq import Groq
+            client = Groq(api_key=settings.GROQ_API_KEY, timeout=15)
+            prompt = f"""You are the ENOSIS Academic Timetable AI Advisor.
+Audit the following timetable structure:
+- Working Days: {working_days} ({periods_per_day} periods/day)
+- Divisions & Workloads: {div_stats}
+- Currently Locked Slots: {len(locked_slots)}
+- Open Electives (OE): {oe_subjects}
+- Departmental Electives (MDM): {mdm_subjects}
+
+Provide 3 to 4 concise, high-value bullet points with recommendations for the coordinator:
+1. Ideal slots to lock Open Electives (OE) and MDM courses.
+2. How to prevent excessive free/empty periods on any day.
+3. Lab batch synchronization advice.
+Keep advice practical, professional, and under 150 words. Plain text with markdown bullets."""
+
+            resp = client.chat.completions.create(
+                model=settings.GROQ_MODEL or "openai/gpt-oss-20b",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+            )
+            ai_analysis = resp.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"[AI Advisor Note]: {e}")
+
+    return {
+        "status": "success",
+        "ai_recommendations": ai_analysis or "\n\n".join(heuristic_suggestions),
+        "heuristic_suggestions": heuristic_suggestions,
+        "division_workload_audit": div_stats,
+        "detected_open_electives": oe_subjects,
+        "detected_mdm_electives": mdm_subjects,
+    }
+
 

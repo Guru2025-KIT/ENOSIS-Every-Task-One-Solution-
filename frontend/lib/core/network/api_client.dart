@@ -36,6 +36,7 @@ class ApiClient {
       list.add('http://127.0.0.1:8000');
     } else if (defaultTargetPlatform == TargetPlatform.android) {
       // Physical device Wi-Fi IP (Current PC IP), followed by emulator loopback
+      list.add('http://192.168.0.134:8000');
       list.add('http://10.199.8.143:8000');
       list.add('http://10.78.141.143:8000');
       list.add('http://10.0.2.2:8000');
@@ -61,7 +62,7 @@ class ApiClient {
     }
     return candidateBaseUrls.first;
   }
-  
+
   /// Configurable public application base URL for shareable links
   static const String appBaseUrl = 'http://localhost:5000';
 
@@ -94,6 +95,7 @@ class ApiClient {
     Future<http.Response> Function(String base) requestFn, {
     Duration? timeout,
     int timeoutSeconds = 7,
+    bool retryOnTimeout = true,
   }) async {
     final effectiveTimeout = timeout ?? Duration(seconds: timeoutSeconds);
     final candidates = candidateBaseUrls;
@@ -101,7 +103,7 @@ class ApiClient {
 
     for (final base in candidates) {
       try {
-        final perCandidateTimeout = (timeout != null)
+        final perCandidateTimeout = (timeout != null || !retryOnTimeout)
             ? effectiveTimeout
             : ((_activeBaseUrl == null && candidates.length > 1)
                 ? const Duration(seconds: 5)
@@ -110,6 +112,10 @@ class ApiClient {
         _activeBaseUrl = base;
         return response;
       } catch (e) {
+        // A timed-out POST may still be running on the server.
+        if (e is TimeoutException && !retryOnTimeout) {
+          rethrow;
+        }
         lastError = e;
         debugPrint('[ApiClient] Connection failed for $base: $e. Trying next candidate if available...');
       }
@@ -135,6 +141,7 @@ class ApiClient {
     String? token,
     Duration? timeout,
     int timeoutSeconds = 7,
+    bool retryOnTimeout = true,
   }) {
     final effectiveToken = _resolveToken(token);
     return _sendWithFallback((base) {
@@ -146,7 +153,7 @@ class ApiClient {
         },
         body: jsonEncode(body),
       );
-    }, timeout: timeout, timeoutSeconds: timeoutSeconds);
+    }, timeout: timeout, timeoutSeconds: timeoutSeconds, retryOnTimeout: retryOnTimeout);
   }
 
   /// POST with form-encoded fields — used specifically by /auth/login,

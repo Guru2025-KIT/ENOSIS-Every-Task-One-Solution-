@@ -106,13 +106,19 @@ class _FacultyUploadDialogState extends State<FacultyUploadDialog> with SingleTi
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final isMobile = screenSize.width < 600;
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 12 : 24,
+        vertical: isMobile ? 16 : 24,
+      ),
       child: Container(
-        width: 860,
-        height: 640,
-        padding: const EdgeInsets.all(24),
+        width: screenSize.width > 900 ? 860 : screenSize.width * 0.95,
+        height: screenSize.height > 700 ? 640 : screenSize.height * 0.85,
+        padding: EdgeInsets.all(isMobile ? 16 : 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -199,8 +205,11 @@ class _FacultyUploadDialogState extends State<FacultyUploadDialog> with SingleTi
             const Divider(height: 28),
 
             // Actions Footer
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 if (_validationResult != null)
                   TextButton.icon(
@@ -211,6 +220,7 @@ class _FacultyUploadDialogState extends State<FacultyUploadDialog> with SingleTi
                 else
                   const SizedBox(),
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     TextButton(
                       onPressed: _isImporting ? null : () => Navigator.of(context).pop(),
@@ -222,7 +232,7 @@ class _FacultyUploadDialogState extends State<FacultyUploadDialog> with SingleTi
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _validationResult!.validCount > 0 ? AppColors.success : Colors.grey,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         ),
                         icon: _isImporting
                             ? const SizedBox(
@@ -234,7 +244,7 @@ class _FacultyUploadDialogState extends State<FacultyUploadDialog> with SingleTi
                         label: Text(
                           _isImporting
                               ? 'Importing...'
-                              : 'Commit Import (${_validationResult!.validCount} Valid Records)',
+                              : (isMobile ? 'Import (${_validationResult!.validCount})' : 'Commit Import (${_validationResult!.validCount} Valid Records)'),
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         onPressed: (_validationResult!.validCount > 0 && !_isImporting) ? _executeImport : null,
@@ -305,16 +315,14 @@ class _FacultyUploadDialogState extends State<FacultyUploadDialog> with SingleTi
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Top summary metrics
-        Row(
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
             _buildMetricPill('Total Rows', '${v.totalRows}', AppColors.textPrimary, Colors.grey.shade200),
-            const SizedBox(width: 10),
             _buildMetricPill('Valid to Import', '${v.validCount}', AppColors.success, AppColors.success.withValues(alpha: 0.12)),
-            const SizedBox(width: 10),
             _buildMetricPill('Duplicate Records', '${v.duplicateCount}', Colors.deepOrange, Colors.deepOrange.withValues(alpha: 0.12)),
-            const SizedBox(width: 10),
             _buildMetricPill('Missing Fields', '${v.missingFieldsCount}', Colors.amber.shade900, Colors.amber.withValues(alpha: 0.15)),
-            const SizedBox(width: 10),
             _buildMetricPill('Invalid Email/Format', '${v.invalidCount}', AppColors.error, AppColors.error.withValues(alpha: 0.12)),
           ],
         ),

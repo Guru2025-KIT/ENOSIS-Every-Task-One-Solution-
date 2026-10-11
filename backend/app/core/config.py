@@ -48,7 +48,8 @@ class Settings(BaseSettings):
     # "blank by default, clear 503 if unset" pattern as Cloudinary above.
     # Get a free key from console.groq.com.
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama-3.1-8b-instant"
+    GROQ_MODEL: str = "openai/gpt-oss-20b"
+    AI_REQUEST_TIMEOUT_SECONDS: int = 25
 
     # ElevenLabs
     ELEVENLABS_API_KEY: str = ""

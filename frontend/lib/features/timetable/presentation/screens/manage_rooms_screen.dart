@@ -267,34 +267,44 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   ),
                   onPressed: () async {
-                    if (nameCtrl.text.trim().isEmpty) return;
+                    final roomName = nameCtrl.text.trim();
+                    if (roomName.isEmpty) return;
                     final cap = int.tryParse(capCtrl.text) ?? 60;
                     
                     final provider = context.read<TimetableProvider>();
                     if (existingRoom?.id != null) {
                       await provider.updateRoom(
                         existingRoom!.id!,
-                        Room(name: nameCtrl.text.trim(), type: selectedType, capacity: cap),
+                        Room(name: roomName, type: selectedType, capacity: cap),
                         building: bldgCtrl.text.trim(),
                         department: deptCtrl.text.trim(),
                         equipment: equipCtrl.text.trim(),
                         isActive: isActive,
                       );
                     } else {
+                      final isDuplicate = provider.rooms.any((r) => r.name.toLowerCase() == roomName.toLowerCase());
                       await provider.addRoom(
-                        Room(name: nameCtrl.text.trim(), type: selectedType, capacity: cap),
+                        Room(name: roomName, type: selectedType, capacity: cap),
                         building: bldgCtrl.text.trim(),
                         department: deptCtrl.text.trim(),
                         equipment: equipCtrl.text.trim(),
                         isActive: isActive,
                       );
+                      if (isDuplicate && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Room/Lab "$roomName" already existed; updated existing record.'),
+                            backgroundColor: const Color(0xFFF59E0B),
+                          ),
+                        );
+                      }
                     }
 
                     if (mounted) {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('${nameCtrl.text.trim()} saved successfully!'),
+                          content: Text('$roomName saved successfully!'),
                           backgroundColor: const Color(0xFF10B981),
                         ),
                       );
@@ -969,7 +979,66 @@ class _ManageRoomsScreenState extends State<ManageRoomsScreen> with SingleTicker
             tooltip: 'Import Rooms from Excel',
             onPressed: _isImporting ? null : _pickAndImportExcel,
           ),
-          const SizedBox(width: 8),
+          PopupMenuButton<String>(
+            tooltip: 'Room Management Options',
+            icon: const Icon(Icons.more_vert, color: Colors.white70),
+            color: const Color(0xFF1E293B),
+            onSelected: (val) async {
+              if (val == 'clear_all') {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: const Color(0xFF0F172A),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: const BorderSide(color: Color(0xFF334155)),
+                    ),
+                    title: const Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: Color(0xFFF87171)),
+                        SizedBox(width: 8),
+                        Text('Clear All Rooms & Labs', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                      ],
+                    ),
+                    content: const Text(
+                      'This will delete all registered classrooms and laboratories so you start with an empty list. Continue?',
+                      style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 13),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancel', style: TextStyle(color: Color(0xFF94A3B8))),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Clear All', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true && mounted) {
+                  await context.read<TimetableProvider>().clearAllRooms();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('All classrooms and labs cleared.'), backgroundColor: Color(0xFFF97316)),
+                  );
+                }
+              }
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'clear_all',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_sweep, color: Color(0xFFF87171), size: 18),
+                    SizedBox(width: 8),
+                    Text('Clear All Rooms (Reset)', style: TextStyle(color: Color(0xFFF87171), fontSize: 12.5)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 4),
         ],
         bottom: TabBar(
           controller: _tabController,
