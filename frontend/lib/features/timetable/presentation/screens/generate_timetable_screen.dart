@@ -778,41 +778,55 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: const Color(0xFFF97316), width: 1.5),
                   ),
-                  child: Row(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    alignment: WrapAlignment.spaceBetween,
                     children: [
-                      const Icon(Icons.swap_horiz_rounded, color: Color(0xFFFB923C), size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Shifted "${_lastShiftedSlot!['subject']}" → ${_lastShiftedSlot!['targetDay']} Period ${_lastShiftedSlot!['targetSlot']}',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.swap_horiz_rounded, color: Color(0xFFFB923C), size: 20),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Shifted "${_lastShiftedSlot!['subject']}" → ${_lastShiftedSlot!['targetDay']} Period ${_lastShiftedSlot!['targetSlot']}',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
+                                ),
+                                const Text(
+                                  'Tap "Auto-Rebalance" to rearrange other lectures and classes conflict-free with CP-SAT.',
+                                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5),
+                                ),
+                              ],
                             ),
-                            const Text(
-                              'Tap "Auto-Rebalance" to rearrange other lectures and classes conflict-free with CP-SAT.',
-                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.auto_awesome, size: 14),
+                            label: const Text('Auto-Rebalance ⚡', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFEA580C),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                             ),
-                          ],
-                        ),
-                      ),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.auto_awesome, size: 14),
-                        label: const Text('Auto-Rebalance ⚡', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFEA580C),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                        ),
-                        onPressed: _rebalanceWithMovedSlot,
-                      ),
-                      const SizedBox(width: 4),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white70, size: 16),
-                        onPressed: () => setState(() => _lastShiftedSlot = null),
-                        visualDensity: VisualDensity.compact,
+                            onPressed: _rebalanceWithMovedSlot,
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white70, size: 16),
+                            onPressed: () => setState(() => _lastShiftedSlot = null),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -824,9 +838,11 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                   children: [
                     Icon(Icons.touch_app_outlined, size: 14, color: Color(0xFFEA580C)),
                     SizedBox(width: 6),
-                    Text(
-                      'Drag & Drop any lecture chip to move/swap slots. Shifted lectures can be auto-rebalanced across all divisions.',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                    Expanded(
+                      child: Text(
+                        'Drag & Drop any lecture chip to move/swap slots. Shifted lectures can be auto-rebalanced across all divisions.',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ],
                 ),
@@ -1243,9 +1259,11 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                 ],
               ),
               content: SingleChildScrollView(
-                child: SizedBox(
-                  width: 460,
-                  child: Column(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 460),
+                  child: SizedBox(
+                    width: double.maxFinite,
+                    child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1483,6 +1501,7 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                   ),
                 ),
               ),
+            ),
               actions: [
                 if (initialSubject.isNotEmpty && initialSubject != 'Free')
                   TextButton.icon(

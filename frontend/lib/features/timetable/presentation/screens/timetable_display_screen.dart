@@ -223,21 +223,28 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: const Color(0xFF6366F1), width: 1.5),
             ),
-            child: Row(
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              alignment: WrapAlignment.spaceBetween,
               children: [
-                const Icon(Icons.edit_calendar_outlined, color: Color(0xFF818CF8), size: 20),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    'You have modified published slots (added/rearranged/edited lectures).',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
-                  ),
+                const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.edit_calendar_outlined, color: Color(0xFF818CF8), size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Modified published slots detected.',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
+                    ),
+                  ],
                 ),
                 ElevatedButton.icon(
                   icon: _isSavingPublished
                       ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                       : const Icon(Icons.save_rounded, size: 14),
-                  label: const Text('Save Changes to Server 💾', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                  label: const Text('Save Changes 💾', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF4F46E5),
                     foregroundColor: Colors.white,
@@ -292,11 +299,11 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
               const SizedBox(width: 10),
               ElevatedButton.icon(
                 icon: const Icon(Icons.add_circle_outline, size: 16),
-                label: const Text('Add / Fill Lecture', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                label: const Text('Add Lecture', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4F46E5),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 1,
                 ),
@@ -774,9 +781,11 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
                 ],
               ),
               content: SingleChildScrollView(
-                child: SizedBox(
-                  width: 460,
-                  child: Column(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 460),
+                  child: SizedBox(
+                    width: double.maxFinite,
+                    child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1014,6 +1023,7 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
                   ),
                 ),
               ),
+            ),
               actions: [
                 if (initialSubject.isNotEmpty && initialSubject != 'Free')
                   TextButton.icon(
@@ -1617,9 +1627,12 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
           children: [
             Icon(Icons.calendar_month_outlined, color: Color(0xFF818CF8), size: 22),
             SizedBox(width: 8),
-            Text(
-              'Master Timetable Explorer',
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Colors.white),
+            Flexible(
+              child: Text(
+                'Master Timetable Explorer',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Colors.white),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
@@ -1683,6 +1696,8 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
         ],
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           indicatorColor: const Color(0xFF6366F1),
           indicatorWeight: 3,
           labelColor: Colors.white,

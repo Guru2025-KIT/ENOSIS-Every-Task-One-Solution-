@@ -4,7 +4,6 @@ import '../../providers/timetable_provider.dart';
 import 'time_slot_setup_screen.dart';
 import 'upload_assignments_screen.dart';
 import 'manage_rooms_screen.dart';
-import 'constraint_builder_screen.dart';
 import 'interactive_slot_locking_workbench_screen.dart';
 import 'generate_timetable_screen.dart';
 import 'timetable_display_screen.dart';
@@ -31,7 +30,6 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
 
     final roomCount = provider.roomModels.length;
     final assignCount = provider.assignments.length;
-    final constraintCount = provider.constraints.length;
     final hasPublished = provider.publishedTimetable.isNotEmpty;
     final config = provider.scheduleConfig;
 
@@ -43,12 +41,12 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
         foregroundColor: Colors.white,
         title: const Row(
           children: [
-            Icon(Icons.calendar_month, color: Color(0xFFF97316), size: 24),
-            SizedBox(width: 10),
-            Expanded(
+            Icon(Icons.calendar_month, color: Color(0xFFF97316), size: 22),
+            SizedBox(width: 8),
+            Flexible(
               child: Text(
-                'Timetable Management',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: -0.3, color: Colors.white),
+                'Timetable Hub',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, letterSpacing: -0.3, color: Colors.white),
                 overflow: TextOverflow.ellipsis,
               ),
             ),

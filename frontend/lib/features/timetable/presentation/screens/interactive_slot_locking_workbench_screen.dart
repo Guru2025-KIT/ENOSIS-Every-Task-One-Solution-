@@ -220,11 +220,14 @@ class _InteractiveSlotLockingWorkbenchScreenState
                 borderRadius: BorderRadius.circular(16),
                 side: const BorderSide(color: Color(0xFF334155)),
               ),
-              child: Container(
-                width: 660,
-                height: 540,
-                padding: const EdgeInsets.all(22),
-                child: Column(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 620),
+                child: SizedBox(
+                  width: double.maxFinite,
+                  height: 540,
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
@@ -232,7 +235,7 @@ class _InteractiveSlotLockingWorkbenchScreenState
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF97316).withOpacity(0.15),
+                            color: const Color(0xFFF97316).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Icon(Icons.category_rounded, color: Color(0xFFF97316), size: 22),
@@ -312,36 +315,39 @@ class _InteractiveSlotLockingWorkbenchScreenState
                                     borderRadius: BorderRadius.circular(10),
                                     border: Border.all(color: const Color(0xFF334155)),
                                   ),
-                                  child: Row(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Expanded(
-                                        child: Text(
-                                          sub,
-                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
+                                      Text(
+                                        sub,
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      const SizedBox(width: 8),
-                                      _buildCategoryPill(
-                                        label: '🌐 Inst (OE)',
-                                        isSelected: currentCat == 'institutional',
-                                        activeBgColor: const Color(0xFFEA580C),
-                                        onTap: () => setDialogState(() => localCategories[sub] = 'institutional'),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      _buildCategoryPill(
-                                        label: '🏛️ Dept (MDM)',
-                                        isSelected: currentCat == 'departmental',
-                                        activeBgColor: const Color(0xFFD97706),
-                                        onTap: () => setDialogState(() => localCategories[sub] = 'departmental'),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      _buildCategoryPill(
-                                        label: '📚 Class Core',
-                                        isSelected: currentCat == 'class',
-                                        activeBgColor: const Color(0xFF1E3A8A),
-                                        onTap: () => setDialogState(() => localCategories[sub] = 'class'),
+                                      const SizedBox(height: 6),
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 4,
+                                        children: [
+                                          _buildCategoryPill(
+                                            label: '🌐 Inst (OE)',
+                                            isSelected: currentCat == 'institutional',
+                                            activeBgColor: const Color(0xFFEA580C),
+                                            onTap: () => setDialogState(() => localCategories[sub] = 'institutional'),
+                                          ),
+                                          _buildCategoryPill(
+                                            label: '🏛️ Dept (MDM)',
+                                            isSelected: currentCat == 'departmental',
+                                            activeBgColor: const Color(0xFFD97706),
+                                            onTap: () => setDialogState(() => localCategories[sub] = 'departmental'),
+                                          ),
+                                          _buildCategoryPill(
+                                            label: '📚 Class Core',
+                                            isSelected: currentCat == 'class',
+                                            activeBgColor: const Color(0xFF1E3A8A),
+                                            onTap: () => setDialogState(() => localCategories[sub] = 'class'),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
@@ -400,7 +406,9 @@ class _InteractiveSlotLockingWorkbenchScreenState
                   ],
                 ),
               ),
-            );
+            ),
+          ),
+        );
           },
         );
       },
@@ -947,21 +955,24 @@ class _InteractiveSlotLockingWorkbenchScreenState
         foregroundColor: Colors.white,
         title: const Row(
           children: [
-            Icon(Icons.lock_clock_outlined, color: Color(0xFFF97316), size: 22),
+            Icon(Icons.lock_clock_outlined, color: Color(0xFFF97316), size: 20),
             SizedBox(width: 8),
-            Text(
-              'Interactive Pre-Assignment & Locking Workbench',
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Colors.white),
+            Flexible(
+              child: Text(
+                'Pre-Assignment & Locking',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Colors.white),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
         actions: [
           TextButton.icon(
-            icon: const Icon(Icons.category, color: Color(0xFFFB923C), size: 16),
-            label: const Text('Classify Subjects', style: TextStyle(color: Color(0xFFFB923C), fontWeight: FontWeight.bold, fontSize: 12)),
+            icon: const Icon(Icons.category, color: Color(0xFFFB923C), size: 15),
+            label: const Text('Classify', style: TextStyle(color: Color(0xFFFB923C), fontWeight: FontWeight.bold, fontSize: 12)),
             onPressed: _showSubjectClassificationDialog,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
         ],
       ),
       body: SingleChildScrollView(
@@ -986,43 +997,53 @@ class _InteractiveSlotLockingWorkbenchScreenState
                   ),
                 ],
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEA580C).withValues(alpha: 0.25),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.touch_app, color: Color(0xFFFB923C), size: 24),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Visual Slot Placement & Priority Cohort Locking',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEA580C).withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        const SizedBox(height: 3),
-                        Text(
-                          'Locking an Institutional (OE) or Dept (MDM) subject on $selectedClass auto-syncs across all $cohort classes. CP-SAT optimizes remaining lectures conflict-free.',
-                          style: TextStyle(color: const Color(0xFFFB923C).withValues(alpha: 0.9), fontSize: 11.5),
+                        child: const Icon(Icons.touch_app, color: Color(0xFFFB923C), size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Visual Slot Placement & Priority Cohort Locking',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14.5),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'Locking an Institutional (OE) or Dept (MDM) subject on $selectedClass auto-syncs across all $cohort classes. CP-SAT optimizes remaining lectures conflict-free.',
+                              style: TextStyle(color: const Color(0xFFFB923C).withValues(alpha: 0.9), fontSize: 11.5),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.play_arrow_rounded, size: 20),
-                    label: const Text('Auto-Generate', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFF97316),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.play_arrow_rounded, size: 20),
+                      label: const Text('Auto-Generate Timetable', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF97316),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      onPressed: _saveAndExecuteSolver,
                     ),
-                    onPressed: _saveAndExecuteSolver,
                   ),
                 ],
               ),
@@ -1031,35 +1052,36 @@ class _InteractiveSlotLockingWorkbenchScreenState
             const SizedBox(height: 18),
 
             // ── DIVISION SELECTOR & HOME CLASSROOM BADGE ─────────────────────
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFCBD5E1)),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedDivision,
-                        hint: const Text('Select Division to Inspect'),
-                        items: divisions.map((d) {
-                          return DropdownMenuItem(
-                            value: d,
-                            child: Text(
-                              d,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (val) => setState(() => _selectedDivision = val),
-                      ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedDivision,
+                      isExpanded: true,
+                      hint: const Text('Select Division to Inspect'),
+                      items: divisions.map((d) {
+                        return DropdownMenuItem(
+                          value: d,
+                          child: Text(
+                            d,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (val) => setState(() => _selectedDivision = val),
                     ),
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(height: 10),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                   decoration: BoxDecoration(
@@ -1071,9 +1093,12 @@ class _InteractiveSlotLockingWorkbenchScreenState
                     children: [
                       const Icon(Icons.meeting_room, color: Color(0xFFF97316), size: 16),
                       const SizedBox(width: 6),
-                      Text(
-                        'Home Classroom: ${_selectedDivision != null ? provider.getHomeClassroomForDivision(_selectedDivision!) : "Assigned"}',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                      Flexible(
+                        child: Text(
+                          'Home Classroom: ${_selectedDivision != null ? provider.getHomeClassroomForDivision(_selectedDivision!) : "Assigned"}',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                   ),
@@ -1126,40 +1151,47 @@ class _InteractiveSlotLockingWorkbenchScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 6,
             children: [
-              const Icon(Icons.palette_outlined, color: Color(0xFFEA580C), size: 20),
-              const SizedBox(width: 8),
-              const Text(
-                'Subject Tray (Drag & Drop or Tap to Lock)',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFF0F172A)),
+              const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.palette_outlined, color: Color(0xFFEA580C), size: 18),
+                  SizedBox(width: 6),
+                  Text(
+                    'Subject Tray',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF0F172A)),
+                  ),
+                ],
               ),
-              const Spacer(),
               TextButton.icon(
-                icon: const Icon(Icons.category, size: 15, color: Color(0xFF0F172A)),
-                label: const Text('⚙️ Classify', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11.5)),
+                icon: const Icon(Icons.category, size: 14, color: Color(0xFF0F172A)),
+                label: const Text('Classify', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11)),
                 style: TextButton.styleFrom(
                   backgroundColor: const Color(0xFFF1F5F9),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 onPressed: _showSubjectClassificationDialog,
               ),
-              const SizedBox(width: 8),
               TextButton.icon(
-                icon: const Icon(Icons.add, size: 16, color: Color(0xFFEA580C)),
-                label: const Text('+ Add Subject', style: TextStyle(color: Color(0xFFEA580C), fontWeight: FontWeight.bold, fontSize: 12)),
+                icon: const Icon(Icons.add, size: 14, color: Color(0xFFEA580C)),
+                label: const Text('Add Subject', style: TextStyle(color: Color(0xFFEA580C), fontWeight: FontWeight.bold, fontSize: 11)),
                 style: TextButton.styleFrom(
                   backgroundColor: const Color(0xFFFFF7ED),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 onPressed: _showAddSubjectDialog,
               ),
-              const SizedBox(width: 10),
               Text(
                 '${_lockedSlots.length} Locked 🔒',
-                style: const TextStyle(color: Color(0xFFEA580C), fontWeight: FontWeight.bold, fontSize: 12),
+                style: const TextStyle(color: Color(0xFFEA580C), fontWeight: FontWeight.bold, fontSize: 11),
               ),
             ],
           ),
@@ -1169,6 +1201,8 @@ class _InteractiveSlotLockingWorkbenchScreenState
             child: Column(
               children: [
                 const TabBar(
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
                   labelColor: Color(0xFF4F46E5),
                   unselectedLabelColor: Color(0xFF64748B),
                   indicatorColor: Color(0xFF4F46E5),
@@ -1326,19 +1360,30 @@ class _InteractiveSlotLockingWorkbenchScreenState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.grid_on, color: Color(0xFF0F172A), size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  'Weekly Schedule Grid: $selectedDivision',
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFF0F172A)),
+                Row(
+                  children: [
+                    const Icon(Icons.grid_on, color: Color(0xFF0F172A), size: 17),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        'Weekly Schedule Grid: $selectedDivision',
+                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF0F172A)),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
+                  ],
                 ),
-                const Spacer(),
+                const SizedBox(height: 2),
                 const Text(
-                  'Tap or Drop into a slot to Lock 🔒',
-                  style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                  'Tap or drop a subject card into a slot to lock it 🔒',
+                  style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ],
             ),
