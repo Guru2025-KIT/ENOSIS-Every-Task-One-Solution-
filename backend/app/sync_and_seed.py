@@ -348,22 +348,31 @@ def seed_admin_user():
 
     db = SessionLocal()
     try:
-        # Check if an admin with enosissofficial@gmail.com already exists
+        # 1. Check if user with DEFAULT_ADMIN_EMAIL exists
         admin_user = db.query(User).filter(User.email == DEFAULT_ADMIN_EMAIL).first()
         
-        # If not, check if an admin with old email exists and update it
+        # 2. If not found by email, look for existing admin account to migrate
         if not admin_user:
-            old_admin = db.query(User).filter(User.email == "admin@enosis.edu.in").first()
-            if old_admin:
-                old_admin.email = DEFAULT_ADMIN_EMAIL
-                old_admin.role = UserRole.ADMIN
-                old_admin.is_active = True
-                old_admin.can_manage_timetable = True
-                old_admin.hashed_password = hash_password(DEFAULT_ADMIN_PASSWORD)
-                db.commit()
-                print(f"  [OK] Updated admin account email to: {DEFAULT_ADMIN_EMAIL} (password: {DEFAULT_ADMIN_PASSWORD})")
-                return
+            admin_user = (
+                db.query(User)
+                .filter(
+                    (User.employee_id == "ADMIN-001")
+                    | (User.role == UserRole.ADMIN)
+                    | (User.email.in_(["admin@enosis.edu.in", "admin_master@enosis.edu.in"]))
+                )
+                .first()
+            )
 
+        if admin_user:
+            admin_user.email = DEFAULT_ADMIN_EMAIL
+            admin_user.full_name = DEFAULT_ADMIN_NAME
+            admin_user.role = UserRole.ADMIN
+            admin_user.is_active = True
+            admin_user.can_manage_timetable = True
+            admin_user.hashed_password = hash_password(DEFAULT_ADMIN_PASSWORD)
+            db.commit()
+            print(f"  [OK] Admin account active & updated: {admin_user.email} (password: {DEFAULT_ADMIN_PASSWORD})")
+        else:
             new_admin = User(
                 email=DEFAULT_ADMIN_EMAIL,
                 hashed_password=hash_password(DEFAULT_ADMIN_PASSWORD),
@@ -377,13 +386,6 @@ def seed_admin_user():
             db.add(new_admin)
             db.commit()
             print(f"  [OK] Created default admin user: {DEFAULT_ADMIN_EMAIL} (password: {DEFAULT_ADMIN_PASSWORD})")
-        else:
-            admin_user.role = UserRole.ADMIN
-            admin_user.is_active = True
-            admin_user.can_manage_timetable = True
-            admin_user.hashed_password = hash_password(DEFAULT_ADMIN_PASSWORD)
-            db.commit()
-            print(f"  [OK] Admin account active & verified: {admin_user.email}")
     except Exception as e:
         db.rollback()
         print(f"  [WARN] Admin check notice: {e}")

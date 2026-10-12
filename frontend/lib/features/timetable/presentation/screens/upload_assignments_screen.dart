@@ -171,7 +171,7 @@ class _UploadAssignmentsScreenState extends State<UploadAssignmentsScreen> {
     });
 
     try {
-      // ✅ FIX: Using FilePicker.pickFile as used in manage_rooms_screen.dart
+      // FIX: Using FilePicker.pickFile as used in manage_rooms_screen.dart
       final file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: ['xlsx'],
