@@ -24,8 +24,7 @@ From automated mathematical timetable scheduling and NBA/NAAC-accredited outcome
 
 </div>
 
-## 💡 What is ENOSIS? (In Simple Words)
-
+## 💡 What is ENOSIS?
 In most colleges today, managing academic operations is chaotic:
 - **Timetable coordinators** spend weeks in Excel trying to fit dozens of classes, faculty members, and labs without double-booking rooms or teachers.
 - **Faculty members** jump between different portals to check their schedules, plan their lectures, track curriculum outcomes, and record their professional achievements.
