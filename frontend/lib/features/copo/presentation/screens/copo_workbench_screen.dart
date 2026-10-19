@@ -1657,59 +1657,60 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           const SizedBox(height: 10),
 
           // Row 2: Active Mapping Course Status Banner
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 9, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.primarySoft,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                            color: AppColors.primary.withValues(alpha: 0.3)),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth > 700;
+              final courseInfoWidget = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(
+                      _selectedCourse.code,
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
                       ),
-                      child: Text(
-                        _selectedCourse.code,
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _selectedCourse.name,
+                          style: AppTypography.bodyMedium.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
+                        Text(
+                          'KIT\'s College of Engineering (Autonomous), Kolhapur · Department of CSE (AI & ML) · ${_selectedCourse.semester}',
+                          style: AppTypography.caption.copyWith(
+                              color: AppColors.textSecondary, fontSize: 11),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _selectedCourse.name,
-                            style: AppTypography.bodyMedium.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            'KIT\'s College of Engineering (Autonomous), Kolhapur · Department of CSE (AI & ML) · ${_selectedCourse.semester}',
-                            style: AppTypography.caption.copyWith(
-                                color: AppColors.textSecondary, fontSize: 11),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Row(
+                  ),
+                ],
+              );
+
+              final attainmentBadgeWidget = Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
                     padding:
@@ -1771,8 +1772,30 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     ],
                   ),
                 ],
-              ),
-            ],
+              );
+
+              if (isWide) {
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: courseInfoWidget),
+                    const SizedBox(width: 12),
+                    attainmentBadgeWidget,
+                  ],
+                );
+              } else {
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    courseInfoWidget,
+                    attainmentBadgeWidget,
+                  ],
+                );
+              }
+            },
           ),
         ],
       ),
@@ -2126,25 +2149,33 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 12,
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                              'Step 2: Student Master Roll Call (${roster.length} Enrolled)',
-                              style: AppTypography.h3
-                                  .copyWith(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 4),
-                          Text(
-                              'Upload or manage the master list of all students with Sr. No., Roll No., Name, and PRN.',
-                              style: AppTypography.caption
-                                  .copyWith(color: AppColors.textSecondary)),
-                        ],
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 550),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                                'Step 2: Student Master Roll Call (${roster.length} Enrolled)',
+                                style: AppTypography.h3
+                                    .copyWith(fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 4),
+                            Text(
+                                'Upload or manage the master list of all students with Sr. No., Roll No., Name, and PRN.',
+                                style: AppTypography.caption
+                                    .copyWith(color: AppColors.textSecondary)),
+                          ],
+                        ),
                       ),
                       Wrap(
                         spacing: 10,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           OutlinedButton.icon(
                             onPressed: () {
@@ -2191,7 +2222,6 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           const SizedBox(height: 18),
 
           // Master Student Data Table Card
-          // Master Student Data Table Card
           Card(
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -2200,8 +2230,11 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text('Enrolled Student Roster',
                           style: AppTypography.h3
@@ -2347,15 +2380,21 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            spacing: 16,
+            runSpacing: 12,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
                 '${exam.examType} (In-Semester Evaluation)',
                 style: AppTypography.h2.copyWith(
                     fontWeight: FontWeight.bold, color: AppColors.primary),
               ),
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   OutlinedButton.icon(
                     onPressed: () {
@@ -2380,7 +2419,6 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       side: const BorderSide(color: AppColors.secondary),
                     ),
                   ),
-                  const SizedBox(width: 8),
                   ElevatedButton.icon(
                     onPressed: _isProcessing
                         ? null
@@ -2403,52 +2441,59 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                alignment: WrapAlignment.spaceBetween,
                 children: [
-                  Text('Mapped COs for ${exam.examType}: ',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 13)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: ['CO1', 'CO2', 'CO3', 'CO4', 'CO5'].map((co) {
-                        final isSelected =
-                            exam.mappedCos.contains(co) || exam.mappedCo == co;
-                        return FilterChip(
-                          selected: isSelected,
-                          showCheckmark: isSelected,
-                          label: Text(co,
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : AppColors.textPrimary,
-                                  fontSize: 12)),
-                          selectedColor: AppColors.secondary,
-                          checkmarkColor: Colors.white,
-                          onSelected: (selected) {
-                            setState(() {
-                              if (selected) {
-                                if (!exam.mappedCos.contains(co)) {
-                                  exam.mappedCos.add(co);
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text('Mapped COs for ${exam.examType}: ',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 13)),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: ['CO1', 'CO2', 'CO3', 'CO4', 'CO5'].map((co) {
+                          final isSelected =
+                              exam.mappedCos.contains(co) || exam.mappedCo == co;
+                          return FilterChip(
+                            selected: isSelected,
+                            showCheckmark: isSelected,
+                            label: Text(co,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : AppColors.textPrimary,
+                                    fontSize: 12)),
+                            selectedColor: AppColors.secondary,
+                            checkmarkColor: Colors.white,
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  if (!exam.mappedCos.contains(co)) {
+                                    exam.mappedCos.add(co);
+                                  }
+                                } else {
+                                  if (exam.mappedCos.length > 1) {
+                                    exam.mappedCos.remove(co);
+                                  }
                                 }
-                              } else {
-                                if (exam.mappedCos.length > 1) {
-                                  exam.mappedCos.remove(co);
+                                if (exam.mappedCos.isNotEmpty) {
+                                  exam.mappedCo = exam.mappedCos.first;
                                 }
-                              }
-                              if (exam.mappedCos.isNotEmpty) {
-                                exam.mappedCo = exam.mappedCos.first;
-                              }
-                              _recalculate();
-                            });
-                          },
-                        );
-                      }).toList(),
-                    ),
+                                _recalculate();
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ],
                   ),
                   Text('Max Marks: ${exam.maxMarks.toStringAsFixed(0)}',
                       style: AppTypography.captionBold),
@@ -2459,36 +2504,52 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           const SizedBox(height: 16),
 
           // KPI Stats Cards
-          Row(
-            children: [
-              Expanded(
-                  child: _buildKpiCard(
-                      'Attempted',
-                      '${stats.attemptedCount} (${stats.attemptedPercentage}%)',
-                      Icons.people_alt_outlined,
-                      const Color(0xFF0284C7))),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: _buildKpiCard(
-                      'Scoring >= 50% (5 Marks)',
-                      '${stats.scoring50Count} (${stats.scoring50Percentage}%)',
-                      Icons.check_circle_outline,
-                      const Color(0xFF16A34A))),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: _buildKpiCard(
-                      'Scoring >= 55% (5.5 Marks)',
-                      '${stats.scoring55Count} (${stats.scoring55Percentage}%)',
-                      Icons.trending_up,
-                      const Color(0xFFD97706))),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: _buildKpiCard(
-                      'Attainment Level',
-                      'Level ${stats.attainmentLevel} / 3',
-                      Icons.star_border_purple500,
-                      const Color(0xFF8B5CF6))),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardW = constraints.maxWidth > 800
+                  ? (constraints.maxWidth - 36) / 4
+                  : (constraints.maxWidth > 480
+                      ? (constraints.maxWidth - 12) / 2
+                      : constraints.maxWidth);
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: cardW,
+                    child: _buildKpiCard(
+                        'Attempted',
+                        '${stats.attemptedCount} (${stats.attemptedPercentage}%)',
+                        Icons.people_alt_outlined,
+                        const Color(0xFF0284C7)),
+                  ),
+                  SizedBox(
+                    width: cardW,
+                    child: _buildKpiCard(
+                        'Scoring >= 50% (5 Marks)',
+                        '${stats.scoring50Count} (${stats.scoring50Percentage}%)',
+                        Icons.check_circle_outline,
+                        const Color(0xFF16A34A)),
+                  ),
+                  SizedBox(
+                    width: cardW,
+                    child: _buildKpiCard(
+                        'Scoring >= 55% (5.5 Marks)',
+                        '${stats.scoring55Count} (${stats.scoring55Percentage}%)',
+                        Icons.trending_up,
+                        const Color(0xFFD97706)),
+                  ),
+                  SizedBox(
+                    width: cardW,
+                    child: _buildKpiCard(
+                        'Attainment Level',
+                        'Level ${stats.attainmentLevel} / 3',
+                        Icons.star_border_purple500,
+                        const Color(0xFF8B5CF6)),
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
 
@@ -2744,15 +2805,21 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            spacing: 16,
+            runSpacing: 12,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
                 '${exam.examType} (Question-Wise Assessment)',
                 style: AppTypography.h2.copyWith(
                     fontWeight: FontWeight.bold, color: AppColors.primary),
               ),
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   OutlinedButton.icon(
                     onPressed: () {
@@ -2780,7 +2847,6 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       side: const BorderSide(color: AppColors.primary),
                     ),
                   ),
-                  const SizedBox(width: 8),
                   ElevatedButton.icon(
                     onPressed: _isProcessing
                         ? null
@@ -2806,22 +2872,28 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 12,
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                              'Step 1: ${exam.examType} Questions & CO Mapping',
-                              style: AppTypography.h3
-                                  .copyWith(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 4),
-                          Text(
-                              'Type custom Questions, select Max Marks (1–10) & assign Course Outcome (CO)',
-                              style: AppTypography.caption
-                                  .copyWith(color: AppColors.textSecondary)),
-                        ],
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 550),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                                'Step 1: ${exam.examType} Questions & CO Mapping',
+                                style: AppTypography.h3
+                                    .copyWith(fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 4),
+                            Text(
+                                'Type custom Questions, select Max Marks (1–10) & assign Course Outcome (CO)',
+                                style: AppTypography.caption
+                                    .copyWith(color: AppColors.textSecondary)),
+                          ],
+                        ),
                       ),
                       ElevatedButton.icon(
                         onPressed: () => _showAddQuestionDialog(exam),
@@ -3022,8 +3094,11 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
                           'Step 3: CO Average Attainment Summary for ${exam.examType}',
@@ -3672,8 +3747,11 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text('Final Course Outcome (CO) Attainment',
                           style: AppTypography.h3.copyWith(
@@ -3989,8 +4067,11 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text('Final CO Attainment Visualization',
                     style: AppTypography.h3.copyWith(
@@ -4303,79 +4384,53 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       ),
       child: SafeArea(
         top: false,
-        child: Row(
-          children: [
-            // Prev Step
-            OutlinedButton.icon(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isCompact = constraints.maxWidth < 640;
+
+            final backButton = OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.textPrimary,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: EdgeInsets.symmetric(
+                    horizontal: isCompact ? 8 : 12, vertical: 8),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
               ),
-              icon: const Icon(Icons.arrow_back, size: 16),
+              icon: const Icon(Icons.arrow_back, size: 15),
               label: Text(
-                hasPrev ? 'Back: $prevTitle' : 'Switch Course',
-                style:
-                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                isCompact
+                    ? 'Back'
+                    : (hasPrev ? 'Back: $prevTitle' : 'Switch Course'),
+                style: const TextStyle(
+                    fontSize: 11.5, fontWeight: FontWeight.w600),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               onPressed: hasPrev
                   ? () => _goToTab(currentIndex - 1)
                   : () => setState(() => _hasStartedMapping = false),
-            ),
-            const Spacer(),
-            // Progress dots
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: List.generate(8, (i) {
-                final isCurrent = i == currentIndex;
-                final isPast = i < currentIndex;
-                return InkWell(
-                  onTap: () => _goToTab(i),
-                  borderRadius: BorderRadius.circular(10),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    width: isCurrent ? 26 : 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: isCurrent
-                          ? AppColors.secondary
-                          : (isPast ? AppColors.primary : AppColors.divider),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                );
-              }),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '${currentIndex + 1}/8',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const Spacer(),
-            // Next Step
-            ElevatedButton.icon(
+            );
+
+            final nextButton = ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor:
                     hasNext ? AppColors.secondary : AppColors.success,
                 foregroundColor: Colors.white,
                 elevation: 2,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: EdgeInsets.symmetric(
+                    horizontal: isCompact ? 10 : 14, vertical: 8),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
               ),
-              icon: Icon(hasNext ? Icons.arrow_forward : Icons.check, size: 16),
+              icon: Icon(hasNext ? Icons.arrow_forward : Icons.check, size: 15),
               label: Text(
-                hasNext ? 'Next: $nextTitle ➔' : 'Report Ready ✓',
-                style:
-                    const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                isCompact
+                    ? (hasNext ? 'Next ➔' : 'Ready ✓')
+                    : (hasNext ? 'Next: $nextTitle ➔' : 'Report Ready ✓'),
+                style: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.bold),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               onPressed: () {
                 if (hasNext) {
@@ -4392,8 +4447,64 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   );
                 }
               },
-            ),
-          ],
+            );
+
+            final dotsWidget = Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(8, (i) {
+                    final isCurrent = i == currentIndex;
+                    final isPast = i < currentIndex;
+                    return InkWell(
+                      onTap: () => _goToTab(i),
+                      borderRadius: BorderRadius.circular(10),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        width: isCurrent ? 22 : 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: isCurrent
+                              ? AppColors.secondary
+                              : (isPast ? AppColors.primary : AppColors.divider),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '${currentIndex + 1}/8',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            );
+
+            return Row(
+              children: [
+                Flexible(flex: 3, child: backButton),
+                const SizedBox(width: 4),
+                Expanded(
+                  flex: 4,
+                  child: Center(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: dotsWidget,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Flexible(flex: 3, child: nextButton),
+              ],
+            );
+          },
         ),
       ),
     );

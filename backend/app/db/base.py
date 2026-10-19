@@ -17,11 +17,15 @@ from app.core.config import settings
 # is the standard fix — recommended directly in FastAPI's own SQLAlchemy
 # tutorial. This branch only applies to SQLite; MySQL (via Docker) doesn't
 # have this issue and uses a normal connection pool.
-is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+db_url = settings.DATABASE_URL
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+is_sqlite = db_url.startswith("sqlite")
 connect_args = {"check_same_thread": False, "timeout": 30} if is_sqlite else {}
 engine_kwargs = {"poolclass": StaticPool} if is_sqlite else {}
 
-engine = create_engine(settings.DATABASE_URL, connect_args=connect_args, **engine_kwargs)
+engine = create_engine(db_url, connect_args=connect_args, **engine_kwargs)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
