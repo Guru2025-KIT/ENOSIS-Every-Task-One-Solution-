@@ -104,7 +104,7 @@ def get_faculty_dashboard_summary(
     config = db.query(ScheduleConfig).first()
 
     # 2. Get active generation run if any
-    active_run = db.query(GenerationRun).filter(GenerationRun.status == "OPTIMAL").order_by(GenerationRun.generated_at.desc()).first()
+    active_run = db.query(GenerationRun).filter(GenerationRun.status.in_(["OPTIMAL", "FEASIBLE"])).order_by(GenerationRun.generated_at.desc()).first()
     batch_id = active_run.id if active_run else None
 
     # 3. Query Faculty Timetable for Selected Day

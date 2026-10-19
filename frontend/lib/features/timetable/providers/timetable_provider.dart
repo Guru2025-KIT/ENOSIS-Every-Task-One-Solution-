@@ -85,12 +85,72 @@ class TimetableProvider extends ChangeNotifier {
       _scheduleConfig = await _repository.fetchScheduleConfig();
       _roomModels = await _repository.fetchRooms();
       _generateTimeSlotsFromConfig();
+      // ✅ CRITICAL FIX: Load teaching assignments so Step 4 workbench can show subjects
+      if (_assignments.isEmpty) {
+        await _fetchAssignmentsFromBackend();
+      }
+      await fetchSavedConstraints();
       await fetchPublishedTimetable();
     } catch (e) {
       debugPrint('Error initializing timetable provider: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Fetches all teaching assignments from the backend workload sheet
+  /// and populates _assignments so the Step 4 workbench can display subjects.
+  Future<void> _fetchAssignmentsFromBackend() async {
+    try {
+      final rawList = await _repository.fetchAssignments();
+      final loaded = <TeachingAssignment>[];
+      for (final raw in rawList) {
+        if (raw is! Map) continue;
+        final m = Map<String, dynamic>.from(raw);
+        final faculty = (m['faculty_name'] ?? m['facultyName'] ?? 'Faculty').toString().trim();
+        final subject = (m['subject_name'] ?? m['subjectName'] ?? '').toString().trim();
+        final code = (m['subject_code'] ?? m['subjectCode'] ?? '').toString().trim();
+        final rawClass = (m['class_name'] ?? m['className'] ?? m['division_name'] ?? '').toString().trim();
+        final className = rawClass.isEmpty ? 'All' : rawClass;
+        final batch = (m['batch'] ?? '-').toString().trim();
+        final type = (m['type'] ?? 'Theory').toString().trim();
+        final hours = int.tryParse((m['weekly_hours'] ?? m['weeklyHours'] ?? 3).toString()) ?? 3;
+        final jointId = (m['joint_group_id'] ?? '').toString().trim();
+        final rawCat = (m['category'] ?? '').toString().trim().toLowerCase();
+
+        if (subject.isEmpty) continue;
+
+        loaded.add(TeachingAssignment(
+          facultyName: faculty.isEmpty ? 'Faculty' : faculty,
+          subjectName: subject,
+          subjectCode: code.isEmpty ? subject.toUpperCase() : code,
+          className: className,
+          batch: batch.isEmpty ? '-' : batch,
+          weeklyHours: hours,
+          type: type,
+          jointGroupId: jointId,
+        ));
+
+        // Auto-classify based on category payload or subject name keywords
+        final lo = subject.toLowerCase();
+        if (rawCat == 'institutional' || lo.contains('(oe)') || lo.contains('open elective') ||
+            lo.contains('institute') || lo.contains('honours') || lo.contains('minors') ||
+            lo.startsWith('oe:') || lo.startsWith('oe-') || lo.startsWith('oe ')) {
+          _institutionalSubjectNames.add(subject);
+        } else if (rawCat == 'departmental' || lo.contains('(mdm)') || lo.contains('mdm') ||
+            lo.contains('(pe)') || lo.contains('pe-') || lo.startsWith('pe ') || lo.startsWith('pe:') ||
+            lo.contains('dept elective') || lo.contains('program elective') || lo.contains('professional elective')) {
+          _departmentalSubjectNames.add(subject);
+        }
+      }
+      if (loaded.isNotEmpty) {
+        _assignments.clear();
+        _assignments.addAll(loaded);
+        debugPrint('Loaded ${loaded.length} assignments from backend for workbench.');
+      }
+    } catch (e) {
+      debugPrint('fetchAssignmentsFromBackend error: $e');
     }
   }
 
@@ -580,6 +640,75 @@ class TimetableProvider extends ChangeNotifier {
     return true;
   }
 
+  /// Fetches saved active constraints from backend database and merges into _constraints
+  Future<void> fetchSavedConstraints() async {
+    try {
+      final res = await ApiClient.get('/timetable/constraints');
+      if (res.statusCode == 200) {
+        final list = jsonDecode(res.body) as List<dynamic>;
+        _constraints.removeWhere((c) => c.id.startsWith('db_lock_'));
+        for (final item in list) {
+          final cType = item['constraint_type']?.toString().toLowerCase() ?? '';
+          final rType = item['rule_type']?.toString().toLowerCase() ?? '';
+          final desc = item['description']?.toString() ?? '';
+          final isActive = item['is_active'] != false;
+          if (!isActive) continue;
+          if (cType.contains('fixed') || rType.contains('fixed') || desc.toLowerCase().contains('lock')) {
+            final p = item['payload'] is Map ? item['payload'] as Map<String, dynamic> : <String, dynamic>{};
+            String cls = p['class_name']?.toString() ?? p['className']?.toString() ?? item['class_name']?.toString() ?? '';
+            String day = p['day_name']?.toString() ?? p['day']?.toString() ?? item['day_name']?.toString() ?? '';
+            var slotRaw = p['slot_number'] ?? p['slot'] ?? item['slot_number'];
+            String subj = p['subject_name']?.toString() ?? p['subject']?.toString() ?? item['subject_name']?.toString() ?? '';
+            String fac = p['faculty_name']?.toString() ?? p['faculty']?.toString() ?? item['faculty_name']?.toString() ?? '';
+
+            if (desc.isNotEmpty && (cls.isEmpty || day.isEmpty || slotRaw == null || subj.isEmpty)) {
+              final reg = RegExp(r'Locked\s+(.*?)\s+on\s+(\w+)\s+Slot\s+(\d+)\s+for\s+(.*)', caseSensitive: false);
+              final match = reg.firstMatch(desc);
+              if (match != null) {
+                if (subj.isEmpty) subj = match.group(1)?.trim() ?? '';
+                if (day.isEmpty) day = match.group(2)?.trim() ?? '';
+                slotRaw ??= int.tryParse(match.group(3)?.trim() ?? '');
+                if (cls.isEmpty) cls = match.group(4)?.trim() ?? '';
+              }
+            }
+
+            if (day.isNotEmpty && int.tryParse(day) != null) {
+              final dayIndex = int.parse(day);
+              final dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+              if (dayIndex >= 0 && dayIndex < dayNames.length) {
+                day = dayNames[dayIndex];
+              }
+            }
+
+            final slot = slotRaw is int ? slotRaw : int.tryParse(slotRaw?.toString() ?? '');
+            if (cls.isNotEmpty && day.isNotEmpty && slot != null && subj.isNotEmpty) {
+              final key = '${cls}_${day}_$slot';
+              final alreadyExists = _constraints.any((c) =>
+                  c.classNames.contains(cls) &&
+                  c.days.contains(day) &&
+                  c.slotNumbers.contains(slot));
+              if (!alreadyExists) {
+                _constraints.add(
+                  TimetableConstraint(
+                    id: 'db_lock_${item['id'] ?? key}',
+                    category: 'Fixed Slot | Locked ($subj)',
+                    facultyNames: fac.isNotEmpty ? [fac] : [],
+                    subjectNames: [subj],
+                    classNames: [cls],
+                    days: [day],
+                    slotNumbers: [slot],
+                  ),
+                );
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('fetchSavedConstraints error: $e');
+    }
+  }
+
   // Generation
   Future<void> generateTimetable() async {
     _generatedTimetable.clear();
@@ -590,6 +719,8 @@ class TimetableProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Ensure any saved locks in database are loaded
+      await fetchSavedConstraints();
       final assignmentsPayload = _assignments.map((a) => {
         'facultyName': a.facultyName,
         'subjectName': a.subjectName,
@@ -891,6 +1022,12 @@ class TimetableProvider extends ChangeNotifier {
   // Quick Manual Assignment Creation
   void addManualAssignment(TeachingAssignment assignment) {
     _assignments.add(assignment);
+    notifyListeners();
+  }
+
+  /// Public method to force-refresh assignments from backend (called by Step 4 workbench)
+  Future<void> refreshAssignments() async {
+    await _fetchAssignmentsFromBackend();
     notifyListeners();
   }
 

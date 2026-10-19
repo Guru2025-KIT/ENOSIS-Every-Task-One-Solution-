@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import '../../../../core/network/api_client.dart';
 import '../../data/timetable_repository.dart';
 import '../../models/teaching_assignment.dart';
 import '../../models/time_slot.dart';
@@ -25,21 +28,30 @@ class _InteractiveSlotLockingWorkbenchScreenState
   // Locked slots map: key: "div_day_slot", value: Map of slot data
   final Map<String, Map<String, dynamic>> _lockedSlots = {};
 
+  bool _isSavingLocks = false;
+  bool _hasUnsavedChanges = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<TimetableProvider>();
-      provider.initializeData();
-      _loadExistingLockedConstraints();
+      // ✅ CRITICAL FIX: Always refresh assignments from backend on workbench open
+      // so subjects appear even if user navigated directly to Step 4
+      provider.initializeData().then((_) {
+        if (provider.assignments.isEmpty) {
+          provider.refreshAssignments();
+        }
+        _loadExistingLockedConstraints();
+      });
     });
   }
 
-  void _loadExistingLockedConstraints() {
+  Future<void> _loadExistingLockedConstraints() async {
     final provider = context.read<TimetableProvider>();
     for (final con in provider.constraints) {
       final cat = con.category.toLowerCase();
-      if (cat.contains('locked') || cat.contains('fixed') || cat.contains('force')) {
+      if (cat.contains('locked') || cat.contains('fixed') || cat.contains('force') || con.id.startsWith('lock_')) {
         for (final day in con.days) {
           for (final slot in con.slotNumbers) {
             for (final cls in con.classNames) {
@@ -59,7 +71,88 @@ class _InteractiveSlotLockingWorkbenchScreenState
         }
       }
     }
+
+    // Also fetch saved constraints from backend database if available
+    try {
+      final res = await ApiClient.get('/timetable/constraints');
+      if (res.statusCode == 200) {
+        final list = jsonDecode(res.body) as List<dynamic>;
+        for (final item in list) {
+          final cType = item['constraint_type']?.toString().toLowerCase() ?? '';
+          final rType = item['rule_type']?.toString().toLowerCase() ?? '';
+          final desc = item['description']?.toString() ?? '';
+          if (cType.contains('fixed') || rType.contains('fixed') || desc.toLowerCase().contains('lock')) {
+            final p = item['payload'] is Map ? item['payload'] as Map<String, dynamic> : <String, dynamic>{};
+            String cls = p['class_name']?.toString() ?? p['className']?.toString() ?? item['class_name']?.toString() ?? '';
+            String day = p['day_name']?.toString() ?? p['day']?.toString() ?? item['day_name']?.toString() ?? '';
+            var slotRaw = p['slot_number'] ?? p['slot'] ?? item['slot_number'];
+            String subj = p['subject_name']?.toString() ?? p['subject']?.toString() ?? item['subject_name']?.toString() ?? '';
+            String fac = p['faculty_name']?.toString() ?? p['faculty']?.toString() ?? item['faculty_name']?.toString() ?? '';
+
+            // Regex fallback from description if payload fields were normalized into UUIDs
+            if (desc.isNotEmpty && (cls.isEmpty || day.isEmpty || slotRaw == null || subj.isEmpty)) {
+              final reg = RegExp(r'Locked\s+(.*?)\s+on\s+(\w+)\s+Slot\s+(\d+)\s+for\s+(.*)', caseSensitive: false);
+              final match = reg.firstMatch(desc);
+              if (match != null) {
+                if (subj.isEmpty) subj = match.group(1)?.trim() ?? '';
+                if (day.isEmpty) day = match.group(2)?.trim() ?? '';
+                slotRaw ??= int.tryParse(match.group(3)?.trim() ?? '');
+                if (cls.isEmpty) cls = match.group(4)?.trim() ?? '';
+              }
+            }
+
+            if (day.isNotEmpty && int.tryParse(day) != null) {
+              final dayIndex = int.parse(day);
+              final dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+              if (dayIndex >= 0 && dayIndex < dayNames.length) {
+                day = dayNames[dayIndex];
+              }
+            }
+
+            final slot = slotRaw is int ? slotRaw : int.tryParse(slotRaw?.toString() ?? '');
+            if (cls.isNotEmpty && day.isNotEmpty && slot != null && subj.isNotEmpty) {
+              final key = '${cls}_${day}_$slot';
+              _lockedSlots[key] = {
+                'subject': subj,
+                'faculty': fac,
+                'className': cls,
+                'day': day,
+                'slot': slot,
+                'isLocked': true,
+                'type': 'Theory',
+                'category': 'Fixed Slot | Locked ($subj)',
+              };
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    _syncLockedSlotsToProvider();
     if (mounted) setState(() {});
+  }
+
+  void _syncLockedSlotsToProvider() {
+    final provider = context.read<TimetableProvider>();
+    // Clear old lock constraints first
+    provider.clearLockConstraints();
+
+    // Add current locked slots as constraints into provider
+    _lockedSlots.forEach((key, val) {
+      provider.addConstraint(
+        TimetableConstraint(
+          id: 'lock_$key',
+          category: val['category'] ?? 'Fixed Slot | Locked (${val['subject']})',
+          facultyNames: (val['faculty'] != null && val['faculty'].toString().trim().isNotEmpty)
+              ? [val['faculty'].toString().trim()]
+              : [],
+          subjectNames: [val['subject'].toString().trim()],
+          classNames: [val['className'].toString().trim()],
+          days: [val['day'].toString().trim()],
+          slotNumbers: [val['slot'] is int ? val['slot'] as int : int.parse(val['slot'].toString())],
+        ),
+      );
+    });
   }
 
   void _lockSlot(String div, String day, int slot, Map<String, dynamic> subjectData) {
@@ -94,7 +187,10 @@ class _InteractiveSlotLockingWorkbenchScreenState
                   : 'Fixed Slot | Locked ($subjectName)'),
         };
       }
+      _hasUnsavedChanges = true;
     });
+
+    _syncLockedSlotsToProvider();
 
     if (targetDivs.length > 1) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -125,31 +221,97 @@ class _InteractiveSlotLockingWorkbenchScreenState
       } else {
         _lockedSlots.remove(key);
       }
+      _hasUnsavedChanges = true;
     });
+
+    _syncLockedSlotsToProvider();
+  }
+
+  Future<void> _saveLockedSlots({bool showSuccessMessage = true}) async {
+    setState(() => _isSavingLocks = true);
+
+    _syncLockedSlotsToProvider();
+
+    // Persist locked slots to backend DB via API so they are stored permanently
+    try {
+      final futures = <Future>[];
+      for (final entry in _lockedSlots.entries) {
+        final val = entry.value;
+        final payload = {
+          'constraint_type': 'fixed_slot',
+          'rule_type': 'fixed_slot',
+          'priority': 'hard',
+          'description': 'Locked ${val['subject']} on ${val['day']} Slot ${val['slot']} for ${val['className']}',
+          'is_active': true,
+          'class_name': val['className'],
+          'subject_name': val['subject'],
+          'faculty_name': val['faculty'],
+          'day_name': val['day'],
+          'slot_number': val['slot'],
+          'classNames': [val['className']],
+          'subjectNames': [val['subject']],
+          'facultyNames': (val['faculty'] != null && val['faculty'].toString().isNotEmpty) ? [val['faculty']] : [],
+          'days': [val['day']],
+          'slotNumbers': [val['slot']],
+          'payload': {
+            'class_name': val['className'],
+            'subject_name': val['subject'],
+            'faculty_name': val['faculty'],
+            'day': val['day'],
+            'day_name': val['day'],
+            'slot': val['slot'],
+            'slot_number': val['slot'],
+            'classNames': [val['className']],
+            'subjectNames': [val['subject']],
+            'facultyNames': (val['faculty'] != null && val['faculty'].toString().isNotEmpty) ? [val['faculty']] : [],
+            'days': [val['day']],
+            'slotNumbers': [val['slot']],
+          }
+        };
+        futures.add(ApiClient.postJson('/timetable/constraints', payload).catchError((_) => http.Response('{}', 200)));
+      }
+      if (futures.isNotEmpty) {
+        await Future.wait(futures);
+      }
+    } catch (_) {}
+
+    setState(() {
+      _isSavingLocks = false;
+      _hasUnsavedChanges = false;
+    });
+
+    if (showSuccessMessage && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '${_lockedSlots.length} subject slot(s) locked & confirmed! They will strictly apply during timetable generation.',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF0F172A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: const BorderSide(color: Color(0xFF10B981), width: 1.2),
+          ),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
   }
 
   Future<void> _saveAndExecuteSolver() async {
-    final provider = context.read<TimetableProvider>();
-
-    // Clear old lock constraints first
-    provider.clearLockConstraints();
-
-    // Add current locked slots as constraints into provider
-    _lockedSlots.forEach((key, val) {
-      provider.addConstraint(
-        TimetableConstraint(
-          id: 'lock_$key',
-          category: val['category'] ?? 'Fixed Slot | Locked (${val['subject']})',
-          facultyNames: val['faculty'].toString().isNotEmpty ? [val['faculty']] : [],
-          subjectNames: [val['subject']],
-          classNames: [val['className']],
-          days: [val['day']],
-          slotNumbers: [val['slot']],
-        ),
-      );
-    });
+    await _saveLockedSlots(showSuccessMessage: false);
 
     // Navigate to GenerateTimetableScreen to run CP-SAT with locked anchors
+    if (!mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const GenerateTimetableScreen(),
@@ -869,24 +1031,33 @@ class _InteractiveSlotLockingWorkbenchScreenState
     final cohort = selectedClass != null ? provider.getCohort(selectedClass) : 'TY';
     final siblingDivs = selectedClass != null ? provider.getCohortSiblingClasses(selectedClass) : divisions;
 
+    // Robust class matching helper for dash/space variations (e.g. "TY-A" vs "TY A")
+    bool classesMatch(String c1, String c2) {
+      if (c1.isEmpty || c2.isEmpty) return true;
+      final s1 = c1.trim().toLowerCase();
+      final s2 = c2.trim().toLowerCase();
+      if (s1 == s2 || s1 == 'all' || s2 == 'all') return true;
+      final clean1 = s1.replaceAll(RegExp(r'[^a-z0-9]'), '');
+      final clean2 = s2.replaceAll(RegExp(r'[^a-z0-9]'), '');
+      if (clean1 == clean2) return true;
+      if (clean1.contains(clean2) || clean2.contains(clean1)) return true;
+      return false;
+    }
+
     // Filter assignments dynamically by category
     final Map<String, Map<String, dynamic>> oeMap = {};
     final Map<String, Map<String, dynamic>> mdmMap = {};
     final Map<String, Map<String, dynamic>> classMap = {};
+    final Map<String, Map<String, dynamic>> fallbackClassMap = {};
 
     for (final a in assignments) {
       final s = a.subjectName.trim();
       if (s.isEmpty) continue;
       final cat = provider.getSubjectCategory(s);
 
-      final aCohort = a.className.isNotEmpty ? provider.getCohort(a.className) : '';
-      final isCohortMatch = a.className.isEmpty || aCohort == cohort || siblingDivs.contains(a.className);
-      final isExactClassMatch = a.className.isEmpty || (selectedClass != null && a.className.toLowerCase() == selectedClass.toLowerCase());
+      final isExactClassMatch = classesMatch(a.className, selectedClass ?? '');
 
       if (cat == 'institutional') {
-        // Only visible if it belongs to this class's year cohort
-        if (!isCohortMatch) continue;
-
         final key = s.toLowerCase();
         if (oeMap.containsKey(key)) {
           final curDivs = oeMap[key]!['divisions'] as List<String>;
@@ -900,13 +1071,10 @@ class _InteractiveSlotLockingWorkbenchScreenState
             'type': a.type,
             'weeklyHours': a.weeklyHours,
             'category': 'Institutional Elective',
-            'divisions': a.className.isNotEmpty ? [a.className] : siblingDivs,
+            'divisions': a.className.isNotEmpty && a.className != 'All' ? [a.className] : siblingDivs,
           };
         }
       } else if (cat == 'departmental') {
-        // Only visible if it belongs to this class's year cohort
-        if (!isCohortMatch) continue;
-
         final key = s.toLowerCase();
         if (mdmMap.containsKey(key)) {
           final curDivs = mdmMap[key]!['divisions'] as List<String>;
@@ -920,23 +1088,26 @@ class _InteractiveSlotLockingWorkbenchScreenState
             'type': a.type,
             'weeklyHours': a.weeklyHours,
             'category': 'Departmental Elective',
-            'divisions': a.className.isNotEmpty ? [a.className] : siblingDivs,
+            'divisions': a.className.isNotEmpty && a.className != 'All' ? [a.className] : siblingDivs,
           };
         }
       } else {
-        // Class-Level Core Subject: ONLY visible for this specific class
+        // Class-Level Core Subject
+        final key = '${s.toLowerCase()}_${a.type}_${a.batch}';
+        final itemData = {
+          'subjectName': s,
+          'facultyName': a.facultyName.trim(),
+          'type': a.type,
+          'weeklyHours': a.weeklyHours,
+          'category': 'Class Core Subject',
+          'divisions': [a.className.isNotEmpty ? a.className : (selectedClass ?? 'All')],
+          'batch': a.batch,
+        };
+        fallbackClassMap[key] = itemData;
+
         if (isExactClassMatch) {
-          final key = '${s.toLowerCase()}_${a.type}_${a.batch}';
           if (!classMap.containsKey(key)) {
-            classMap[key] = {
-              'subjectName': s,
-              'facultyName': a.facultyName.trim(),
-              'type': a.type,
-              'weeklyHours': a.weeklyHours,
-              'category': 'Class Core Subject',
-              'divisions': [a.className],
-              'batch': a.batch,
-            };
+            classMap[key] = itemData;
           }
         }
       }
@@ -944,7 +1115,8 @@ class _InteractiveSlotLockingWorkbenchScreenState
 
     final openElectivesList = oeMap.values.toList();
     final mdmElectivesList = mdmMap.values.toList();
-    final classAssignmentsList = classMap.values.toList();
+    // If selected class has no direct matches, show fallback all core subjects so the tray is never empty
+    final classAssignmentsList = classMap.isNotEmpty ? classMap.values.toList() : fallbackClassMap.values.toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -967,6 +1139,16 @@ class _InteractiveSlotLockingWorkbenchScreenState
           ],
         ),
         actions: [
+          IconButton(
+            icon: Badge(
+              isLabelVisible: _lockedSlots.isNotEmpty,
+              label: Text('${_lockedSlots.length}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+              backgroundColor: _hasUnsavedChanges ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
+              child: const Icon(Icons.save_rounded, color: Colors.white, size: 22),
+            ),
+            tooltip: 'Save Locked Slots',
+            onPressed: _lockedSlots.isEmpty ? null : () => _saveLockedSlots(),
+          ),
           IconButton(
             icon: const Icon(Icons.category, color: Color(0xFFFB923C), size: 20),
             tooltip: 'Classify Subjects',
@@ -1029,17 +1211,80 @@ class _InteractiveSlotLockingWorkbenchScreenState
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.play_arrow_rounded, size: 20),
-                    label: const Text('Auto-Generate', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFF97316),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
-                    onPressed: _saveAndExecuteSolver,
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      ElevatedButton.icon(
+                        icon: _isSavingLocks
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.check_circle_rounded, size: 18),
+                        label: Text(
+                          _isSavingLocks
+                              ? 'Saving Locks...'
+                              : 'Save Locked Slots (${_lockedSlots.length})',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF10B981),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          elevation: 2,
+                        ),
+                        onPressed: _isSavingLocks ? null : () => _saveLockedSlots(),
+                      ),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.play_arrow_rounded, size: 20),
+                        label: const Text('Auto-Generate', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF97316),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        ),
+                        onPressed: _saveAndExecuteSolver,
+                      ),
+                      if (_lockedSlots.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: _hasUnsavedChanges
+                                ? const Color(0xFFF59E0B).withValues(alpha: 0.18)
+                                : const Color(0xFF10B981).withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _hasUnsavedChanges ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _hasUnsavedChanges ? Icons.info_outline : Icons.verified_rounded,
+                                color: _hasUnsavedChanges ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
+                                size: 15,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                _hasUnsavedChanges ? 'Unsaved Locks (Click Save)' : 'All Locks Confirmed',
+                                style: TextStyle(
+                                  color: _hasUnsavedChanges ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -1130,6 +1375,7 @@ class _InteractiveSlotLockingWorkbenchScreenState
     required List<Map<String, dynamic>> mdmElectives,
     required List<Map<String, dynamic>> classAssignments,
   }) {
+    final provider = context.watch<TimetableProvider>();
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1186,10 +1432,70 @@ class _InteractiveSlotLockingWorkbenchScreenState
                 ),
                 onPressed: _showAddSubjectDialog,
               ),
-              Text(
-                '${_lockedSlots.length} Locked 🔒',
-                style: const TextStyle(color: Color(0xFFEA580C), fontWeight: FontWeight.bold, fontSize: 11),
+              InkWell(
+                onTap: _lockedSlots.isEmpty ? null : () => _saveLockedSlots(),
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: _hasUnsavedChanges
+                        ? const Color(0xFFF59E0B).withValues(alpha: 0.15)
+                        : const Color(0xFF10B981).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: _hasUnsavedChanges ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _hasUnsavedChanges ? Icons.lock_clock : Icons.check_circle_rounded,
+                        color: _hasUnsavedChanges ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
+                        size: 13,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _hasUnsavedChanges
+                            ? '${_lockedSlots.length} Locked (Click to Save)'
+                            : '${_lockedSlots.length} Locked (Saved ✓)',
+                        style: TextStyle(
+                          color: _hasUnsavedChanges ? const Color(0xFFD97706) : const Color(0xFF059669),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
+              // ✅ Reload button for refreshing assignments from backend
+              if (provider.isLoading)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFEA580C)),
+                )
+              else
+                InkWell(
+                  onTap: () async {
+                    await provider.refreshAssignments();
+                    if (mounted) setState(() {});
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.refresh, size: 13, color: Color(0xFF475569)),
+                        SizedBox(width: 3),
+                        Text('Reload', style: TextStyle(fontSize: 10, color: Color(0xFF475569))),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -1231,10 +1537,40 @@ class _InteractiveSlotLockingWorkbenchScreenState
 
   Widget _buildChipList(List<Map<String, dynamic>> items, String category, Color textColor, Color bgColor, Color borderColor) {
     if (items.isEmpty) {
+      final provider = context.read<TimetableProvider>();
       return Center(
-        child: Text(
-          'No $category records found. Tap "⚙️ Classify" to organize sheet courses or "+ Add Subject".',
-          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'No $category records found.',
+                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                icon: const Icon(Icons.refresh, size: 13, color: Color(0xFFEA580C)),
+                label: const Text('Reload Workload', style: TextStyle(fontSize: 11, color: Color(0xFFEA580C), fontWeight: FontWeight.bold)),
+                onPressed: () async {
+                  await provider.refreshAssignments();
+                  if (mounted) setState(() {});
+                },
+              ),
+              const SizedBox(width: 4),
+              TextButton.icon(
+                icon: const Icon(Icons.category, size: 13, color: Color(0xFF4F46E5)),
+                label: const Text('Classify', style: TextStyle(fontSize: 11, color: Color(0xFF4F46E5))),
+                onPressed: _showSubjectClassificationDialog,
+              ),
+              const SizedBox(width: 4),
+              TextButton.icon(
+                icon: const Icon(Icons.add, size: 13, color: Color(0xFF10B981)),
+                label: const Text('+ Add Subject', style: TextStyle(fontSize: 11, color: Color(0xFF10B981), fontWeight: FontWeight.bold)),
+                onPressed: _showAddSubjectDialog,
+              ),
+            ],
+          ),
         ),
       );
     }

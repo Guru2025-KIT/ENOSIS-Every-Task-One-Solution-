@@ -165,10 +165,14 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
     final startStr = '${_collegeStartTime.hour.toString().padLeft(2, '0')}:${_collegeStartTime.minute.toString().padLeft(2, '0')}';
     final endStr = '${_collegeEndTime.hour.toString().padLeft(2, '0')}:${_collegeEndTime.minute.toString().padLeft(2, '0')}';
 
+    int calculatedPeriods = _generatePreviewSlots().where((s) => !s.isBreak).length;
+    if (calculatedPeriods < 1) calculatedPeriods = 1;
+    if (calculatedPeriods > 20) calculatedPeriods = 20;
+
     final updatedConfig = ScheduleConfigModel(
-      workingDays: _selectedDays.length,
-      dayNames: _selectedDays.toList(),
-      periodsPerDay: _generatePreviewSlots().where((s) => !s.isBreak).length, // ✅ Auto-calculate periods
+      workingDays: _selectedDays.isNotEmpty ? _selectedDays.length : 6,
+      dayNames: _selectedDays.isNotEmpty ? _selectedDays.toList() : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+      periodsPerDay: calculatedPeriods, // Auto-calculate periods safely clamped
       periodDurationMinutes: _lectureDurationMinutes,
       lectureDurationMinutes: _lectureDurationMinutes,
       labDurationMinutes: _labDurationMinutes,

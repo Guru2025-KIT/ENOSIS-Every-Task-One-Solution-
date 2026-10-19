@@ -165,7 +165,7 @@ def faculty_list(db: Session = Depends(get_db), _: User = Depends(require_timeta
 # ---------------------------------------------------------------------------
 
 @router.get("/schedule-config", response_model=ScheduleConfigOut)
-def get_schedule_config(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def get_schedule_config(db: Session = Depends(get_db), _: User | None = Depends(get_optional_current_user)):
     """Retrieves the active timetable schedule configuration (always uses id='default')."""
     config = db.query(ScheduleConfig).filter(ScheduleConfig.id == "default").first()
     if not config:
@@ -207,7 +207,7 @@ def get_schedule_config(db: Session = Depends(get_db), _: User = Depends(get_cur
 def update_schedule_config(
     payload: ScheduleConfigCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_timetable_manager)
+    _: User | None = Depends(require_timetable_manager)
 ):
     """Upserts the active schedule configuration."""
     config = db.query(ScheduleConfig).filter(ScheduleConfig.id == "default").first()
@@ -280,8 +280,23 @@ def _validate_and_normalize_constraint(payload: ConstraintCreate, db: Session) -
     params = dict(payload.params or {})
 
     divisions_in = list(scope.get("divisions") or raw_payload.get("divisions") or raw_payload.get("classNames") or [])
+    if raw_payload.get("class_name") and raw_payload.get("class_name") not in divisions_in:
+        divisions_in.append(raw_payload.get("class_name"))
+    if raw_payload.get("className") and raw_payload.get("className") not in divisions_in:
+        divisions_in.append(raw_payload.get("className"))
+
     subjects_in = list(scope.get("subjects") or raw_payload.get("subjects") or raw_payload.get("subjectNames") or [])
+    if raw_payload.get("subject_name") and raw_payload.get("subject_name") not in subjects_in:
+        subjects_in.append(raw_payload.get("subject_name"))
+    if raw_payload.get("subjectName") and raw_payload.get("subjectName") not in subjects_in:
+        subjects_in.append(raw_payload.get("subjectName"))
+
     faculty_in = list(scope.get("faculty") or raw_payload.get("faculty") or raw_payload.get("facultyNames") or [])
+    if raw_payload.get("faculty_name") and raw_payload.get("faculty_name") not in faculty_in:
+        faculty_in.append(raw_payload.get("faculty_name"))
+    if raw_payload.get("facultyName") and raw_payload.get("facultyName") not in faculty_in:
+        faculty_in.append(raw_payload.get("facultyName"))
+
     session_types_in = list(scope.get("session_types") or raw_payload.get("session_types") or [])
 
     if "division_id" in raw_payload:
@@ -301,8 +316,10 @@ def _validate_and_normalize_constraint(payload: ConstraintCreate, db: Session) -
             (Division.id == d_str) | (Division.name.ilike(d_str)) | (Division.division_code.ilike(d_str))
         ).first()
         if not div_rec:
-            raise HTTPException(status_code=400, detail=f"Division '{d_str}' does not exist in database.")
-        resolved_div_ids.append(div_rec.id)
+            # Fallback for transient / custom classes
+            resolved_div_ids.append(d_str)
+        else:
+            resolved_div_ids.append(div_rec.id)
 
     resolved_sub_ids = []
     for s in subjects_in:
@@ -313,8 +330,9 @@ def _validate_and_normalize_constraint(payload: ConstraintCreate, db: Session) -
             (Subject.id == s_str) | (Subject.code.ilike(s_str)) | (Subject.name.ilike(s_str))
         ).first()
         if not sub_rec:
-            raise HTTPException(status_code=400, detail=f"Subject '{s_str}' does not exist in database.")
-        resolved_sub_ids.append(sub_rec.id)
+            resolved_sub_ids.append(s_str)
+        else:
+            resolved_sub_ids.append(sub_rec.id)
 
     resolved_fac_ids = []
     for f in faculty_in:
@@ -325,8 +343,9 @@ def _validate_and_normalize_constraint(payload: ConstraintCreate, db: Session) -
             (User.id == f_str) | (User.email.ilike(f_str)) | (User.full_name.ilike(f_str))
         ).first()
         if not fac_rec:
-            raise HTTPException(status_code=400, detail=f"Faculty '{f_str}' does not exist in database.")
-        resolved_fac_ids.append(fac_rec.id)
+            resolved_fac_ids.append(f_str)
+        else:
+            resolved_fac_ids.append(fac_rec.id)
 
     # 4. Validate days & slots & breaks against ScheduleConfig
     config = db.query(ScheduleConfig).filter(ScheduleConfig.id == "default").first()
@@ -400,7 +419,12 @@ def _validate_and_normalize_constraint(payload: ConstraintCreate, db: Session) -
         },
         "params": params,
         "priority": priority,
-        "weight": weight
+        "weight": weight,
+        "class_name": raw_payload.get("class_name") or raw_payload.get("className") or (divisions_in[0] if divisions_in else ""),
+        "subject_name": raw_payload.get("subject_name") or raw_payload.get("subjectName") or (subjects_in[0] if subjects_in else ""),
+        "faculty_name": raw_payload.get("faculty_name") or raw_payload.get("facultyName") or (faculty_in[0] if faculty_in else ""),
+        "day_name": raw_payload.get("day_name") or raw_payload.get("day") or "",
+        "slot_number": raw_payload.get("slot_number") or raw_payload.get("slot") or (params.get("slot")),
     }
 
     desc = payload.description or f"{rule_type.replace('_', ' ').title()} ({priority})"
@@ -829,19 +853,102 @@ def list_assignments(db: Session = Depends(get_db), _: User = Depends(get_curren
 
 @router.get("/assignments-detailed")
 def list_assignments_detailed(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    """Returns assignments with resolved faculty name, subject name, and division name for display."""
+    """Returns assignments with resolved faculty name, subject name, division name, and category for workbench display."""
     assignments = db.query(TeachingAssignment).all()
     result = []
     for a in assignments:
+        div_name = ""
+        if a.division:
+            div_name = a.division.name or f"Year {a.division.year} - Div {a.division.division_code}"
+        else:
+            div_name = "All"
+
+        hrs = (a.weekly_count or 1) * (a.duration_slots or 1) if (a.weekly_count and a.duration_slots) else (a.weekly_count or 3)
+        stype = "Lab" if (a.session_type or "").lower() == "lab" else "Theory"
+
         result.append({
             "id": a.id,
             "faculty_id": a.faculty_id,
             "faculty_name": a.faculty.full_name if a.faculty else "Unknown",
             "subject_id": a.subject_id,
             "subject_name": a.subject.name if a.subject else "Unknown",
+            "subject_code": a.subject.code if a.subject else "",
             "division_id": a.division_id,
-            "division_name": f"Year {a.division.year} - Div {a.division.division_code}" if a.division else "Unknown",
+            "division_name": div_name,
+            "class_name": div_name,
+            "className": div_name,
+            "type": stype,
+            "weekly_hours": hrs,
+            "weeklyHours": hrs,
+            "batch": a.batch_name or ("Batch 1" if stype == "Lab" else "-"),
+            "joint_group_id": a.joint_group_id or "",
         })
+
+    # Include Institutional Courses so they appear in Institutional Elective tray
+    inst_courses = db.query(InstitutionalCourse).all()
+    for ic in inst_courses:
+        div_str = ", ".join(ic.divisions) if ic.divisions else f"Year {ic.year}"
+        result.append({
+            "id": ic.id,
+            "faculty_id": ic.faculty_id,
+            "faculty_name": ic.faculty.full_name if ic.faculty else "Faculty",
+            "subject_id": None,
+            "subject_name": ic.course_name,
+            "subject_code": ic.course_code or "",
+            "division_id": None,
+            "division_name": div_str,
+            "class_name": div_str,
+            "className": div_str,
+            "type": "Theory",
+            "weekly_hours": ic.duration_slots or 3,
+            "weeklyHours": ic.duration_slots or 3,
+            "batch": "-",
+            "category": "institutional",
+        })
+
+    # Include Shared / Elective Courses so they appear in Departmental Elective tray
+    shared_courses = db.query(SharedCourse).all()
+    for sc in shared_courses:
+        div_str = ", ".join(sc.divisions) if sc.divisions else f"Year {sc.year}"
+        result.append({
+            "id": sc.id,
+            "faculty_id": sc.faculty_id,
+            "faculty_name": sc.faculty.full_name if sc.faculty else "Faculty",
+            "subject_id": None,
+            "subject_name": sc.course_name,
+            "subject_code": sc.course_code or "",
+            "division_id": None,
+            "division_name": div_str,
+            "class_name": div_str,
+            "className": div_str,
+            "type": "Lab" if (sc.session_type or "").lower() == "lab" else "Theory",
+            "weekly_hours": (sc.weekly_sessions or 1) * (sc.duration_slots or 1),
+            "weeklyHours": (sc.weekly_sessions or 1) * (sc.duration_slots or 1),
+            "batch": "-",
+            "category": "departmental",
+        })
+
+    # If no assignments exist at all, populate from existing subjects table so trays are populated
+    if not result:
+        subs = db.query(Subject).all()
+        for s in subs:
+            result.append({
+                "id": s.id,
+                "faculty_id": None,
+                "faculty_name": "Faculty",
+                "subject_id": s.id,
+                "subject_name": s.name,
+                "subject_code": s.code or "",
+                "division_id": None,
+                "division_name": "All",
+                "class_name": "All",
+                "className": "All",
+                "type": "Lab" if (s.subject_type or "").lower() == "lab" else "Theory",
+                "weekly_hours": 3,
+                "weeklyHours": 3,
+                "batch": "-",
+            })
+
     return result
 
 
@@ -1121,9 +1228,82 @@ def generate(
             for r in db_rooms
         ]
 
+        # Merge active DB fixed/lock constraints into constraints_raw
+        existing_lock_keys = set()
+        for c in payload.constraints:
+            c_days = c.get("days") or []
+            c_slots = c.get("slotNumbers") or c.get("slot_numbers") or []
+            c_classes = c.get("classNames") or c.get("class_names") or []
+            for d in c_days:
+                for s in c_slots:
+                    for cl in c_classes:
+                        try:
+                            existing_lock_keys.add((str(cl).strip().upper(), str(d).strip().title(), int(s)))
+                        except Exception:
+                            pass
+
+        db_fixed_cons = db.query(TimetableConstraint).filter(
+            TimetableConstraint.is_active == True,
+            TimetableConstraint.constraint_type.in_(["fixed_slot", "fixed", "lock"])
+        ).all()
+
+        day_names_list = effective_working_days or ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        day_int_to_name = {idx: d for idx, d in enumerate(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"])}
+
+        merged_constraints = list(payload.constraints)
+        for dbc in db_fixed_cons:
+            p = dbc.payload or {}
+            params = p.get("params", {})
+            raw_day = p.get("day_name") or p.get("day") or params.get("day_name") or params.get("day")
+            if isinstance(raw_day, int) and raw_day in day_int_to_name:
+                day_name = day_int_to_name[raw_day]
+            elif isinstance(raw_day, str) and raw_day.strip().title() in day_names_list:
+                day_name = raw_day.strip().title()
+            else:
+                m = re.search(r"Locked (.*?) on (\w+) Slot (\d+) for (.*)", dbc.description)
+                if m:
+                    day_name = m.group(2).title()
+                else:
+                    continue
+
+            raw_slot = p.get("slot_number") or p.get("slot") or params.get("slot") or (params.get("slots") or [None])[0]
+            if raw_slot is None:
+                m = re.search(r"Locked (.*?) on (\w+) Slot (\d+) for (.*)", dbc.description)
+                raw_slot = int(m.group(3)) if m else None
+            if raw_slot is None:
+                continue
+            slot_num = int(raw_slot)
+
+            sub_name = p.get("subject_name") or p.get("subject") or ""
+            cls_name = p.get("class_name") or p.get("className") or ""
+            fac_name = p.get("faculty_name") or p.get("faculty") or ""
+
+            if not sub_name or not cls_name:
+                m = re.search(r"Locked (.*?) on (\w+) Slot (\d+) for (.*)", dbc.description)
+                if m:
+                    sub_name = sub_name or m.group(1).strip()
+                    cls_name = cls_name or m.group(4).strip()
+
+            if not cls_name or not sub_name:
+                continue
+
+            lock_key = (cls_name.strip().upper(), day_name.strip().title(), slot_num)
+            if lock_key not in existing_lock_keys:
+                existing_lock_keys.add(lock_key)
+                merged_constraints.append({
+                    "id": f"db_lock_{dbc.id}",
+                    "category": f"Fixed Slot | Locked ({sub_name})",
+                    "intent": "fixed",
+                    "facultyNames": [fac_name] if fac_name else [],
+                    "subjectNames": [sub_name],
+                    "classNames": [cls_name],
+                    "days": [day_name],
+                    "slotNumbers": [slot_num],
+                })
+
         solver_result = solve_from_dicts(
             assignments_raw=payload.assignments,
-            constraints_raw=payload.constraints,
+            constraints_raw=merged_constraints,
             combined_groups=payload.combined_groups,
             time_slots_raw=payload.time_slots,
             working_days=effective_working_days,

@@ -59,7 +59,7 @@ class Settings(BaseSettings):
 
     # RESTRICTED: when False, only ADMIN accounts and faculty explicitly
     # granted access via can_manage_timetable can manage/generate timetables.
-    OPEN_TIMETABLE_ACCESS: bool = False
+    OPEN_TIMETABLE_ACCESS: bool = True
 
     # ─── SMTP Email Dispatch ───────────────────────────────────────────
     # Used by admin faculty onboarding & password-reset flows.

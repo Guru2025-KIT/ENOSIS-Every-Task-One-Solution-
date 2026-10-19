@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_html/html.dart' as html;
 import '../../providers/timetable_provider.dart';
+import '../../../../core/auth/auth_session.dart';
 
 class TimetableDisplayScreen extends StatefulWidget {
   const TimetableDisplayScreen({super.key});
@@ -209,7 +210,18 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
     }
 
     final keys = timetableData.keys.toList()..sort();
-    final activeKey = _selectedTarget ?? keys.first;
+    String? defaultKey;
+    if (_tabController.index == 1 && AuthSession.fullName != null && AuthSession.fullName!.trim().isNotEmpty) {
+      final userFacName = AuthSession.fullName!.trim().toLowerCase();
+      for (final k in keys) {
+        final kClean = k.trim().toLowerCase();
+        if (kClean == userFacName || kClean.contains(userFacName) || userFacName.contains(kClean)) {
+          defaultKey = k;
+          break;
+        }
+      }
+    }
+    final activeKey = _selectedTarget ?? defaultKey ?? (keys.isNotEmpty ? keys.first : '');
     final grid = timetableData[activeKey] ?? {};
 
     return Column(
@@ -1587,30 +1599,33 @@ class _TimetableDisplayScreenState extends State<TimetableDisplayScreen> with Si
         final rawRm = cell.length > 2 ? cell[2] : '';
         final rawBatch = cell.length > 3 ? cell[3] : '';
 
-        // Map Faculty
-        if (rawFac.isNotEmpty) {
-          final facs = rawFac.split(' | ');
-          for (final f in facs) {
-            final fTrim = f.trim();
-            if (fTrim.isEmpty) continue;
-            facultyMap.putIfAbsent(fTrim, () => {});
-            facultyMap[fTrim]![slotKey] = [rawSubj, className, rawRm, rawBatch];
-          }
-        }
+        final subjs = rawSubj.split(' | ');
+        final facs = rawFac.split(' | ');
+        final rms = rawRm.split(' | ');
+        final batches = rawBatch.split(' | ');
+        final int trackCount = [subjs.length, facs.length, rms.length, batches.length].reduce((curr, next) => curr > next ? curr : next);
 
-        // Map Room / Lab
-        if (rawRm.isNotEmpty) {
-          final rms = rawRm.split(' | ');
-          for (final r in rms) {
-            final rTrim = r.trim();
-            if (rTrim.isEmpty) continue;
-            final isLab = rTrim.toLowerCase().contains('lab') || rawSubj.toLowerCase().contains('lab');
+        for (int i = 0; i < trackCount; i++) {
+          final thisSubj = i < subjs.length ? subjs[i].trim() : subjs.first.trim();
+          final thisFac = i < facs.length ? facs[i].trim() : (facs.isNotEmpty ? facs.first.trim() : '');
+          final thisRm = i < rms.length ? rms[i].trim() : (rms.isNotEmpty ? rms.first.trim() : '');
+          final thisBatch = i < batches.length ? batches[i].trim() : (batches.isNotEmpty ? batches.first.trim() : '');
+
+          // Map Faculty View
+          if (thisFac.isNotEmpty && thisFac != 'Unknown') {
+            facultyMap.putIfAbsent(thisFac, () => {});
+            facultyMap[thisFac]![slotKey] = [thisSubj, className, thisRm, thisBatch];
+          }
+
+          // Map Room & Lab Views
+          if (thisRm.isNotEmpty) {
+            final isLab = thisRm.toLowerCase().contains('lab') || thisSubj.toLowerCase().contains('lab');
             if (isLab) {
-              labMap.putIfAbsent(rTrim, () => {});
-              labMap[rTrim]![slotKey] = [rawSubj, rawFac, className, rawBatch];
+              labMap.putIfAbsent(thisRm, () => {});
+              labMap[thisRm]![slotKey] = [thisSubj, thisFac, className, thisBatch];
             } else {
-              roomMap.putIfAbsent(rTrim, () => {});
-              roomMap[rTrim]![slotKey] = [rawSubj, rawFac, className, rawBatch];
+              roomMap.putIfAbsent(thisRm, () => {});
+              roomMap[thisRm]![slotKey] = [thisSubj, thisFac, className, thisBatch];
             }
           }
         }

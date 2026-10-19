@@ -914,6 +914,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           Transform.scale(
             scale: compact ? 0.72 : 0.82,
             child: Switch(
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               value: hasAccess,
               activeColor: const Color(0xFF10B981),
               activeTrackColor: const Color(0xFFA7F3D0),
@@ -2261,32 +2262,110 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: Padding(
                     padding: const EdgeInsets.all(14),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 22,
-                          backgroundColor: const Color(0xFF0F172A),
-                          child: Text(
-                            faculty.name.isNotEmpty ? faculty.name[0].toUpperCase() : 'F',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
+                    child: isMobile
+                        ? Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [
-                                  Flexible(
+                                  CircleAvatar(
+                                    radius: 20,
+                                    backgroundColor: const Color(0xFF0F172A),
                                     child: Text(
-                                      faculty.name,
-                                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                      faculty.name.isNotEmpty ? faculty.name[0].toUpperCase() : 'F',
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          faculty.name,
+                                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${faculty.designation} · ${faculty.department}',
+                                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuButton<String>(
+                                    icon: const Icon(Icons.more_vert),
+                                    onSelected: (val) {
+                                      if (val == 'assign') _openAssignSubjectDialog(faculty);
+                                      if (val == 'perf') _showFacultyPerformanceDetails(faculty);
+                                      if (val == 'onboard') _handleSendOnboarding(faculty);
+                                      if (val == 'timetable') _toggleTimetableAccess(faculty);
+                                      if (val == 'delete') _confirmDeleteFaculty(faculty);
+                                    },
+                                    itemBuilder: (ctx) => [
+                                      const PopupMenuItem(
+                                        value: 'assign',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.menu_book, color: AppColors.secondary, size: 18),
+                                            SizedBox(width: 8),
+                                            Text('Assign Subject'),
+                                          ],
+                                        ),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: 'perf',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.insights_rounded, color: Color(0xFF2563EB), size: 18),
+                                            SizedBox(width: 8),
+                                            Text('Performance Profile'),
+                                          ],
+                                        ),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: 'onboard',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.forward_to_inbox_rounded, color: Color(0xFFF97316), size: 18),
+                                            SizedBox(width: 8),
+                                            Text('Resend Credentials'),
+                                          ],
+                                        ),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: 'delete',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.delete_outline, color: AppColors.error, size: 18),
+                                            SizedBox(width: 8),
+                                            Text('Delete Faculty'),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'ID: ${faculty.employeeId} · ${faculty.email} · ${faculty.phone}',
+                                style: const TextStyle(fontSize: 11.5, color: Color(0xFF2563EB)),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 10),
+                              const Divider(height: 1),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
@@ -2302,7 +2381,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 5),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
@@ -2326,122 +2404,131 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                       ],
                                     ),
                                   ),
-                                  if (faculty.canManageTimetable) ...[
-                                    const SizedBox(width: 5),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: const Text(
-                                        'TT GEN ENABLED',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFF7C3AED),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                  _buildTimetableTogglePill(faculty, compact: false),
                                 ],
                               ),
-                              const SizedBox(height: 3),
-                              Text(
-                                '${faculty.designation} · ${faculty.department} · ID: ${faculty.employeeId} · Workload: ${faculty.workloadHours} hrs/week',
-                                style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                            ],
+                          )
+                        : Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 22,
+                                backgroundColor: const Color(0xFF0F172A),
+                                child: Text(
+                                  faculty.name.isNotEmpty ? faculty.name[0].toUpperCase() : 'F',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                ),
                               ),
-                              Text(
-                                '${faculty.email} · Phone: ${faculty.phone}',
-                                style: const TextStyle(fontSize: 12, color: Color(0xFF2563EB)),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 4,
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      children: [
+                                        Text(
+                                          faculty.name,
+                                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: faculty.isActive ? const Color(0xFF10B981).withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            faculty.isActive ? 'ACTIVE' : 'INACTIVE',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: faculty.isActive ? const Color(0xFF10B981) : Colors.grey,
+                                            ),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.3)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.schedule_rounded, size: 11, color: Color(0xFF0284C7)),
+                                              const SizedBox(width: 3),
+                                              Text(
+                                                '${faculty.workloadHours} hrs/wk',
+                                                style: const TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Color(0xFF0284C7),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        if (faculty.canManageTimetable) ...[
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: const Text(
+                                              'TT GEN ENABLED',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF7C3AED),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      '${faculty.designation} · ${faculty.department} · ID: ${faculty.employeeId} · Workload: ${faculty.workloadHours} hrs/week',
+                                      style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      '${faculty.email} · Phone: ${faculty.phone}',
+                                      style: const TextStyle(fontSize: 12, color: Color(0xFF2563EB)),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              _buildTimetableTogglePill(faculty, compact: false),
+                              IconButton(
+                                icon: const Icon(Icons.menu_book, color: AppColors.secondary),
+                                tooltip: 'Assign / Allocate Subject',
+                                onPressed: () => _openAssignSubjectDialog(faculty),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.insights_rounded, color: Color(0xFF2563EB)),
+                                tooltip: 'View Performance & Profile',
+                                onPressed: () => _showFacultyPerformanceDetails(faculty),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.forward_to_inbox_rounded, color: Color(0xFFF97316)),
+                                tooltip: 'Resend Onboarding Credentials',
+                                onPressed: () => _handleSendOnboarding(faculty),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                                tooltip: 'Delete Faculty',
+                                onPressed: () => _confirmDeleteFaculty(faculty),
                               ),
                             ],
                           ),
-                        ),
-                        // Actions: Timetable Access Toggle is ALWAYS visible directly in front of each faculty
-                        if (isMobile) ...[
-                          _buildTimetableTogglePill(faculty, compact: true),
-                          PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert),
-                            onSelected: (val) {
-                              if (val == 'assign') _openAssignSubjectDialog(faculty);
-                              if (val == 'perf') _showFacultyPerformanceDetails(faculty);
-                              if (val == 'onboard') _handleSendOnboarding(faculty);
-                              if (val == 'timetable') _toggleTimetableAccess(faculty);
-                              if (val == 'delete') _confirmDeleteFaculty(faculty);
-                            },
-                            itemBuilder: (ctx) => [
-                              const PopupMenuItem(
-                                value: 'assign',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.menu_book, color: AppColors.secondary, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Assign Subject'),
-                                  ],
-                                ),
-                              ),
-                              const PopupMenuItem(
-                                value: 'perf',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.insights_rounded, color: Color(0xFF2563EB), size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Performance Profile'),
-                                  ],
-                                ),
-                              ),
-                              const PopupMenuItem(
-                                value: 'onboard',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.forward_to_inbox_rounded, color: Color(0xFFF97316), size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Resend Credentials'),
-                                  ],
-                                ),
-                              ),
-                              const PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.delete_outline, color: AppColors.error, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Delete Faculty'),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ] else ...[
-                          _buildTimetableTogglePill(faculty, compact: false),
-                          IconButton(
-                            icon: const Icon(Icons.menu_book, color: AppColors.secondary),
-                            tooltip: 'Assign / Allocate Subject',
-                            onPressed: () => _openAssignSubjectDialog(faculty),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.insights_rounded, color: Color(0xFF2563EB)),
-                            tooltip: 'View Performance & Profile',
-                            onPressed: () => _showFacultyPerformanceDetails(faculty),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.forward_to_inbox_rounded, color: Color(0xFFF97316)),
-                            tooltip: 'Resend Onboarding Credentials',
-                            onPressed: () => _handleSendOnboarding(faculty),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, color: AppColors.error),
-                            tooltip: 'Delete Faculty',
-                            onPressed: () => _confirmDeleteFaculty(faculty),
-                          ),
-                        ],
-                      ],
-                    ),
                   ),
                 );
               },
