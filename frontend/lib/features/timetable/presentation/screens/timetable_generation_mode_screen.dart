@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -268,7 +269,7 @@ class _TimetableGenerationModeScreenState extends State<TimetableGenerationModeS
                 ],
               ),
               content: SizedBox(
-                width: 580,
+                width: math.min(580.0, MediaQuery.of(context).size.width - 32),
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,

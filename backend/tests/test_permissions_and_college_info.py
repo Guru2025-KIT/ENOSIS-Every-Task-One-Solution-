@@ -26,25 +26,20 @@ def test_college_info_is_public_no_auth_needed():
     assert "college_name" in response.json()
 
 
-def test_open_timetable_access_lets_any_faculty_generate_by_default(faculty_user):
-    """OPEN_TIMETABLE_ACCESS defaults to True — this is the CURRENT real
-    behavior of the app right now, not a hypothetical. Any logged-in
-    faculty member can generate without any admin delegation step."""
+def test_restricted_timetable_access_blocks_ordinary_faculty_by_default(faculty_user):
+    """OPEN_TIMETABLE_ACCESS defaults to False. Ordinary faculty cannot
+    generate timetables without explicit admin delegation."""
     _, faculty_token = faculty_user
     response = client.post("/timetable/generate", headers=_auth_headers(faculty_token))
-    # 200 (generated) or 422 (nothing to schedule yet) both prove the
-    # PERMISSION check passed — 403 would mean it didn't.
-    assert response.status_code in (200, 422)
-
-
-def test_faculty_without_delegation_cannot_generate_when_access_is_restricted(faculty_user):
-    """Proves the underlying admin-or-delegated permission check still
-    works correctly — this is what happens once OPEN_TIMETABLE_ACCESS is
-    set to False for a real deployment."""
-    _, faculty_token = faculty_user
-    with patch("app.api.deps.settings.OPEN_TIMETABLE_ACCESS", False):
-        response = client.post("/timetable/generate", headers=_auth_headers(faculty_token))
     assert response.status_code == 403
+
+
+def test_open_timetable_access_toggle_allows_bypass_when_enabled(faculty_user):
+    """When OPEN_TIMETABLE_ACCESS is set to True, any faculty can generate."""
+    _, faculty_token = faculty_user
+    with patch("app.api.deps.settings.OPEN_TIMETABLE_ACCESS", True):
+        response = client.post("/timetable/generate", headers=_auth_headers(faculty_token))
+    assert response.status_code in (200, 422)
 
 
 def test_admin_can_delegate_timetable_access_to_faculty(admin_token, faculty_user):

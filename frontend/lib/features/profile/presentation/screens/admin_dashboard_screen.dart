@@ -124,7 +124,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             ],
           ),
           content: SizedBox(
-            width: 460,
+            width: math.min(460.0, MediaQuery.of(context).size.width - 32),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -160,9 +160,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     children: [
                       const Icon(Icons.lock_reset_rounded, size: 18, color: AppColors.primary),
                       const SizedBox(width: 8),
-                      Text(
-                        'Change Password (Optional)',
-                        style: AppTypography.bodyMedium.copyWith(fontSize: 13.5, fontWeight: FontWeight.bold),
+                      Flexible(
+                        child: Text(
+                          'Change Password (Optional)',
+                          style: AppTypography.bodyMedium.copyWith(fontSize: 13.5, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                   ),
@@ -344,7 +347,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 ],
               ),
               content: SizedBox(
-                width: 480,
+                width: math.min(480.0, MediaQuery.of(context).size.width - 32),
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -714,17 +717,63 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
                   onPressed: () async {
-                    if (nameCtrl.text.trim().isEmpty || emailCtrl.text.trim().isEmpty) {
+                    final inputName = nameCtrl.text.trim();
+                    final inputEmail = emailCtrl.text.trim();
+                    final inputEmpId = empCtrl.text.trim();
+
+                    if (inputName.isEmpty || inputEmail.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Please fill all required fields.')),
                       );
                       return;
                     }
+
+                    // ── Client-side duplicate checks ──────────────────────────
+                    final nameLower = inputName.toLowerCase();
+                    final emailLower = inputEmail.toLowerCase();
+                    final empIdLower = inputEmpId.toLowerCase();
+
+                    final dupName = _facultyList.any((f) => f.name.trim().toLowerCase() == nameLower);
+                    if (dupName) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('A faculty member named "$inputName" already exists.'),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                      return;
+                    }
+
+                    final dupEmail = _facultyList.any((f) => f.email.trim().toLowerCase() == emailLower);
+                    if (dupEmail) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Email "$inputEmail" is already registered.'),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (inputEmpId.isNotEmpty) {
+                      final dupEmp = _facultyList.any((f) => f.employeeId.trim().toLowerCase() == empIdLower);
+                      if (dupEmp) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Employee ID "$inputEmpId" is already in use.'),
+                            backgroundColor: AppColors.error,
+                          ),
+                        );
+                        return;
+                      }
+                    }
+                    // ─────────────────────────────────────────────────────────
+
                     try {
                       final result = await _repository.createFaculty(
-                        name: nameCtrl.text.trim(),
-                        email: emailCtrl.text.trim(),
-                        employeeId: empCtrl.text.trim().isNotEmpty ? empCtrl.text.trim() : 'FAC-${DateTime.now().millisecondsSinceEpoch % 10000}',
+                        name: inputName,
+                        email: inputEmail,
+                        employeeId: inputEmpId.isNotEmpty ? inputEmpId : 'FAC-${DateTime.now().millisecondsSinceEpoch % 10000}',
                         department: dept,
                         designation: desig,
                         phone: phoneCtrl.text.trim(),
@@ -736,8 +785,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         final emailSent = result['email_sent'] as bool? ?? false;
                         _showCredentialDialog(
                           'Faculty Account Created',
-                          nameCtrl.text.trim(),
-                          emailCtrl.text.trim(),
+                          inputName,
+                          inputEmail,
                           tempPass,
                           emailSent,
                         );
@@ -794,7 +843,89 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     }
   }
 
-  // ─── DELETE FACULTY ───────────────────────────────────────────────────────
+  // ─── TOGGLE TIMETABLE GENERATION ACCESS ───────────────────────────────────
+
+  Future<void> _toggleTimetableAccess(FacultyModel faculty) async {
+    final newValue = !faculty.canManageTimetable;
+    try {
+      await _repository.updateFaculty(
+        id: faculty.id,
+        canManageTimetable: newValue,
+      );
+      await _loadDashboardData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              newValue
+                  ? '${faculty.name} can now generate timetables.'
+                  : 'Timetable generation access revoked for ${faculty.name}.',
+            ),
+            backgroundColor: newValue ? AppColors.success : AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update access: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  // ─── DEDICATED TIMETABLE ACCESS TOGGLE PILL ────────────────────────────────
+  Widget _buildTimetableTogglePill(FacultyModel faculty, {bool compact = false}) {
+    final hasAccess = faculty.canManageTimetable;
+    return Container(
+      margin: EdgeInsets.only(right: compact ? 6 : 12),
+      decoration: BoxDecoration(
+        color: hasAccess
+            ? const Color(0xFFDCFCE7) // Emerald light
+            : const Color(0xFFF1F5F9), // Slate 100
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: hasAccess ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+          width: 1.5,
+        ),
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 12,
+        vertical: compact ? 2 : 4,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            hasAccess ? Icons.verified_user_rounded : Icons.lock_outline_rounded,
+            size: compact ? 15 : 18,
+            color: hasAccess ? const Color(0xFF047857) : const Color(0xFF64748B),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            hasAccess ? 'Timetable: ON' : 'Timetable: OFF',
+            style: TextStyle(
+              fontSize: compact ? 11 : 12.5,
+              fontWeight: FontWeight.w800,
+              color: hasAccess ? const Color(0xFF047857) : const Color(0xFF334155),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Transform.scale(
+            scale: compact ? 0.72 : 0.82,
+            child: Switch(
+              value: hasAccess,
+              activeColor: const Color(0xFF10B981),
+              activeTrackColor: const Color(0xFFA7F3D0),
+              inactiveThumbColor: const Color(0xFF94A3B8),
+              inactiveTrackColor: const Color(0xFFE2E8F0),
+              onChanged: (val) => _toggleTimetableAccess(faculty),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _confirmDeleteFaculty(FacultyModel faculty) {
     showDialog(
@@ -854,6 +985,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     String selectedYear = 'S.Y. B.Tech';
     String selectedSemester = 'Semester IV';
     String selectedDept = faculty.department.isNotEmpty ? faculty.department : 'CSE (AI & ML)';
+    String selectedSessionType = 'Theory';
+    int weeklyHours = 3;
     int credits = 3;
     bool isSaving = false;
 
@@ -1084,6 +1217,65 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         ],
                       ),
                     const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: selectedSessionType,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Session Type',
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            ),
+                            items: ['Theory', 'Lab']
+                                .map((t) => DropdownMenuItem(
+                                      value: t,
+                                      child: Text(t, style: const TextStyle(fontSize: 12)),
+                                    ))
+                                .toList(),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setDialogState(() {
+                                  selectedSessionType = v;
+                                  if (v == 'Lab' && weeklyHours > 2) {
+                                    weeklyHours = 2;
+                                  } else if (v == 'Theory' && weeklyHours < 3) {
+                                    weeklyHours = 3;
+                                  }
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DropdownButtonFormField<int>(
+                            value: weeklyHours,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Weekly Hours',
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            ),
+                            items: [1, 2, 3, 4, 5, 6]
+                                .map((h) => DropdownMenuItem(
+                                      value: h,
+                                      child: Text('$h hr${h > 1 ? 's' : ''}/week', style: const TextStyle(fontSize: 12)),
+                                    ))
+                                .toList(),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setDialogState(() => weeklyHours = v);
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
                     TextField(
                       decoration: InputDecoration(
                         labelText: 'Department',
@@ -1125,6 +1317,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           semester: selectedSemester,
                           credits: credits,
                           facultyId: faculty.id,
+                          weeklyHours: weeklyHours,
+                          sessionType: selectedSessionType,
                         );
                         if (ctx.mounted) Navigator.pop(ctx);
                         await _loadDashboardData();
@@ -2108,11 +2302,53 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                       ),
                                     ),
                                   ),
+                                  const SizedBox(width: 5),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.3)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.schedule_rounded, size: 11, color: Color(0xFF0284C7)),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          '${faculty.workloadHours} hrs/wk',
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF0284C7),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (faculty.canManageTimetable) ...[
+                                    const SizedBox(width: 5),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text(
+                                        'TT GEN ENABLED',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF7C3AED),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                '${faculty.designation} · ${faculty.department} · ID: ${faculty.employeeId}',
+                                '${faculty.designation} · ${faculty.department} · ID: ${faculty.employeeId} · Workload: ${faculty.workloadHours} hrs/week',
                                 style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -2126,14 +2362,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                             ],
                           ),
                         ),
-                        // Actions (Popup on mobile, row of icons on desktop)
-                        if (isMobile)
+                        // Actions: Timetable Access Toggle is ALWAYS visible directly in front of each faculty
+                        if (isMobile) ...[
+                          _buildTimetableTogglePill(faculty, compact: true),
                           PopupMenuButton<String>(
                             icon: const Icon(Icons.more_vert),
                             onSelected: (val) {
                               if (val == 'assign') _openAssignSubjectDialog(faculty);
                               if (val == 'perf') _showFacultyPerformanceDetails(faculty);
                               if (val == 'onboard') _handleSendOnboarding(faculty);
+                              if (val == 'timetable') _toggleTimetableAccess(faculty);
                               if (val == 'delete') _confirmDeleteFaculty(faculty);
                             },
                             itemBuilder: (ctx) => [
@@ -2178,8 +2416,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                 ),
                               ),
                             ],
-                          )
-                        else ...[
+                          ),
+                        ] else ...[
+                          _buildTimetableTogglePill(faculty, compact: false),
                           IconButton(
                             icon: const Icon(Icons.menu_book, color: AppColors.secondary),
                             tooltip: 'Assign / Allocate Subject',

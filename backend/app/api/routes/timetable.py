@@ -155,8 +155,9 @@ def faculty_list(db: Session = Depends(get_db), _: User = Depends(require_timeta
     """
     A minimal faculty picker for the assignment-creation screen.
     """
-    faculty = db.query(User).all()
-    return [{"id": u.id, "full_name": u.full_name, "email": u.email} for u in faculty]
+    from app.services.admin_service import list_faculty
+    fac_list = list_faculty(db, is_active=True)
+    return [{"id": u.id, "full_name": u.full_name, "email": u.email} for u in fac_list]
 
 
 # ---------------------------------------------------------------------------
@@ -515,6 +516,24 @@ def delete_division(
 
 @router.post("/subjects", response_model=SubjectOut, status_code=status.HTTP_201_CREATED)
 def create_subject(payload: SubjectCreate, db: Session = Depends(get_db), _: User = Depends(require_timetable_manager)):
+    name_clean = payload.name.strip()
+    code_clean = (payload.code or "").strip().upper()
+
+    # Check if a subject with the same code or name already exists
+    existing = None
+    if code_clean:
+        existing = db.query(Subject).filter(Subject.code == code_clean).first()
+    if not existing:
+        existing = db.query(Subject).filter(Subject.name.ilike(name_clean)).first()
+
+    if existing:
+        for field, value in payload.model_dump().items():
+            if value is not None:
+                setattr(existing, field, value)
+        db.commit()
+        db.refresh(existing)
+        return existing
+
     subject = Subject(**payload.model_dump())
     db.add(subject)
     db.commit()
@@ -524,7 +543,27 @@ def create_subject(payload: SubjectCreate, db: Session = Depends(get_db), _: Use
 
 @router.get("/subjects", response_model=list[SubjectOut])
 def list_subjects(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    return db.query(Subject).all()
+    all_subjects = db.query(Subject).filter(
+        ~Subject.name.contains(" | "),
+        ~Subject.name.contains(" / "),
+        Subject.name != "",
+    ).order_by(Subject.name.asc()).all()
+
+    seen_names = set()
+    seen_codes = set()
+    unique_subjects = []
+    for s in all_subjects:
+        norm_name = (s.name or "").strip().lower()
+        norm_code = (s.code or "").strip().lower()
+        if norm_name in seen_names:
+            continue
+        if norm_code and norm_code in seen_codes:
+            continue
+        seen_names.add(norm_name)
+        if norm_code:
+            seen_codes.add(norm_code)
+        unique_subjects.append(s)
+    return unique_subjects
 
 
 @router.put("/subjects/{subject_id}", response_model=SubjectOut)
@@ -582,7 +621,7 @@ def create_room(payload: RoomCreate, db: Session = Depends(get_db), _: User = De
 
 
 @router.get("/rooms", response_model=list[RoomOut])
-def list_rooms(db: Session = Depends(get_db), _: User = Depends(require_timetable_manager)):
+def list_rooms(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     return db.query(Room).all()
 
 
@@ -1554,60 +1593,74 @@ def publish_timetable(
             day_idx = day_map.get(raw_day, 0)
             slot_idx = max(0, raw_slot_num - 1)
 
-            sub = sub_cache.get(subj_name.lower())
-            if not sub:
-                sub = Subject(id=str(uuid.uuid4()), name=subj_name, code=subj_name[:10].upper(), sli_department_id=dept_id)
-                db.add(sub)
-                db.flush()
-                sub_cache[subj_name.lower()] = sub
+            # Split parallel tracks/batches so each gets its own clean canonical subject, room, and faculty
+            sub_parts = [p.strip() for p in subj_name.replace(" / ", " | ").split(" | ") if p.strip()]
+            fac_parts = [p.strip() for p in fac_name.replace(" / ", " | ").split(" | ") if p.strip()]
+            rm_parts = [p.strip() for p in room_name.replace(" / ", " | ").split(" | ") if p.strip()]
+            bat_parts = [p.strip() for p in batch_name.replace(" / ", " | ").split(" | ") if p.strip()]
 
-            fac_user = _match_or_create_faculty_user(fac_name, user_cache, all_existing_users, db)
+            max_tracks = max(len(sub_parts), len(rm_parts), len(fac_parts), len(bat_parts), 1)
+            for trk_idx in range(max_tracks):
+                cur_subj = sub_parts[trk_idx] if trk_idx < len(sub_parts) else sub_parts[0]
+                cur_fac = fac_parts[trk_idx] if trk_idx < len(fac_parts) else (fac_parts[0] if fac_parts else "")
+                cur_rm = rm_parts[trk_idx] if trk_idx < len(rm_parts) else (rm_parts[0] if rm_parts else "")
+                cur_bat = bat_parts[trk_idx] if trk_idx < len(bat_parts) else (bat_parts[0] if bat_parts else "All")
 
-            room = room_cache.get(room_name.lower().strip()) if room_name else None
-            if not room:
-                is_lab_room = "lab" in subj_name.lower() or "lab" in room_name.lower()
-                target_room_name = room_name.strip() if room_name.strip() else ("Lab 1" if is_lab_room else "Classroom 1")
-                
-                # Check DB case-insensitively first
-                existing_room = db.query(Room).filter(Room.name.ilike(target_room_name)).first()
-                if existing_room:
-                    room = existing_room
-                else:
-                    # Fallback to any existing room of matching type in DB
-                    existing_by_type = db.query(Room).filter(Room.type == (RoomType.LAB if is_lab_room else RoomType.LECTURE)).first()
-                    if existing_by_type:
-                        room = existing_by_type
+                clean_sub_name = cur_subj.strip()
+                sub = sub_cache.get(clean_sub_name.lower())
+                if not sub:
+                    sub = db.query(Subject).filter(
+                        (Subject.name.ilike(clean_sub_name)) | (Subject.code.ilike(clean_sub_name))
+                    ).first()
+                if not sub:
+                    sub = Subject(id=str(uuid.uuid4()), name=clean_sub_name, code=clean_sub_name[:10].upper(), sli_department_id=dept_id)
+                    db.add(sub)
+                    db.flush()
+                sub_cache[clean_sub_name.lower()] = sub
+
+                fac_user = _match_or_create_faculty_user(cur_fac, user_cache, all_existing_users, db)
+
+                clean_rm_name = cur_rm.strip()
+                room = room_cache.get(clean_rm_name.lower()) if clean_rm_name else None
+                if not room:
+                    is_lab_room = "lab" in clean_sub_name.lower() or "lab" in clean_rm_name.lower()
+                    target_room_name = clean_rm_name if clean_rm_name else ("Lab 1" if is_lab_room else "Classroom 1")
+                    existing_room = db.query(Room).filter(Room.name.ilike(target_room_name)).first()
+                    if existing_room:
+                        room = existing_room
                     else:
-                        room = Room(
-                            id=str(uuid.uuid4()),
-                            name=target_room_name,
-                            type=RoomType.LAB if is_lab_room else RoomType.LECTURE,
-                            capacity=60,
-                        )
-                        db.add(room)
-                        db.flush()
-                
-                if room_name:
-                    room_cache[room_name.lower().strip()] = room
+                        existing_by_type = db.query(Room).filter(Room.type == (RoomType.LAB if is_lab_room else RoomType.LECTURE)).first()
+                        if existing_by_type:
+                            room = existing_by_type
+                        else:
+                            room = Room(
+                                id=str(uuid.uuid4()),
+                                name=target_room_name,
+                                type=RoomType.LAB if is_lab_room else RoomType.LECTURE,
+                                capacity=60,
+                            )
+                            db.add(room)
+                            db.flush()
+                    room_cache[target_room_name.lower().strip()] = room
 
-            is_lab = "lab" in subj_name.lower() or "practical" in subj_name.lower()
+                is_lab = "lab" in clean_sub_name.lower() or "practical" in clean_sub_name.lower()
 
-            entry = TimetableEntry(
-                id=str(uuid.uuid4()),
-                batch_id=batch_id,
-                division_id=div.id,
-                subject_id=sub.id,
-                faculty_id=fac_user.id,
-                room_id=room.id,
-                day=day_idx,
-                slot=slot_idx,
-                is_lab_block=is_lab,
-                batch_name=batch_name,
-                session_type="lab" if is_lab else "lecture",
-                generated_at=now,
-            )
-            db.add(entry)
-            total_saved += 1
+                entry = TimetableEntry(
+                    id=str(uuid.uuid4()),
+                    batch_id=batch_id,
+                    division_id=div.id,
+                    subject_id=sub.id,
+                    faculty_id=fac_user.id,
+                    room_id=room.id,
+                    day=day_idx,
+                    slot=slot_idx,
+                    is_lab_block=is_lab,
+                    batch_name=cur_bat,
+                    session_type="lab" if is_lab else "lecture",
+                    generated_at=now,
+                )
+                db.add(entry)
+                total_saved += 1
 
             # Ensure TeachingAssignment exists for faculty
             ta = db.query(TeachingAssignment).filter(

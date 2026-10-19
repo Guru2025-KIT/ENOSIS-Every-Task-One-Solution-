@@ -13,7 +13,22 @@ router = APIRouter(prefix="/users", tags=["users"])
 def list_users(db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """Admin-only — used by the admin UI to pick which faculty member to
     delegate timetable-management duty to."""
-    return db.query(User).all()
+    all_users = db.query(User).filter(
+        ~User.full_name.contains(' | '),
+        ~User.full_name.contains(' / '),
+        ~User.email.contains('..'),
+        User.full_name != "Unassigned Faculty",
+        User.full_name != "",
+    ).order_by(User.full_name.asc()).all()
+
+    seen = set()
+    deduped = []
+    for u in all_users:
+        norm = (u.full_name or "").strip().lower()
+        if norm not in seen:
+            seen.add(norm)
+            deduped.append(u)
+    return deduped
 
 
 @router.post("/{user_id}/timetable-access", response_model=UserOut)

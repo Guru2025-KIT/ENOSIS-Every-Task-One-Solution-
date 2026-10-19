@@ -5,12 +5,12 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../ai_assistant/presentation/screens/ai_assistant_screen.dart';
 import '../../../career/presentation/screens/career_advancement_screen.dart';
-import '../../../copo/presentation/screens/copo_attainment_screen.dart';
 import '../../../copo/presentation/screens/copo_mapping_screen.dart';
 import '../../../faculty_insights/presentation/screens/faculty_insights_screen.dart';
 import '../../../notifications/presentation/screens/notifications_screen.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
 import '../../../timetable/presentation/screens/generate_timetable_screen.dart';
+import '../../../timetable/presentation/screens/timetable_display_screen.dart';
 import '../../../timetable/presentation/screens/timetable_hub_screen.dart';
 import '../../../todo/presentation/screens/my_day_screen.dart';
 import 'package:provider/provider.dart';
@@ -40,9 +40,11 @@ class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
 
   // Tabs for the main layout stack (indexed 0 to 6)
-  late final List<Widget> _tabs = [
+  List<Widget> get _tabs => [
     DashboardScreen(onNavigateTab: _setTabIndex), // 0: Home
-    const TimetableHubScreen(),                    // 1: Timetable
+    AuthSession.canAccessTimetableGeneration
+        ? const TimetableHubScreen()
+        : const TimetableDisplayScreen(),          // 1: Timetable
     const CopoMappingScreen(),                     // 2: CO-PO Mapping
     const CareerAdvancementScreen(),               // 3: Career Advancement
     const MyDayScreen(),                           // 4: To-Do List
@@ -164,14 +166,31 @@ class _MainShellState extends State<MainShell> {
                       color: AppColors.primarySoft,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.auto_awesome_outlined, color: AppColors.primary),
+                    child: Icon(
+                      AuthSession.canAccessTimetableGeneration
+                          ? Icons.auto_awesome_outlined
+                          : Icons.calendar_month_outlined,
+                      color: AppColors.primary,
+                    ),
                   ),
-                  title: Text('Generate Timetable', style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
-                  subtitle: Text('Run automated constraint schedule engine', style: AppTypography.caption),
+                  title: Text(
+                    AuthSession.canAccessTimetableGeneration ? 'Generate Timetable' : 'View Timetable',
+                    style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    AuthSession.canAccessTimetableGeneration
+                        ? 'Run automated constraint schedule engine'
+                        : 'View published classes & labs schedule',
+                    style: AppTypography.caption,
+                  ),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
                     Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const GenerateTimetableScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => AuthSession.canAccessTimetableGeneration
+                            ? const GenerateTimetableScreen()
+                            : const TimetableDisplayScreen(),
+                      ),
                     );
                   },
                 ),

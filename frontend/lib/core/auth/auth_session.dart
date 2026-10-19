@@ -35,7 +35,7 @@ class AuthSession {
 
   /// True for real admins AND for faculty an admin has explicitly
   /// delegated timetable duty to.
-  static bool get canAccessTimetableGeneration => true;
+  static bool get canAccessTimetableGeneration => isAdmin || canManageTimetable;
 
   /// Saves the current session state to persistent storage.
   static Future<void> saveToPreferences() async {

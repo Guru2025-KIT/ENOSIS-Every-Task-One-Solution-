@@ -10,6 +10,7 @@ import '../../../copo/presentation/screens/copo_attainment_screen.dart';
 import '../../../copo/presentation/screens/copo_mapping_screen.dart';
 import '../../../faculty_insights/presentation/screens/faculty_insights_screen.dart';
 import '../../../timetable/presentation/screens/generate_timetable_screen.dart';
+import '../../../timetable/presentation/screens/timetable_display_screen.dart';
 import '../../../timetable/presentation/screens/timetable_hub_screen.dart';
 import '../../../todo/presentation/screens/my_day_screen.dart';
 import '../../data/models/dashboard_summary_model.dart';
@@ -118,8 +119,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
         break;
       case 'Generate Timetable':
-        Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const GenerateTimetableScreen()));
+      case 'View Timetable':
+        if (AuthSession.canAccessTimetableGeneration) {
+          Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const GenerateTimetableScreen()));
+        } else {
+          Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const TimetableDisplayScreen()));
+        }
         break;
       case 'Pending Tasks':
         if (widget.onNavigateTab != null) {
@@ -972,12 +979,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         icon: Icons.track_changes_outlined,
         accentColor: Color(0xFF0F1F44),
       ),
-      const WorkspaceActionItem(
-        title: 'Generate Timetable',
-        subtitle: 'Automated constraint schedule engine',
-        actionLabel: 'Generate',
-        icon: Icons.auto_awesome_outlined,
-        accentColor: Color(0xFFF4791E),
+      WorkspaceActionItem(
+        title: AuthSession.canAccessTimetableGeneration ? 'Generate Timetable' : 'View Timetable',
+        subtitle: AuthSession.canAccessTimetableGeneration
+            ? 'Automated constraint schedule engine'
+            : 'Published class & lab master schedules',
+        actionLabel: AuthSession.canAccessTimetableGeneration ? 'Generate' : 'View Schedule',
+        icon: AuthSession.canAccessTimetableGeneration
+            ? Icons.auto_awesome_outlined
+            : Icons.calendar_today_outlined,
+        accentColor: const Color(0xFFF4791E),
       ),
       WorkspaceActionItem(
         title: 'Pending Tasks',
@@ -1491,12 +1502,15 @@ class _ScheduleSlotTile extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      'Slot ${slot.slotNumber}',
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                    Flexible(
+                      child: Text(
+                        'Slot ${slot.slotNumber}',
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -1533,10 +1547,8 @@ class _MiniCalendarGrid extends StatelessWidget {
     return Column(
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: daysOfWeek.map((day) {
-            return SizedBox(
-              width: 34,
+            return Expanded(
               child: Text(
                 day,
                 textAlign: TextAlign.center,

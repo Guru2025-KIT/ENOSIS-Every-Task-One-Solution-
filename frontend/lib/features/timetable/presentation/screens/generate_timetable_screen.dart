@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_html/html.dart' as html;
+import '../../../../core/auth/auth_session.dart';
 import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../../faculty_insights/presentation/providers/sli_end_provider.dart';
 import '../../../faculty_insights/presentation/providers/sli_mid_provider.dart';
@@ -111,6 +112,15 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
   }
 
   Future<void> _executeGenerationWithAutoRelaxation() async {
+    if (!AuthSession.canAccessTimetableGeneration) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Timetable generation is restricted to administrators and designated timetable coordinators.'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
+      return;
+    }
     setState(() {
       _isSolvingInteractive = true;
       _relaxationBannerMessage = null;
@@ -394,13 +404,24 @@ class _GenerateTimetableScreenState extends State<GenerateTimetableScreen> with 
                               height: 20,
                               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
                             )
-                          : const Icon(Icons.play_arrow_rounded, size: 24),
+                          : Icon(
+                              !AuthSession.canAccessTimetableGeneration
+                                  ? Icons.lock_outline_rounded
+                                  : Icons.play_arrow_rounded,
+                              size: 24,
+                            ),
                       label: Text(
-                        isGenerating ? 'Optimizing Schedule...' : 'Generate Academic Timetable',
+                        isGenerating
+                            ? 'Optimizing Schedule...'
+                            : (!AuthSession.canAccessTimetableGeneration
+                                ? 'Generation Restricted (Admin Only)'
+                                : 'Generate Academic Timetable'),
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF97316),
+                        backgroundColor: !AuthSession.canAccessTimetableGeneration
+                            ? const Color(0xFF475569)
+                            : const Color(0xFFF97316),
                         foregroundColor: Colors.white,
                         elevation: 3,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

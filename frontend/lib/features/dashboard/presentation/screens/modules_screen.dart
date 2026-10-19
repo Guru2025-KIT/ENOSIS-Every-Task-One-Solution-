@@ -9,6 +9,7 @@ import '../../../copo/presentation/screens/copo_attainment_screen.dart';
 import '../../../copo/presentation/screens/copo_mapping_screen.dart';
 import '../../../faculty_insights/presentation/screens/faculty_insights_screen.dart';
 import '../../../timetable/presentation/screens/generate_timetable_screen.dart';
+import '../../../timetable/presentation/screens/timetable_display_screen.dart';
 import '../../../timetable/presentation/screens/timetable_hub_screen.dart';
 import '../../../todo/presentation/screens/my_day_screen.dart';
 
@@ -48,10 +49,18 @@ class ModulesScreen extends StatelessWidget {
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AiAssistantScreen()));
         break;
       case 'Timetable':
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TimetableHubScreen()));
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => AuthSession.canAccessTimetableGeneration
+              ? const TimetableHubScreen()
+              : const TimetableDisplayScreen(),
+        ));
         break;
       case 'Generate Timetable':
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GenerateTimetableScreen()));
+        if (AuthSession.canAccessTimetableGeneration) {
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GenerateTimetableScreen()));
+        } else {
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TimetableDisplayScreen()));
+        }
         break;
       case 'Career Adv.':
       case 'Career Advancement':

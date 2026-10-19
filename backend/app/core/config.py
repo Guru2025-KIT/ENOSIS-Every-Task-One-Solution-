@@ -57,15 +57,9 @@ class Settings(BaseSettings):
     ELEVENLABS_VOICE_ID_MALE: str = "ErXwobaYiN019PkySvjV"     # Antoni (default male)
 
 
-    # TEMPORARY testing convenience: when True, every logged-in faculty
-    # member can manage/generate timetables, bypassing the
-    # admin-or-delegated check entirely. The real permission system
-    # (User.can_manage_timetable, require_timetable_manager,
-    # POST/DELETE /users/{id}/timetable-access) still exists underneath
-    # and is still tested — flip this to False once you're ready to
-    # actually restrict who can generate. Defaults True so you can test
-    # the full timetable flow immediately without an admin-delegation step.
-    OPEN_TIMETABLE_ACCESS: bool = True
+    # RESTRICTED: when False, only ADMIN accounts and faculty explicitly
+    # granted access via can_manage_timetable can manage/generate timetables.
+    OPEN_TIMETABLE_ACCESS: bool = False
 
     # ─── SMTP Email Dispatch ───────────────────────────────────────────
     # Used by admin faculty onboarding & password-reset flows.

@@ -23,6 +23,8 @@ class SubjectAllocationOut(BaseModel):
     faculty_name: str
     co_faculty_name: str = "None"
     attainment_status: str = "In Progress"
+    weekly_hours: int = 3
+    session_type: str = "Theory"
 
 
 class SubjectAllocationCreate(BaseModel):
@@ -34,6 +36,9 @@ class SubjectAllocationCreate(BaseModel):
     credits: int = 3
     faculty_id: str
     co_faculty_name: str = "None"
+    weekly_hours: int = 3
+    session_type: str = "Theory"
+    division: str | None = None
 
 
 class SubjectReassignRequest(BaseModel):

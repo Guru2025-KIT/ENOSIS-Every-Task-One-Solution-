@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/auth/auth_session.dart';
 import '../../providers/timetable_provider.dart';
 import 'time_slot_setup_screen.dart';
 import 'upload_assignments_screen.dart';
@@ -294,10 +295,21 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
               stepNumber: 5,
               title: 'Generate & Publish Timetable',
               subtitle: 'Run CP-SAT solver, fine-tune with drag & drop, and publish schedules to faculty dashboards.',
-              badgeText: hasPublished ? 'Schedule Ready' : 'Ready to Solve',
+              badgeText: AuthSession.canAccessTimetableGeneration
+                  ? (hasPublished ? 'Schedule Ready' : 'Ready to Solve')
+                  : 'Admin Access Required 🔒',
               icon: Icons.auto_awesome,
               isHighlighted: false,
               onTap: () {
+                if (!AuthSession.canAccessTimetableGeneration) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Timetable generation is restricted to administrators and designated timetable coordinators.'),
+                      backgroundColor: Color(0xFFEF4444),
+                    ),
+                  );
+                  return;
+                }
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const GenerateTimetableScreen()),
                 );
@@ -480,23 +492,31 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
                               fontSize: 14.5,
                               color: Colors.white,
                             ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: isHighlighted ? const Color(0xFFF97316) : const Color(0xFF334155),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          flex: 0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isHighlighted ? const Color(0xFFF97316) : const Color(0xFF334155),
+                              ),
                             ),
-                          ),
-                          child: Text(
-                            badgeText,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: isHighlighted ? const Color(0xFFF97316) : const Color(0xFFFB923C),
+                            child: Text(
+                              badgeText,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: isHighlighted ? const Color(0xFFF97316) : const Color(0xFFFB923C),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ),
@@ -509,6 +529,8 @@ class _TimetableHubScreenState extends State<TimetableHubScreen> {
                         fontSize: 12,
                         color: Color(0xFFFB923C),
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),

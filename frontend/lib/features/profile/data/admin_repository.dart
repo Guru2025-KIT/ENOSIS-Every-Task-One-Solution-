@@ -47,6 +47,7 @@ class FacultyModel {
   bool isActive;
   bool canManageTimetable;
   List<String> assignedSubjectCodes;
+  int workloadHours;
   DateTime? createdAt;
 
   FacultyModel({
@@ -60,6 +61,7 @@ class FacultyModel {
     this.isActive = true,
     this.canManageTimetable = false,
     this.assignedSubjectCodes = const [],
+    this.workloadHours = 0,
     this.createdAt,
   });
 
@@ -78,6 +80,7 @@ class FacultyModel {
               ?.map((e) => e.toString())
               .toList() ??
           [],
+      workloadHours: json['workload_hours'] as int? ?? 0,
       createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
     );
   }
@@ -107,6 +110,8 @@ class SubjectAllocationModel {
   String facultyName;
   String coFacultyName;
   String attainmentStatus;
+  final int weeklyHours;
+  final String sessionType;
 
   SubjectAllocationModel({
     required this.id,
@@ -120,6 +125,8 @@ class SubjectAllocationModel {
     required this.facultyName,
     this.coFacultyName = 'None',
     this.attainmentStatus = 'In Progress',
+    this.weeklyHours = 3,
+    this.sessionType = 'Theory',
   });
 
   factory SubjectAllocationModel.fromJson(Map<String, dynamic> json) {
@@ -135,6 +142,8 @@ class SubjectAllocationModel {
       facultyName: json['faculty_name'] as String? ?? '',
       coFacultyName: json['co_faculty_name'] as String? ?? 'None',
       attainmentStatus: json['attainment_status'] as String? ?? 'In Progress',
+      weeklyHours: json['weekly_hours'] as int? ?? 3,
+      sessionType: json['session_type'] as String? ?? 'Theory',
     );
   }
 }
@@ -471,6 +480,9 @@ class AdminRepository {
     int credits = 3,
     required String facultyId,
     String coFacultyName = 'None',
+    int weeklyHours = 3,
+    String sessionType = 'Theory',
+    String? division,
   }) async {
     final res = await ApiClient.postJson(
       '/admin/allocations',
@@ -483,6 +495,9 @@ class AdminRepository {
         'credits': credits,
         'faculty_id': facultyId,
         'co_faculty_name': coFacultyName,
+        'weekly_hours': weeklyHours,
+        'session_type': sessionType,
+        if (division != null) 'division': division,
       },
       token: _token,
     );

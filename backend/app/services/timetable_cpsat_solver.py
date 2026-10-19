@@ -146,11 +146,46 @@ class TimetableCpSatSolver:
 
         all_cls_names = sorted(list({a.class_name for a in self.assignments if a.class_name}))
         self.home_classrooms: Dict[str, str] = {}
+        # Track which real classroom names are already assigned (1-to-1 guarantee)
+        _used_real_rooms: set = set()
+        _synthetic_idx = 0
         for c_idx, c_name in enumerate(all_cls_names):
             if self.classrooms:
-                self.home_classrooms[c_name] = self.classrooms[c_idx % len(self.classrooms)].get("name", f"Classroom {c_idx + 1}")
+                # Find the next real classroom not yet used by another class
+                assigned = None
+                for cr in self.classrooms:
+                    cr_name = cr.get("name", f"Classroom {c_idx + 1}")
+                    if cr_name not in _used_real_rooms:
+                        assigned = cr_name
+                        _used_real_rooms.add(cr_name)
+                        break
+                if assigned is None:
+                    # Overflow: all real rooms taken — generate a unique synthetic name
+                    while f"Room {101 + _synthetic_idx}" in _used_real_rooms:
+                        _synthetic_idx += 1
+                    assigned = f"Room {101 + _synthetic_idx}"
+                    _used_real_rooms.add(assigned)
+                    _synthetic_idx += 1
+                self.home_classrooms[c_name] = assigned
             else:
                 self.home_classrooms[c_name] = f"Room {101 + c_idx}"
+
+        # Dedicated Lab Rooms: map each unique lab subject to at most 2 dedicated laboratories (never more than 2)
+        self.subject_lab_rooms: Dict[str, List[str]] = {}
+        lab_subjects = sorted(list({
+            a.subject for a in self.assignments 
+            if (a.type and a.type.lower() == "lab") or "lab" in a.subject.lower() or "laboratory" in a.subject.lower()
+        }))
+        for idx, sub_name in enumerate(lab_subjects):
+            assigned_labs = []
+            if self.labs_pool:
+                l_count = len(self.labs_pool)
+                lab1 = self.labs_pool[(idx * 2) % l_count].get("name", f"Lab {(idx * 2) % l_count + 1}")
+                lab2 = self.labs_pool[(idx * 2 + 1) % l_count].get("name", f"Lab {(idx * 2 + 1) % l_count + 1}")
+                assigned_labs = [lab1, lab2] if lab1 != lab2 else [lab1]
+            else:
+                assigned_labs = [f"Lab {(idx * 2) % 6 + 1}", f"Lab {(idx * 2 + 1) % 6 + 1}"]
+            self.subject_lab_rooms[sub_name] = assigned_labs
 
 
     # -------------------------------------------------------------- #
@@ -297,11 +332,20 @@ class TimetableCpSatSolver:
             return self.classrooms[0].get("name", "Classroom 1") if self.classrooms else "Room 101"
         if class_name in self.home_classrooms:
             return self.home_classrooms[class_name]
+        # Late-appearing class — assign the first real room not yet taken by any other class,
+        # or fall back to a unique synthetic name.
+        used = set(self.home_classrooms.values())
         if self.classrooms:
-            idx = abs(hash(class_name)) % len(self.classrooms)
-            rm = self.classrooms[idx].get("name", f"Classroom {idx + 1}")
-        else:
-            rm = f"Room {101 + (abs(hash(class_name)) % 50)}"
+            for cr in self.classrooms:
+                cr_name = cr.get("name", "Classroom 1")
+                if cr_name not in used:
+                    self.home_classrooms[class_name] = cr_name
+                    return cr_name
+        # All real rooms taken or no real rooms — generate unique synthetic name
+        idx = 101
+        while f"Room {idx}" in used:
+            idx += 1
+        rm = f"Room {idx}"
         self.home_classrooms[class_name] = rm
         return rm
 
@@ -311,13 +355,15 @@ class TimetableCpSatSolver:
         intent = (intent_raw or "").lower().strip()
         cat = (category_raw or "").lower()
 
-        # ALWAYS prioritize lock / fixed anchors
-        if "lock" in intent or "fixed" in intent or "force" in intent or "lock" in cat or "fixed" in cat or "force" in cat:
+        # Check explicit avoid/blacklist first
+        if intent in ("avoid", "blacklist") or any(kw in cat for kw in ("unavailable", "block", "leave")):
+            return "avoid"
+
+        # ALWAYS prioritize lock / fixed anchors with word boundaries
+        if re.search(r"\b(lock|locked|fixed|force)\b", intent) or re.search(r"\b(lock|locked|fixed|force)\b", cat):
             return "fixed"
 
-        if intent == "blacklist":
-            return "avoid"
-        if intent in ("avoid", "fixed", "force", "whitelist", "fill",
+        if intent in ("fixed", "force", "whitelist", "fill",
                       "holiday", "no_theory_after_lunch", "parallel", "preferred"):
             return intent
 
@@ -1050,13 +1096,28 @@ class TimetableCpSatSolver:
                     bl = "All" if sess.type == "Theory" else (sess.batch or "Batch 1")
                     rm = ""
 
-                    # 1. Lab Practical Sessions: assign from lab pool
+                    # 1. Lab Practical Sessions: assign strictly from subject's dedicated lab rooms (max 2 labs)
                     if sess.type == "Lab":
-                        for r in self.labs_pool:
-                            rn = r.get("name", "")
-                            if rn and all(rn not in room_use[(opt.day, s)] for s in opt.slots):
-                                rm = rn
-                                break
+                        cand_labs = self.subject_lab_rooms.get(sess.subject, [])
+                        batch_num = 0
+                        b_str = (sess.batch or "").lower()
+                        if "2" in b_str or "b2" in b_str or "b" in b_str:
+                            batch_num = 1
+                        
+                        preferred = cand_labs[batch_num % len(cand_labs)] if cand_labs else None
+                        if preferred and all(preferred not in room_use[(opt.day, s)] for s in opt.slots):
+                            rm = preferred
+                        else:
+                            for lab_cand in cand_labs:
+                                if all(lab_cand not in room_use[(opt.day, s)] for s in opt.slots):
+                                    rm = lab_cand
+                                    break
+                        if not rm:
+                            for r in self.labs_pool:
+                                rn = r.get("name", "")
+                                if rn and all(rn not in room_use[(opt.day, s)] for s in opt.slots):
+                                    rm = rn
+                                    break
                         if not rm:
                             l_idx = 1
                             while any(f"Lab {l_idx}" in room_use[(opt.day, s)] for s in opt.slots):
