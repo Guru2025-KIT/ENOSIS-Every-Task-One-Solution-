@@ -221,21 +221,21 @@ class _InteractiveSlotLockingWorkbenchScreenState
                 side: const BorderSide(color: Color(0xFF334155)),
               ),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 620),
-                child: SizedBox(
-                  width: double.maxFinite,
-                  height: 540,
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                constraints: const BoxConstraints(
+                  maxWidth: 620,
+                  maxHeight: 580,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF97316).withValues(alpha: 0.15),
+                            color: const Color(0xFFF97316).withOpacity(0.15),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Icon(Icons.category_rounded, color: Color(0xFFF97316), size: 22),
@@ -404,11 +404,10 @@ class _InteractiveSlotLockingWorkbenchScreenState
                       ],
                     ),
                   ],
+                  ),
                 ),
               ),
-            ),
-          ),
-        );
+            );
           },
         );
       },
@@ -956,23 +955,23 @@ class _InteractiveSlotLockingWorkbenchScreenState
         title: const Row(
           children: [
             Icon(Icons.lock_clock_outlined, color: Color(0xFFF97316), size: 20),
-            SizedBox(width: 8),
+            SizedBox(width: 6),
             Flexible(
               child: Text(
-                'Pre-Assignment & Locking',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Colors.white),
+                'Pre-Assignment & Locking Workbench',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.white),
                 overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ),
           ],
         ),
         actions: [
-          TextButton.icon(
-            icon: const Icon(Icons.category, color: Color(0xFFFB923C), size: 15),
-            label: const Text('Classify', style: TextStyle(color: Color(0xFFFB923C), fontWeight: FontWeight.bold, fontSize: 12)),
+          IconButton(
+            icon: const Icon(Icons.category, color: Color(0xFFFB923C), size: 20),
+            tooltip: 'Classify Subjects',
             onPressed: _showSubjectClassificationDialog,
           ),
-          const SizedBox(width: 6),
         ],
       ),
       body: SingleChildScrollView(
@@ -998,7 +997,7 @@ class _InteractiveSlotLockingWorkbenchScreenState
                 ],
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1011,14 +1010,14 @@ class _InteractiveSlotLockingWorkbenchScreenState
                         ),
                         child: const Icon(Icons.touch_app, color: Color(0xFFFB923C), size: 24),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
                               'Visual Slot Placement & Priority Cohort Locking',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14.5),
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14),
                             ),
                             const SizedBox(height: 3),
                             Text(
@@ -1031,19 +1030,16 @@ class _InteractiveSlotLockingWorkbenchScreenState
                     ],
                   ),
                   const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.play_arrow_rounded, size: 20),
-                      label: const Text('Auto-Generate Timetable', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF97316),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      ),
-                      onPressed: _saveAndExecuteSolver,
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.play_arrow_rounded, size: 20),
+                    label: const Text('Auto-Generate', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFF97316),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
+                    onPressed: _saveAndExecuteSolver,
                   ),
                 ],
               ),
@@ -1151,6 +1147,7 @@ class _InteractiveSlotLockingWorkbenchScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Subject tray header — wraps on narrow screens
           Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 6,
