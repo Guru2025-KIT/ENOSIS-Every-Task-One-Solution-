@@ -36,6 +36,8 @@ class ApiClient {
       list.add('http://127.0.0.1:8000');
     } else if (defaultTargetPlatform == TargetPlatform.android) {
       // Physical device Wi-Fi IP (Current PC IP), followed by emulator loopback
+      list.add('https://enosis-every-task-one-solution.onrender.com');
+      list.add('http://10.189.113.8:8000');
       list.add('http://192.168.0.134:8000');
       list.add('http://10.199.8.143:8000');
       list.add('http://10.78.141.143:8000');
