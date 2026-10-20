@@ -33,9 +33,9 @@ class AuthSession {
   /// True if the current user has the system administrator role.
   static bool get isAdmin => role?.toLowerCase() == 'admin';
 
-  /// True for real admins AND for faculty an admin has explicitly
-  /// delegated timetable duty to.
-  static bool get canAccessTimetableGeneration => isAdmin || canManageTimetable;
+  /// Access to timetable generation is open to all faculties and admins on the project,
+  /// while preserving the button and toggle mechanisms for future custom controls.
+  static bool get canAccessTimetableGeneration => true;
 
   /// Saves the current session state to persistent storage.
   static Future<void> saveToPreferences() async {

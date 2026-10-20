@@ -454,8 +454,13 @@ class TimetableRepository {
   }
 
   Future<bool> updateScheduleConfig(ScheduleConfigModel config) async {
-    final response = await ApiClient.postJson('/timetable/schedule-config', config.toJson());
-    return response.statusCode == 200;
+    try {
+      final response = await ApiClient.postJson('/timetable/schedule-config', config.toJson());
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      debugPrint('[TimetableRepository] updateScheduleConfig error: $e');
+      return false;
+    }
   }
 
   Future<Map<String, dynamic>> fetchPublishedTimetable({String? viewType, String? target}) async {

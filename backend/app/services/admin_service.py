@@ -244,6 +244,7 @@ def create_single_faculty(db: Session, payload: FacultyCreate) -> FacultyOut:
         experience=payload.experience.strip() if payload.experience else None,
         role=UserRole.FACULTY,
         is_active=True,
+        can_manage_timetable=True,
     )
     db.add(user)
     db.commit()
@@ -580,6 +581,7 @@ def bulk_import_faculty(db: Session, payload: FacultyImportPayload) -> dict[str,
             phone=rec.phone.strip() if rec.phone else None,
             role=UserRole.FACULTY,
             is_active=True,
+            can_manage_timetable=True,
         )
         db.add(user)
         imported_count += 1

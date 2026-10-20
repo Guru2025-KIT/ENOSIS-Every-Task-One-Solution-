@@ -96,7 +96,7 @@ class FacultyOut(BaseModel):
     joining_date: str | None = None
     experience: str | None = None
     is_active: bool = True
-    can_manage_timetable: bool = False
+    can_manage_timetable: bool = True
     assigned_subject_codes: list[str] = []
     workload_hours: int = 0
     created_at: datetime

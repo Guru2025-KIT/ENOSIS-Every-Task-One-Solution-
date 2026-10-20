@@ -165,6 +165,11 @@ class _TimeSlotSetupScreenState extends State<TimeSlotSetupScreen> {
     final startStr = '${_collegeStartTime.hour.toString().padLeft(2, '0')}:${_collegeStartTime.minute.toString().padLeft(2, '0')}';
     final endStr = '${_collegeEndTime.hour.toString().padLeft(2, '0')}:${_collegeEndTime.minute.toString().padLeft(2, '0')}';
 
+    final lecMin = int.tryParse(_lectureDurationController.text) ?? _lectureDurationMinutes;
+    final labMin = int.tryParse(_labDurationController.text) ?? _labDurationMinutes;
+    _lectureDurationMinutes = lecMin;
+    _labDurationMinutes = labMin;
+
     int calculatedPeriods = _generatePreviewSlots().where((s) => !s.isBreak).length;
     if (calculatedPeriods < 1) calculatedPeriods = 1;
     if (calculatedPeriods > 20) calculatedPeriods = 20;
