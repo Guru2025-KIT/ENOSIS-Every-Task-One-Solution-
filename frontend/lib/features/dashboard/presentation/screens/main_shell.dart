@@ -98,12 +98,14 @@ class _MainShellState extends State<MainShell> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: Row(
                     children: [
                       Text(
                         'Quick Actions',
-                        style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold),
+                        style: AppTypography.h3
+                            .copyWith(fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -116,14 +118,19 @@ class _MainShellState extends State<MainShell> {
                       color: AppColors.primarySoft,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.smart_toy_outlined, color: AppColors.primary),
+                    child: const Icon(Icons.smart_toy_outlined,
+                        color: AppColors.primary),
                   ),
-                  title: Text('Ask ENOSIS AI Assistant', style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
-                  subtitle: Text('Get help with schedules, syllabus & tasks', style: AppTypography.caption),
+                  title: Text('Ask ENOSIS AI Assistant',
+                      style: AppTypography.bodyMedium
+                          .copyWith(fontWeight: FontWeight.w600)),
+                  subtitle: Text('Get help with schedules, syllabus & tasks',
+                      style: AppTypography.caption),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
                     Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const AiAssistantScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const AiAssistantScreen()),
                     );
                   },
                 ),
@@ -134,10 +141,14 @@ class _MainShellState extends State<MainShell> {
                       color: AppColors.primarySoft,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.add_task_outlined, color: AppColors.primary),
+                    child: const Icon(Icons.add_task_outlined,
+                        color: AppColors.primary),
                   ),
-                  title: Text('Add a Task to To-Do', style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
-                  subtitle: Text('Create a quick reminder or checklist', style: AppTypography.caption),
+                  title: Text('Add a Task to To-Do',
+                      style: AppTypography.bodyMedium
+                          .copyWith(fontWeight: FontWeight.w600)),
+                  subtitle: Text('Create a quick reminder or checklist',
+                      style: AppTypography.caption),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
                     _setTabIndex(4);
@@ -150,10 +161,14 @@ class _MainShellState extends State<MainShell> {
                       color: AppColors.primarySoft,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.emoji_events_outlined, color: AppColors.primary),
+                    child: const Icon(Icons.emoji_events_outlined,
+                        color: AppColors.primary),
                   ),
-                  title: Text('Career Advancement', style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
-                  subtitle: Text('Add certificates, FDPs & achievements', style: AppTypography.caption),
+                  title: Text('Career Advancement',
+                      style: AppTypography.bodyMedium
+                          .copyWith(fontWeight: FontWeight.w600)),
+                  subtitle: Text('Add certificates, FDPs & achievements',
+                      style: AppTypography.caption),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
                     _setTabIndex(3);
@@ -201,10 +216,14 @@ class _MainShellState extends State<MainShell> {
                       color: AppColors.primarySoft,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.assessment_outlined, color: AppColors.primary),
+                    child: const Icon(Icons.assessment_outlined,
+                        color: AppColors.primary),
                   ),
-                  title: Text('View Academic Reports', style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
-                  subtitle: Text('CO-PO attainment & analytics summaries', style: AppTypography.caption),
+                  title: Text('View Academic Reports',
+                      style: AppTypography.bodyMedium
+                          .copyWith(fontWeight: FontWeight.w600)),
+                  subtitle: Text('CO-PO attainment & analytics summaries',
+                      style: AppTypography.caption),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
                     _setTabIndex(2);
@@ -238,7 +257,8 @@ class _MainShellState extends State<MainShell> {
                 children: [
                   // Mobile Top Header (Logo + Title + Action Icons)
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -272,26 +292,36 @@ class _MainShellState extends State<MainShell> {
                         Row(
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.smart_toy_outlined, color: Colors.white, size: 20),
+                              icon: const Icon(Icons.smart_toy_outlined,
+                                  color: Colors.white, size: 20),
                               visualDensity: VisualDensity.compact,
                               padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                              constraints: const BoxConstraints(
+                                  minWidth: 32, minHeight: 32),
                               tooltip: 'AI Assistant',
                               onPressed: () {
                                 Navigator.of(context).push(
-                                  MaterialPageRoute(builder: (_) => const AiAssistantScreen()),
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const AiAssistantScreen()),
                                 );
                               },
                             ),
                             IconButton(
-                              icon: const Icon(Icons.notifications_none_outlined, color: Colors.white, size: 20),
+                              icon: const Icon(
+                                  Icons.notifications_none_outlined,
+                                  color: Colors.white,
+                                  size: 20),
                               visualDensity: VisualDensity.compact,
                               padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                              constraints: const BoxConstraints(
+                                  minWidth: 32, minHeight: 32),
                               tooltip: 'Notifications',
                               onPressed: () {
                                 Navigator.of(context).push(
-                                  MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const NotificationsScreen()),
                                 );
                               },
                             ),
@@ -305,7 +335,9 @@ class _MainShellState extends State<MainShell> {
                                   radius: 13,
                                   backgroundColor: Colors.white24,
                                   child: Text(
-                                    userName.isNotEmpty ? userName[0].toUpperCase() : 'F',
+                                    userName.isNotEmpty
+                                        ? userName[0].toUpperCase()
+                                        : 'F',
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
@@ -332,7 +364,8 @@ class _MainShellState extends State<MainShell> {
                     ),
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
                       child: Row(
                         children: [
                           _MobileNavPill(
@@ -484,7 +517,9 @@ class _MainShellState extends State<MainShell> {
           tooltip: 'Quick Actions',
           child: const Icon(Icons.add, size: 28),
         ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+        floatingActionButtonLocation: _currentIndex == 2
+            ? const _AboveWorkbenchFabLocation()
+            : FloatingActionButtonLocation.endFloat,
       );
     }
 
@@ -509,7 +544,8 @@ class _MainShellState extends State<MainShell> {
                       onTap: () => _setTabIndex(0),
                       borderRadius: BorderRadius.circular(8),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 6),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -622,21 +658,25 @@ class _MainShellState extends State<MainShell> {
                         child: InkWell(
                           onTap: () {
                             Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const AiAssistantScreen()),
+                              MaterialPageRoute(
+                                  builder: (_) => const AiAssistantScreen()),
                             );
                           },
                           borderRadius: BorderRadius.circular(20),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
                               color: Colors.white.withValues(alpha: 0.08),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
+                              border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.24)),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.smart_toy_outlined, size: 16, color: AppColors.secondary),
+                                const Icon(Icons.smart_toy_outlined,
+                                    size: 16, color: AppColors.secondary),
                                 const SizedBox(width: 6),
                                 Text(
                                   'AI Assistant',
@@ -665,7 +705,8 @@ class _MainShellState extends State<MainShell> {
                             customBorder: const CircleBorder(),
                             child: const Padding(
                               padding: EdgeInsets.all(7),
-                              child: Icon(Icons.add, color: Colors.white, size: 18),
+                              child: Icon(Icons.add,
+                                  color: Colors.white, size: 18),
                             ),
                           ),
                         ),
@@ -683,7 +724,9 @@ class _MainShellState extends State<MainShell> {
                             radius: 16,
                             backgroundColor: Colors.white24,
                             child: Text(
-                              userName.isNotEmpty ? userName[0].toUpperCase() : 'F',
+                              userName.isNotEmpty
+                                  ? userName[0].toUpperCase()
+                                  : 'F',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
@@ -733,7 +776,9 @@ class _MobileNavPill extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
-              border: isActive ? null : Border.all(color: Colors.white24, width: 0.8),
+              border: isActive
+                  ? null
+                  : Border.all(color: Colors.white24, width: 0.8),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -865,3 +910,15 @@ class _NavIconButton extends StatelessWidget {
   }
 }
 
+/// Custom FAB location that floats cleanly above the nested CO-PO Workbench
+/// bottom navigation bar so it never overlaps or blocks the workflow buttons.
+class _AboveWorkbenchFabLocation extends FloatingActionButtonLocation {
+  const _AboveWorkbenchFabLocation();
+
+  @override
+  Offset getOffset(ScaffoldPrelayoutGeometry scaffoldGeometry) {
+    final Offset base =
+        FloatingActionButtonLocation.endFloat.getOffset(scaffoldGeometry);
+    return Offset(base.dx, base.dy - 68.0);
+  }
+}

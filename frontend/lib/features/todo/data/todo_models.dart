@@ -126,6 +126,41 @@ class TaskModel {
 
   int get completedSubtasksCount => subtasks.where((s) => s.isCompleted).length;
 
+  bool get wasCompletedLate {
+    if (!isCompleted || completedAt == null || dueDate == null) return false;
+    return completedAt!.isAfter(dueDate!);
+  }
+
+  bool get wasCompletedOnTime {
+    if (!isCompleted || completedAt == null || dueDate == null) return false;
+    return !completedAt!.isAfter(dueDate!);
+  }
+
+  String get relativeDeadlineLabel {
+    if (isCompleted) {
+      return wasCompletedLate ? 'Completed Late' : 'Completed';
+    }
+    if (dueDate == null) return 'No deadline';
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(dueDate!.year, dueDate!.month, dueDate!.day);
+    final diffDays = target.difference(today).inDays;
+
+    if (diffDays < 0) {
+      final overdueDays = -diffDays;
+      return overdueDays == 1 ? 'Overdue by 1 day' : 'Overdue by $overdueDays days';
+    } else if (diffDays == 0) {
+      return 'Due Today';
+    } else if (diffDays == 1) {
+      return 'Due Tomorrow';
+    } else if (diffDays <= 7) {
+      return 'Due in $diffDays days';
+    } else {
+      return 'Due ${dueDate!.day.toString().padLeft(2, '0')}/${dueDate!.month.toString().padLeft(2, '0')}';
+    }
+  }
+
   factory TaskModel.fromJson(Map<String, dynamic> json) {
     return TaskModel(
       id: json['id'] as String? ?? '',

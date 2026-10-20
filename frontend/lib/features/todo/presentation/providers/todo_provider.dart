@@ -22,6 +22,7 @@ class TodoProvider extends ChangeNotifier {
   String? _selectedPriority;
   String? _selectedCategory;
   String _searchQuery = '';
+  String _sortBy = 'priority'; // priority, deadline, created, title
 
   List<TaskModel> get tasks => _tasks;
   TodoSummaryModel? get summary => _summary;
@@ -33,6 +34,34 @@ class TodoProvider extends ChangeNotifier {
   String? get selectedPriority => _selectedPriority;
   String? get selectedCategory => _selectedCategory;
   String get searchQuery => _searchQuery;
+  String get sortBy => _sortBy;
+
+  int get totalTasksCount => _tasks.length;
+  int get completedTasksCount => _tasks.where((t) => t.isCompleted).length;
+  int get pendingTasksCount => _tasks.where((t) => !t.isCompleted && !t.isOverdue).length;
+  int get overdueTasksCount => _tasks.where((t) => t.isOverdue && !t.isCompleted).length;
+  int get urgentTasksCount => _tasks.where((t) => !t.isCompleted && t.priority.toLowerCase() == 'urgent').length;
+  int get inProgressTasksCount => _tasks.where((t) => !t.isCompleted && t.status == 'IN_PROGRESS').length;
+  double get completionPercentage => totalTasksCount == 0 ? 0.0 : (completedTasksCount / totalTasksCount);
+
+  List<String> get availableCategories {
+    final set = <String>{};
+    for (final t in _tasks) {
+      if (t.category != null && t.category!.trim().isNotEmpty) {
+        set.add(t.category!.trim());
+      }
+    }
+    return set.toList()..sort();
+  }
+
+  List<TaskModel> getTasksForDate(DateTime date) {
+    return _tasks.where((t) {
+      if (t.dueDate == null) return false;
+      return t.dueDate!.year == date.year &&
+          t.dueDate!.month == date.month &&
+          t.dueDate!.day == date.day;
+    }).toList();
+  }
 
   List<TaskModel> get filteredTasks {
     List<TaskModel> result = List.from(_tasks);
@@ -57,7 +86,7 @@ class TodoProvider extends ChangeNotifier {
         }).toList();
         break;
       case 'overdue':
-        result = result.where((t) => t.isOverdue).toList();
+        result = result.where((t) => t.isOverdue && !t.isCompleted).toList();
         break;
       case 'urgent':
         result = result.where((t) => t.priority.toLowerCase() == 'urgent').toList();
@@ -104,12 +133,44 @@ class TodoProvider extends ChangeNotifier {
       }).toList();
     }
 
+    // Sorting
+    if (_sortBy == 'priority') {
+      final priorityRank = {'urgent': 0, 'high': 1, 'medium': 2, 'low': 3};
+      result.sort((a, b) {
+        if (a.isCompleted != b.isCompleted) return a.isCompleted ? 1 : -1;
+        if (a.isOverdue != b.isOverdue) return a.isOverdue ? -1 : 1;
+        final rankA = priorityRank[a.priority.toLowerCase()] ?? 4;
+        final rankB = priorityRank[b.priority.toLowerCase()] ?? 4;
+        if (rankA != rankB) return rankA.compareTo(rankB);
+        if (a.dueDate != null && b.dueDate != null) return a.dueDate!.compareTo(b.dueDate!);
+        return 0;
+      });
+    } else if (_sortBy == 'deadline') {
+      result.sort((a, b) {
+        if (a.isCompleted != b.isCompleted) return a.isCompleted ? 1 : -1;
+        if (a.dueDate == null && b.dueDate == null) return 0;
+        if (a.dueDate == null) return 1;
+        if (b.dueDate == null) return -1;
+        return a.dueDate!.compareTo(b.dueDate!);
+      });
+    } else if (_sortBy == 'created') {
+      result.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    } else if (_sortBy == 'title') {
+      result.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    }
+
     return result;
   }
 
   void setActiveView(String view) {
     if (_activeView == view) return;
     _activeView = view;
+    notifyListeners();
+  }
+
+  void setSortBy(String sort) {
+    if (_sortBy == sort) return;
+    _sortBy = sort;
     notifyListeners();
   }
 

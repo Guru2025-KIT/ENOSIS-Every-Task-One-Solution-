@@ -12,7 +12,11 @@ import '../../../faculty_insights/presentation/screens/faculty_insights_screen.d
 import '../../../timetable/presentation/screens/generate_timetable_screen.dart';
 import '../../../timetable/presentation/screens/timetable_display_screen.dart';
 import '../../../timetable/presentation/screens/timetable_hub_screen.dart';
+import '../../../todo/data/todo_models.dart';
+import '../../../todo/presentation/providers/todo_provider.dart';
 import '../../../todo/presentation/screens/my_day_screen.dart';
+import '../../../todo/presentation/screens/task_detail_screen.dart';
+import '../../../todo/presentation/widgets/create_edit_task_sheet.dart';
 import '../../data/models/dashboard_summary_model.dart';
 import '../providers/dashboard_provider.dart';
 
@@ -51,6 +55,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context
           .read<DashboardProvider>()
           .loadDashboard(targetDate: _selectedDate);
+      context.read<TodoProvider>().loadTasks(silent: true);
     });
   }
 
@@ -162,6 +167,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final greetingPrefix = _getGreeting();
     final dashboardProvider = context.watch<DashboardProvider>();
+    final todoProvider = context.watch<TodoProvider>();
+    final allUserTasks = todoProvider.tasks;
+    final selectedDateTasks = todoProvider.getTasksForDate(_selectedDate);
     final summary = dashboardProvider.summary;
     final facultyName =
         AuthSession.fullName ?? summary?.facultyName ?? 'Rachana Patil';
@@ -548,6 +556,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _MiniCalendarGrid(
             month: _calendarMonth,
             selectedDate: _selectedDate,
+            allTasks: allUserTasks,
             onSelectDate: (d) {
               setState(() => _selectedDate = d);
               dashboardProvider.setSelectedDate(d);
@@ -585,6 +594,301 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+
+          // ─── Live To-Dos for Selected Calendar Date ─────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.check_circle_outline_rounded,
+                      size: 17, color: AppColors.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    'To-Dos for ${_formatShortMonthDay(_selectedDate)}',
+                    style: AppTypography.captionBold.copyWith(
+                      color: AppColors.primary,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: selectedDateTasks.isNotEmpty
+                          ? AppColors.primarySoft
+                          : AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${selectedDateTasks.length}',
+                      style: AppTypography.captionBold.copyWith(
+                        color: selectedDateTasks.isNotEmpty
+                            ? AppColors.primary
+                            : AppColors.textTertiary,
+                        fontSize: 10.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.add_circle_outline_rounded,
+                    size: 19, color: AppColors.secondary),
+                tooltip: 'Add task for this date',
+                visualDensity: VisualDensity.compact,
+                onPressed: () {
+                  CreateEditTaskSheet.show(
+                    context,
+                    initialDueDate: _selectedDate,
+                    onSave: ({
+                      required title,
+                      description,
+                      dueDate,
+                      required priority,
+                      category,
+                      tags,
+                      estimatedDurationMinutes,
+                      recurrenceRule,
+                      remindersConfig,
+                      subtasks,
+                    }) async {
+                      await todoProvider.createTask(
+                        title: title,
+                        description: description,
+                        dueDate: dueDate,
+                        priority: priority,
+                        category: category,
+                        tags: tags,
+                        estimatedDurationMinutes: estimatedDurationMinutes,
+                        recurrenceRule: recurrenceRule,
+                        remindersConfig: remindersConfig,
+                        subtasks: subtasks,
+                      );
+                    },
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (selectedDateTasks.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.event_available_rounded,
+                      size: 26, color: Colors.grey.shade400),
+                  const SizedBox(height: 6),
+                  Text(
+                    'No tasks scheduled for ${_formatShortMonthDay(_selectedDate)}',
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: AppColors.secondary,
+                    ),
+                    icon: const Icon(Icons.add_rounded, size: 16),
+                    label: const Text('Add Task',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onPressed: () {
+                      CreateEditTaskSheet.show(
+                        context,
+                        initialDueDate: _selectedDate,
+                        onSave: ({
+                          required title,
+                          description,
+                          dueDate,
+                          required priority,
+                          category,
+                          tags,
+                          estimatedDurationMinutes,
+                          recurrenceRule,
+                          remindersConfig,
+                          subtasks,
+                        }) async {
+                          await todoProvider.createTask(
+                            title: title,
+                            description: description,
+                            dueDate: dueDate,
+                            priority: priority,
+                            category: category,
+                            tags: tags,
+                            estimatedDurationMinutes: estimatedDurationMinutes,
+                            recurrenceRule: recurrenceRule,
+                            remindersConfig: remindersConfig,
+                            subtasks: subtasks,
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ],
+              ),
+            )
+          else
+            ...selectedDateTasks.map((t) {
+              final isTaskComp = t.isCompleted || t.status == 'COMPLETED';
+              final isTaskOverdue = t.isOverdue && !isTaskComp;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isTaskOverdue
+                        ? AppColors.error.withValues(alpha: 0.4)
+                        : (isTaskComp
+                            ? AppColors.success.withValues(alpha: 0.3)
+                            : AppColors.border),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: Checkbox(
+                        value: isTaskComp,
+                        activeColor: AppColors.success,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        onChanged: (_) {
+                          todoProvider.toggleTaskCompletion(t);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => TaskDetailScreen(task: t),
+                            ),
+                          );
+                        },
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              t.title,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                decoration: isTaskComp
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                                color: isTaskComp
+                                    ? AppColors.textTertiary
+                                    : AppColors.textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Wrap(
+                              spacing: 5,
+                              runSpacing: 2,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                // Priority chip
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: (t.priority.toLowerCase() == 'urgent' ||
+                                            t.priority.toLowerCase() == 'high')
+                                        ? const Color(0xFFFFEBEE)
+                                        : AppColors.surfaceVariant,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    t.priority.toUpperCase(),
+                                    style: TextStyle(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: (t.priority.toLowerCase() == 'urgent' ||
+                                              t.priority.toLowerCase() == 'high')
+                                          ? AppColors.error
+                                          : AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                                if (isTaskOverdue)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 5, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.errorLight,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      'OVERDUE',
+                                      style: TextStyle(
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.error,
+                                      ),
+                                    ),
+                                  ),
+                                if (isTaskComp)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 5, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: t.wasCompletedLate
+                                          ? const Color(0xFFFFF3E0)
+                                          : AppColors.successLight,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      t.wasCompletedLate ? 'DONE (LATE)' : 'COMPLETED',
+                                      style: TextStyle(
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: t.wasCompletedLate
+                                            ? const Color(0xFFE65100)
+                                            : AppColors.success,
+                                      ),
+                                    ),
+                                  ),
+                                if (t.dueDate != null)
+                                  Text(
+                                    '${t.dueDate!.hour == 0 ? 12 : (t.dueDate!.hour > 12 ? t.dueDate!.hour - 12 : t.dueDate!.hour)}:${t.dueDate!.minute.toString().padLeft(2, '0')} ${t.dueDate!.hour >= 12 ? 'PM' : 'AM'}',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: isTaskOverdue
+                                          ? AppColors.error
+                                          : AppColors.textTertiary,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
         ],
       ),
     );
@@ -1529,11 +1833,13 @@ class _MiniCalendarGrid extends StatelessWidget {
   final DateTime month;
   final DateTime selectedDate;
   final ValueChanged<DateTime> onSelectDate;
+  final List<TaskModel> allTasks;
 
   const _MiniCalendarGrid({
     required this.month,
     required this.selectedDate,
     required this.onSelectDate,
+    this.allTasks = const [],
   });
 
   @override
@@ -1585,7 +1891,16 @@ class _MiniCalendarGrid extends StatelessWidget {
             final isToday = date.year == now.year &&
                 date.month == now.month &&
                 date.day == now.day;
-            final hasEvents = (dayNumber % 2 == 1 && dayNumber <= 25);
+
+            final dayTasks = allTasks.where((t) {
+              if (t.dueDate == null) return false;
+              return t.dueDate!.year == date.year &&
+                  t.dueDate!.month == date.month &&
+                  t.dueDate!.day == date.day;
+            }).toList();
+
+            final hasOverdue = dayTasks.any((t) => t.isOverdue && !t.isCompleted);
+            final allDone = dayTasks.isNotEmpty && dayTasks.every((t) => t.isCompleted);
 
             return Material(
               color: Colors.transparent,
@@ -1622,15 +1937,19 @@ class _MiniCalendarGrid extends StatelessWidget {
                                   : AppColors.textPrimary),
                         ),
                       ),
-                      if (hasEvents && !isSelected) ...[
+                      if (dayTasks.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Container(
-                          width: 4,
-                          height: 4,
+                          width: 5,
+                          height: 5,
                           decoration: BoxDecoration(
-                            color: isToday
-                                ? AppColors.secondary
-                                : AppColors.primary.withValues(alpha: 0.4),
+                            color: isSelected
+                                ? Colors.white
+                                : (hasOverdue
+                                    ? AppColors.error
+                                    : (allDone
+                                        ? AppColors.success
+                                        : AppColors.secondary)),
                             shape: BoxShape.circle,
                           ),
                         ),

@@ -189,7 +189,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Successfully synced SLI student responses into COPO Indirect Attainment!'),
+          content: Text(
+              'Successfully synced SLI student responses into COPO Indirect Attainment!'),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
         ),
@@ -801,7 +802,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Year Selected: $_selectedYear · Next: Choose Semester in Step 2 below ➔',
+                  'Year Selected: $_selectedYear · Next: Choose Semester in Step 2 below',
                   style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 12,
@@ -887,7 +888,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Semester Selected: $_selectedSemester · Next: Pick Course in Step 3 below ➔',
+                  'Semester Selected: $_selectedSemester · Next: Pick Course in Step 3 below',
                   style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 12,
@@ -1165,7 +1166,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               ),
               icon: const Icon(Icons.arrow_forward_rounded, size: 20),
               label: Text(
-                'Start CO-PO Mapping for ${_selectedCourse.code} ➔',
+                'Start CO-PO Mapping for ${_selectedCourse.code}',
                 style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
@@ -1194,7 +1195,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     final report = _cachedReport ?? _repository.calculateLocalReport();
 
     final screenWidth = MediaQuery.of(context).size.width;
-    final isDesktop = screenWidth > 950;
+    final isDesktop = screenWidth >= 720;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -1230,14 +1231,16 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 backgroundColor: AppColors.secondary,
                 foregroundColor: Colors.white,
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
               ),
               icon: const Icon(Icons.tune_rounded, size: 14),
               label: Text(
                 'Rules (${_repository.config.directWeightPercent.toInt()}/${_repository.config.indirectWeightPercent.toInt()})',
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
               ),
               onPressed: _showAttainmentConfigDialog,
             ),
@@ -1247,7 +1250,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 backgroundColor: Colors.white.withValues(alpha: 0.18),
                 foregroundColor: Colors.white,
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
               ),
@@ -1264,7 +1268,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               ),
               icon: const Icon(Icons.swap_horiz_rounded, size: 14),
-              label: const Text('Switch Course',
+              label: const Text('Switch Course / Year',
                   style: TextStyle(fontSize: 11)),
               onPressed: () {
                 setState(() {
@@ -1273,19 +1277,94 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               },
             ),
             const SizedBox(width: 4),
+          ] else if (screenWidth < 520) ...[
+            IconButton(
+              icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+              tooltip: 'Recalculate Attainment',
+              onPressed: _recalculate,
+            ),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, color: Colors.white, size: 20),
+              tooltip: 'More Actions',
+              onSelected: (val) {
+                switch (val) {
+                  case 'rules':
+                    _showAttainmentConfigDialog();
+                    break;
+                  case 'pdf':
+                    _exportPdfReport(report);
+                    break;
+                  case 'switch':
+                    setState(() => _hasStartedMapping = false);
+                    break;
+                  case 'formulas':
+                    _showFormulaGuideDialog();
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'rules',
+                  child: Row(
+                    children: [
+                      Icon(Icons.tune_rounded,
+                          size: 18, color: AppColors.primary),
+                      SizedBox(width: 10),
+                      Text('Attainment Rules & %'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'pdf',
+                  child: Row(
+                    children: [
+                      Icon(Icons.picture_as_pdf_outlined,
+                          size: 18, color: AppColors.primary),
+                      SizedBox(width: 10),
+                      Text('Export PDF Report'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'switch',
+                  child: Row(
+                    children: [
+                      Icon(Icons.swap_horiz_rounded,
+                          size: 18, color: AppColors.primary),
+                      SizedBox(width: 10),
+                      Text('Switch Course / Year'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'formulas',
+                  child: Row(
+                    children: [
+                      Icon(Icons.functions_rounded,
+                          size: 18, color: AppColors.primary),
+                      SizedBox(width: 10),
+                      Text('View Formulas'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ] else ...[
             IconButton(
-              icon: const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
+              icon:
+                  const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
               tooltip: 'Attainment Rules & Calculation %',
               onPressed: _showAttainmentConfigDialog,
             ),
             IconButton(
-              icon: const Icon(Icons.picture_as_pdf_outlined, color: Colors.white, size: 20),
+              icon: const Icon(Icons.picture_as_pdf_outlined,
+                  color: Colors.white, size: 20),
               tooltip: 'Export PDF Report',
               onPressed: () => _exportPdfReport(report),
             ),
             IconButton(
-              icon: const Icon(Icons.swap_horiz_rounded, color: Colors.white, size: 20),
+              icon: const Icon(Icons.swap_horiz_rounded,
+                  color: Colors.white, size: 20),
               tooltip: 'Switch Course / Year',
               onPressed: () {
                 setState(() {
@@ -1293,18 +1372,19 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 });
               },
             ),
+            IconButton(
+              icon: const Icon(Icons.functions_rounded,
+                  color: Colors.white, size: 20),
+              tooltip: 'View Formulas',
+              onPressed: _showFormulaGuideDialog,
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+              tooltip: 'Recalculate Attainment',
+              onPressed: _recalculate,
+            ),
           ],
-          IconButton(
-            icon: const Icon(Icons.functions_rounded, color: Colors.white, size: 20),
-            tooltip: 'View Formulas',
-            onPressed: _showFormulaGuideDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
-            tooltip: 'Recalculate Attainment',
-            onPressed: _recalculate,
-          ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 4),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(46),
@@ -1313,11 +1393,14 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             child: TabBar(
               controller: _tabController,
               isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              padding: EdgeInsets.zero,
               labelColor: Colors.white,
               unselectedLabelColor: Colors.white.withValues(alpha: 0.65),
               indicatorColor: AppColors.secondary,
               indicatorWeight: 3,
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+              labelStyle:
+                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
               tabs: const [
                 Tab(
                     icon: Icon(Icons.grid_on, size: 15),
@@ -1328,9 +1411,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 Tab(
                     icon: Icon(Icons.assignment_outlined, size: 15),
                     text: '3. ISE 1'),
-                Tab(
-                    icon: Icon(Icons.quiz_outlined, size: 15),
-                    text: '4. MSE'),
+                Tab(icon: Icon(Icons.quiz_outlined, size: 15), text: '4. MSE'),
                 Tab(
                     icon: Icon(Icons.assignment_turned_in_outlined, size: 15),
                     text: '5. ISE 2'),
@@ -1555,243 +1636,267 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 const Text('1. Academic Year: ',
                     style:
                         TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                  // Safe items and value for Year Dropdown
-                  Builder(
-                    builder: (context) {
-                      const yearItems = [
-                        'F.Y. B.Tech',
-                        'S.Y. B.Tech',
-                        'T.Y. B.Tech',
-                        'Final Year B.Tech'
-                      ];
-                      final safeYear = yearItems.contains(_selectedYear) ? _selectedYear : yearItems[1];
-                      return DropdownButton<String>(
-                        value: safeYear,
-                        isDense: true,
-                        underline: const SizedBox(),
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                            fontSize: 12.5),
-                        items: yearItems
-                            .map((y) => DropdownMenuItem(value: y, child: Text(y)))
-                            .toList(),
-                        onChanged: (y) {
-                          if (y != null) _onYearChanged(y);
-                        },
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 18),
-                  const Text('2. Semester: ',
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                  const SizedBox(width: 6),
-                  Builder(
-                    builder: (context) {
-                      final sems = _availableSemesters;
-                      final safeSem = sems.contains(_selectedSemester) ? _selectedSemester : (sems.isNotEmpty ? sems.first : 'Semester IV');
-                      return DropdownButton<String>(
-                        value: safeSem,
-                        isDense: true,
-                        underline: const SizedBox(),
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                            fontSize: 12.5),
-                        items: sems
-                            .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                            .toList(),
-                        onChanged: (s) {
-                          if (s != null) _onSemesterChanged(s);
-                        },
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 18),
-                  const Text('3. Course: ',
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                  const SizedBox(width: 6),
-                  Builder(
-                    builder: (context) {
-                      final courseList = courses.isNotEmpty ? courses : kitAimlCourses;
-                      final courseCodes = courseList.map((c) => c.code).toSet();
-                      final safeCourseCode = courseCodes.contains(_selectedCourse.code)
-                          ? _selectedCourse.code
-                          : (courseList.isNotEmpty ? courseList.first.code : 'UAMPC0403');
-                      return DropdownButton<String>(
-                        value: safeCourseCode,
-                        isDense: true,
-                        underline: const SizedBox(),
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.secondary,
-                            fontSize: 12.5),
-                        items: courseList.map((c) {
-                          return DropdownMenuItem(
-                            value: c.code,
-                            child: Text(
-                              '${c.code} · ${c.name}',
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                // Safe items and value for Year Dropdown
+                Builder(
+                  builder: (context) {
+                    const yearItems = [
+                      'F.Y. B.Tech',
+                      'S.Y. B.Tech',
+                      'T.Y. B.Tech',
+                      'Final Year B.Tech'
+                    ];
+                    final safeYear = yearItems.contains(_selectedYear)
+                        ? _selectedYear
+                        : yearItems[1];
+                    return DropdownButton<String>(
+                      value: safeYear,
+                      isDense: true,
+                      underline: const SizedBox(),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                          fontSize: 12.5),
+                      items: yearItems
+                          .map(
+                              (y) => DropdownMenuItem(value: y, child: Text(y)))
+                          .toList(),
+                      onChanged: (y) {
+                        if (y != null) _onYearChanged(y);
+                      },
+                    );
+                  },
+                ),
+                const SizedBox(width: 18),
+                const Text('2. Semester: ',
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                const SizedBox(width: 6),
+                Builder(
+                  builder: (context) {
+                    final sems = _availableSemesters;
+                    final safeSem = sems.contains(_selectedSemester)
+                        ? _selectedSemester
+                        : (sems.isNotEmpty ? sems.first : 'Semester IV');
+                    return DropdownButton<String>(
+                      value: safeSem,
+                      isDense: true,
+                      underline: const SizedBox(),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                          fontSize: 12.5),
+                      items: sems
+                          .map(
+                              (s) => DropdownMenuItem(value: s, child: Text(s)))
+                          .toList(),
+                      onChanged: (s) {
+                        if (s != null) _onSemesterChanged(s);
+                      },
+                    );
+                  },
+                ),
+                const SizedBox(width: 18),
+                const Text('3. Course: ',
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                const SizedBox(width: 6),
+                Builder(
+                  builder: (context) {
+                    final courseList =
+                        courses.isNotEmpty ? courses : kitAimlCourses;
+                    final courseCodes = courseList.map((c) => c.code).toSet();
+                    final safeCourseCode =
+                        courseCodes.contains(_selectedCourse.code)
+                            ? _selectedCourse.code
+                            : (courseList.isNotEmpty
+                                ? courseList.first.code
+                                : 'UAMPC0403');
+                    return DropdownButton<String>(
+                      value: safeCourseCode,
+                      isDense: true,
+                      underline: const SizedBox(),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.secondary,
+                          fontSize: 12.5),
+                      items: courseList.map((c) {
+                        return DropdownMenuItem(
+                          value: c.code,
+                          child: Text(
+                            '${c.code} · ${c.name}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (code) {
+                        if (code != null) {
+                          final chosen = courseList.firstWhere(
+                            (c) => c.code == code,
+                            orElse: () => courseList.first,
                           );
-                        }).toList(),
-                        onChanged: (code) {
-                          if (code != null) {
-                            final chosen = courseList.firstWhere(
-                              (c) => c.code == code,
-                              orElse: () => courseList.first,
-                            );
-                            _onCourseChanged(chosen);
-                          }
-                        },
-                      );
-                    },
-                  ),
-                ],
-              ),
+                          _onCourseChanged(chosen);
+                        }
+                      },
+                    );
+                  },
+                ),
+              ],
             ),
+          ),
           const SizedBox(height: 10),
           const Divider(height: 1),
           const SizedBox(height: 10),
 
           // Row 2: Active Mapping Course Status Banner
           LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth > 700;
-              final courseInfoWidget = Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 9, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.primarySoft,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                          color: AppColors.primary.withValues(alpha: 0.3)),
-                    ),
-                    child: Text(
-                      _selectedCourse.code,
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
+            builder: (context, bannerConstraints) {
+              final isNarrow = bannerConstraints.maxWidth < 720;
+              final codeBadge = Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  _selectedCourse.code,
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
                   ),
-                  const SizedBox(width: 10),
-                  Flexible(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _selectedCourse.name,
-                          style: AppTypography.bodyMedium.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          'KIT\'s College of Engineering (Autonomous), Kolhapur · Department of CSE (AI & ML) · ${_selectedCourse.semester}',
-                          style: AppTypography.caption.copyWith(
-                              color: AppColors.textSecondary, fontSize: 11),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                ),
+              );
+
+              final courseDetails = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _selectedCourse.name,
+                    style: AppTypography.bodyMedium.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
                     ),
+                    softWrap: true,
+                    maxLines: isNarrow ? 2 : 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    'KIT\'s College of Engineering (Autonomous), Kolhapur · Department of CSE (AI & ML) · ${_selectedCourse.semester}',
+                    style: AppTypography.caption
+                        .copyWith(color: AppColors.textSecondary, fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               );
 
-              final attainmentBadgeWidget = Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
+              final attainmentBadge = Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isOverallAttained
+                      ? AppColors.success.withValues(alpha: 0.15)
+                      : AppColors.error.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color:
+                        isOverallAttained ? AppColors.success : AppColors.error,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isOverallAttained
+                          ? Icons.check_circle
+                          : Icons.warning_amber_rounded,
+                      size: 14,
                       color: isOverallAttained
-                          ? AppColors.success.withValues(alpha: 0.15)
-                          : AppColors.error.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
+                          ? AppColors.success
+                          : AppColors.error,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      isOverallAttained ? 'ATTAINED' : 'NOT ATTAINED',
+                      style: AppTypography.captionBold.copyWith(
                         color: isOverallAttained
                             ? AppColors.success
                             : AppColors.error,
+                        fontSize: 11,
                       ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          isOverallAttained
-                              ? Icons.check_circle
-                              : Icons.warning_amber_rounded,
-                          size: 14,
-                          color: isOverallAttained
-                              ? AppColors.success
-                              : AppColors.error,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          isOverallAttained ? 'ATTAINED' : 'NOT ATTAINED',
-                          style: AppTypography.captionBold.copyWith(
-                            color: isOverallAttained
-                                ? AppColors.success
-                                : AppColors.error,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
+                  ],
+                ),
+              );
+
+              final overallScore = Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Overall Attainment:',
+                    style: TextStyle(
+                        fontSize: 10.5,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500),
                   ),
-                  const SizedBox(width: 10),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Overall Attainment:',
-                        style: TextStyle(
-                            fontSize: 10.5,
-                            color: AppColors.textSecondary,
-                            fontWeight: FontWeight.w500),
-                      ),
-                      Text(
-                        '${overall.toStringAsFixed(2)} / 3.00',
-                        style: AppTypography.h3.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary),
-                      ),
-                    ],
+                  Text(
+                    '${overall.toStringAsFixed(2)} / 3.00',
+                    style: AppTypography.h3.copyWith(
+                        fontWeight: FontWeight.bold, color: AppColors.primary),
                   ),
                 ],
               );
 
-              if (isWide) {
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: courseInfoWidget),
-                    const SizedBox(width: 12),
-                    attainmentBadgeWidget,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        codeBadge,
+                        const SizedBox(width: 10),
+                        Expanded(child: courseDetails),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        attainmentBadge,
+                        overallScore,
+                      ],
+                    ),
                   ],
                 );
               } else {
-                return Wrap(
-                  spacing: 12,
-                  runSpacing: 10,
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    courseInfoWidget,
-                    attainmentBadgeWidget,
+                    Expanded(
+                      child: Row(
+                        children: [
+                          codeBadge,
+                          const SizedBox(width: 10),
+                          Expanded(child: courseDetails),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        attainmentBadge,
+                        const SizedBox(width: 10),
+                        overallScore,
+                      ],
+                    ),
                   ],
                 );
               }
@@ -1981,29 +2086,6 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
     );
   }
 
-  Widget _buildConfigChip(String label, String value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.primarySoft.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label,
-              style: AppTypography.caption
-                  .copyWith(color: AppColors.textTertiary, fontSize: 10.5)),
-          const SizedBox(height: 2),
-          Text(value,
-              style: AppTypography.bodyMedium
-                  .copyWith(fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
-
   Widget _buildMatrixTable() {
     return Table(
       defaultColumnWidth: const FixedColumnWidth(54),
@@ -2149,33 +2231,26 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 12,
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 550),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                                'Step 2: Student Master Roll Call (${roster.length} Enrolled)',
-                                style: AppTypography.h3
-                                    .copyWith(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            Text(
-                                'Upload or manage the master list of all students with Sr. No., Roll No., Name, and PRN.',
-                                style: AppTypography.caption
-                                    .copyWith(color: AppColors.textSecondary)),
-                          ],
-                        ),
-                      ),
-                      Wrap(
+                  Builder(
+                    builder: (context) {
+                      final headerInfo = Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                              'Step 2: Student Master Roll Call (${roster.length} Enrolled)',
+                              style: AppTypography.h3
+                                  .copyWith(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text(
+                              'Upload or manage the master list of all students with Sr. No., Roll No., Name, and PRN.',
+                              style: AppTypography.caption
+                                  .copyWith(color: AppColors.textSecondary)),
+                        ],
+                      );
+
+                      final actionButtons = Wrap(
                         spacing: 10,
                         runSpacing: 8,
-                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           OutlinedButton.icon(
                             onPressed: () {
@@ -2212,8 +2287,22 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                             ),
                           ),
                         ],
-                      ),
-                    ],
+                      );
+
+                      return Wrap(
+                        spacing: 14,
+                        runSpacing: 12,
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 480),
+                            child: headerInfo,
+                          ),
+                          actionButtons,
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -2231,10 +2320,10 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
                     alignment: WrapAlignment.spaceBetween,
                     crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
                       Text('Enrolled Student Roster',
                           style: AppTypography.h3
@@ -2380,21 +2469,17 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 16,
-            runSpacing: 12,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(
+          Builder(
+            builder: (context) {
+              final titleText = Text(
                 '${exam.examType} (In-Semester Evaluation)',
                 style: AppTypography.h2.copyWith(
                     fontWeight: FontWeight.bold, color: AppColors.primary),
-              ),
-              Wrap(
+              );
+
+              final actionButtons = Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   OutlinedButton.icon(
                     onPressed: () {
@@ -2430,8 +2515,19 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                         foregroundColor: Colors.white),
                   ),
                 ],
-              ),
-            ],
+              );
+
+              return Wrap(
+                spacing: 12,
+                runSpacing: 10,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  titleText,
+                  actionButtons,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 16),
 
@@ -2441,63 +2537,86 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                alignment: WrapAlignment.spaceBetween,
-                children: [
-                  Wrap(
+              child: LayoutBuilder(
+                builder: (context, coConstraints) {
+                  final isNarrow = coConstraints.maxWidth < 600;
+                  final chips = Wrap(
                     spacing: 8,
                     runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text('Mapped COs for ${exam.examType}: ',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 13)),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 4,
-                        children: ['CO1', 'CO2', 'CO3', 'CO4', 'CO5'].map((co) {
-                          final isSelected =
-                              exam.mappedCos.contains(co) || exam.mappedCo == co;
-                          return FilterChip(
-                            selected: isSelected,
-                            showCheckmark: isSelected,
-                            label: Text(co,
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: isSelected
-                                        ? Colors.white
-                                        : AppColors.textPrimary,
-                                    fontSize: 12)),
-                            selectedColor: AppColors.secondary,
-                            checkmarkColor: Colors.white,
-                            onSelected: (selected) {
-                              setState(() {
-                                if (selected) {
-                                  if (!exam.mappedCos.contains(co)) {
-                                    exam.mappedCos.add(co);
-                                  }
-                                } else {
-                                  if (exam.mappedCos.length > 1) {
-                                    exam.mappedCos.remove(co);
-                                  }
-                                }
-                                if (exam.mappedCos.isNotEmpty) {
-                                  exam.mappedCo = exam.mappedCos.first;
-                                }
-                                _recalculate();
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                  ),
-                  Text('Max Marks: ${exam.maxMarks.toStringAsFixed(0)}',
-                      style: AppTypography.captionBold),
-                ],
+                    children: ['CO1', 'CO2', 'CO3', 'CO4', 'CO5'].map((co) {
+                      final isSelected =
+                          exam.mappedCos.contains(co) || exam.mappedCo == co;
+                      return FilterChip(
+                        selected: isSelected,
+                        showCheckmark: isSelected,
+                        label: Text(co,
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isSelected
+                                    ? Colors.white
+                                    : AppColors.textPrimary,
+                                fontSize: 12)),
+                        selectedColor: AppColors.secondary,
+                        checkmarkColor: Colors.white,
+                        onSelected: (selected) {
+                          setState(() {
+                            if (selected) {
+                              if (!exam.mappedCos.contains(co)) {
+                                exam.mappedCos.add(co);
+                              }
+                            } else {
+                              if (exam.mappedCos.length > 1) {
+                                exam.mappedCos.remove(co);
+                              }
+                            }
+                            if (exam.mappedCos.isNotEmpty) {
+                              exam.mappedCo = exam.mappedCos.first;
+                            }
+                            _recalculate();
+                          });
+                        },
+                      );
+                    }).toList(),
+                  );
+
+                  if (isNarrow) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 4,
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text('Mapped COs for ${exam.examType}:',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 13)),
+                            Text(
+                                'Max Marks: ${exam.maxMarks.toStringAsFixed(0)}',
+                                style: AppTypography.captionBold),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        chips,
+                      ],
+                    );
+                  } else {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text('Mapped COs for ${exam.examType}: ',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13)),
+                        const SizedBox(width: 8),
+                        Expanded(child: chips),
+                        const SizedBox(width: 8),
+                        Text('Max Marks: ${exam.maxMarks.toStringAsFixed(0)}',
+                            style: AppTypography.captionBold),
+                      ],
+                    );
+                  }
+                },
               ),
             ),
           ),
@@ -2505,50 +2624,62 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
 
           // KPI Stats Cards
           LayoutBuilder(
-            builder: (context, constraints) {
-              final cardW = constraints.maxWidth > 800
-                  ? (constraints.maxWidth - 36) / 4
-                  : (constraints.maxWidth > 480
-                      ? (constraints.maxWidth - 12) / 2
-                      : constraints.maxWidth);
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  SizedBox(
-                    width: cardW,
-                    child: _buildKpiCard(
-                        'Attempted',
-                        '${stats.attemptedCount} (${stats.attemptedPercentage}%)',
-                        Icons.people_alt_outlined,
-                        const Color(0xFF0284C7)),
-                  ),
-                  SizedBox(
-                    width: cardW,
-                    child: _buildKpiCard(
-                        'Scoring >= 50% (5 Marks)',
-                        '${stats.scoring50Count} (${stats.scoring50Percentage}%)',
-                        Icons.check_circle_outline,
-                        const Color(0xFF16A34A)),
-                  ),
-                  SizedBox(
-                    width: cardW,
-                    child: _buildKpiCard(
-                        'Scoring >= 55% (5.5 Marks)',
-                        '${stats.scoring55Count} (${stats.scoring55Percentage}%)',
-                        Icons.trending_up,
-                        const Color(0xFFD97706)),
-                  ),
-                  SizedBox(
-                    width: cardW,
-                    child: _buildKpiCard(
-                        'Attainment Level',
-                        'Level ${stats.attainmentLevel} / 3',
-                        Icons.star_border_purple500,
-                        const Color(0xFF8B5CF6)),
-                  ),
-                ],
-              );
+            builder: (context, kpiConstraints) {
+              final isNarrow = kpiConstraints.maxWidth < 680;
+              final card1 = _buildKpiCard(
+                  'Attempted',
+                  '${stats.attemptedCount} (${stats.attemptedPercentage}%)',
+                  Icons.people_alt_outlined,
+                  const Color(0xFF0284C7));
+              final card2 = _buildKpiCard(
+                  'Scoring >= 50% (5 Marks)',
+                  '${stats.scoring50Count} (${stats.scoring50Percentage}%)',
+                  Icons.check_circle_outline,
+                  const Color(0xFF16A34A));
+              final card3 = _buildKpiCard(
+                  'Scoring >= 55% (5.5 Marks)',
+                  '${stats.scoring55Count} (${stats.scoring55Percentage}%)',
+                  Icons.trending_up,
+                  const Color(0xFFD97706));
+              final card4 = _buildKpiCard(
+                  'Attainment Level',
+                  'Level ${stats.attainmentLevel} / 3',
+                  Icons.star_border_purple500,
+                  const Color(0xFF8B5CF6));
+
+              if (isNarrow) {
+                return Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: card1),
+                        const SizedBox(width: 10),
+                        Expanded(child: card2),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(child: card3),
+                        const SizedBox(width: 10),
+                        Expanded(child: card4),
+                      ],
+                    ),
+                  ],
+                );
+              } else {
+                return Row(
+                  children: [
+                    Expanded(child: card1),
+                    const SizedBox(width: 12),
+                    Expanded(child: card2),
+                    const SizedBox(width: 12),
+                    Expanded(child: card3),
+                    const SizedBox(width: 12),
+                    Expanded(child: card4),
+                  ],
+                );
+              }
             },
           ),
           const SizedBox(height: 20),
@@ -2562,18 +2693,17 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               children: [
                 Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
-                      Expanded(
-                        child: Text(
-                          'Student Marks (Out of 10) — Pre-filled from Roll Call',
-                          style: AppTypography.h3
-                              .copyWith(fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      Text(
+                        'Student Marks (Out of 10) - Pre-filled from Roll Call',
+                        style: AppTypography.h3
+                            .copyWith(fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(width: 8),
                       Text('Real-time calculation',
                           style: AppTypography.caption
                               .copyWith(color: AppColors.textSecondary)),
@@ -2596,49 +2726,142 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                           name: scoreItem.rollNo),
                     );
 
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                              width: 80,
-                              child: Text(scoreItem.rollNo,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold))),
-                          Expanded(
-                              child: Text(student.name,
-                                  style: AppTypography.bodyMedium)),
-                          SizedBox(
-                              width: 130,
-                              child: Text(
-                                  student.prn ?? 'PRN-${student.rollNo}',
-                                  style: const TextStyle(
-                                      fontSize: 11, fontFamily: 'monospace'))),
-                          SizedBox(
-                            width: 100,
-                            height: 36,
-                            child: TextFormField(
-                              key: ValueKey(
-                                  '${exam.examType}_${scoreItem.rollNo}'),
-                              initialValue: scoreItem.marks?.toString() ?? '',
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                      decimal: true),
-                              decoration: const InputDecoration(
-                                contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 6),
-                                border: OutlineInputBorder(),
-                                hintText: '0-10',
-                              ),
-                              onChanged: (val) {
-                                scoreItem.marks = double.tryParse(val);
-                                _recalculate();
-                              },
+                    return LayoutBuilder(
+                      builder: (context, rowConstraints) {
+                        final isCompact = rowConstraints.maxWidth < 520;
+                        if (isCompact) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.primarySoft,
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              scoreItem.rollNo,
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 12,
+                                                  color: AppColors.primary),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              student.name,
+                                              style: AppTypography.bodyMedium
+                                                  .copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w600),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (student.prn != null) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          student.prn!,
+                                          style: const TextStyle(
+                                              fontSize: 10.5,
+                                              fontFamily: 'monospace',
+                                              color: AppColors.textSecondary),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                SizedBox(
+                                  width: 80,
+                                  height: 36,
+                                  child: TextFormField(
+                                    key: ValueKey(
+                                        '${exam.examType}_${scoreItem.rollNo}'),
+                                    initialValue:
+                                        scoreItem.marks?.toString() ?? '',
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    textAlign: TextAlign.center,
+                                    decoration: const InputDecoration(
+                                      contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 6),
+                                      border: OutlineInputBorder(),
+                                      hintText: '0-10',
+                                    ),
+                                    onChanged: (val) {
+                                      scoreItem.marks = double.tryParse(val);
+                                      _recalculate();
+                                    },
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
+                          );
+                        } else {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                    width: 80,
+                                    child: Text(scoreItem.rollNo,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold))),
+                                Expanded(
+                                    child: Text(student.name,
+                                        style: AppTypography.bodyMedium)),
+                                SizedBox(
+                                    width: 130,
+                                    child: Text(
+                                        student.prn ?? 'PRN-${student.rollNo}',
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            fontFamily: 'monospace'))),
+                                SizedBox(
+                                  width: 100,
+                                  height: 36,
+                                  child: TextFormField(
+                                    key: ValueKey(
+                                        '${exam.examType}_${scoreItem.rollNo}'),
+                                    initialValue:
+                                        scoreItem.marks?.toString() ?? '',
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    decoration: const InputDecoration(
+                                      contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 6),
+                                      border: OutlineInputBorder(),
+                                      hintText: '0-10',
+                                    ),
+                                    onChanged: (val) {
+                                      scoreItem.marks = double.tryParse(val);
+                                      _recalculate();
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                      },
                     );
                   },
                 ),
@@ -2805,21 +3028,17 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 16,
-            runSpacing: 12,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(
+          Builder(
+            builder: (context) {
+              final titleText = Text(
                 '${exam.examType} (Question-Wise Assessment)',
                 style: AppTypography.h2.copyWith(
                     fontWeight: FontWeight.bold, color: AppColors.primary),
-              ),
-              Wrap(
+              );
+
+              final actionButtons = Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   OutlinedButton.icon(
                     onPressed: () {
@@ -2858,8 +3077,19 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                         foregroundColor: Colors.white),
                   ),
                 ],
-              ),
-            ],
+              );
+
+              return Wrap(
+                spacing: 12,
+                runSpacing: 10,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  titleText,
+                  actionButtons,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 16),
 
@@ -2872,30 +3102,24 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 12,
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 550),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                                'Step 1: ${exam.examType} Questions & CO Mapping',
-                                style: AppTypography.h3
-                                    .copyWith(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            Text(
-                                'Type custom Questions, select Max Marks (1–10) & assign Course Outcome (CO)',
-                                style: AppTypography.caption
-                                    .copyWith(color: AppColors.textSecondary)),
-                          ],
-                        ),
-                      ),
-                      ElevatedButton.icon(
+                  Builder(
+                    builder: (context) {
+                      final textInfo = Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                              'Step 1: ${exam.examType} Questions & CO Mapping',
+                              style: AppTypography.h3
+                                  .copyWith(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text(
+                              'Type custom Questions, select Max Marks (1–10) & assign Course Outcome (CO)',
+                              style: AppTypography.caption
+                                  .copyWith(color: AppColors.textSecondary)),
+                        ],
+                      );
+
+                      final addBtn = ElevatedButton.icon(
                         onPressed: () => _showAddQuestionDialog(exam),
                         icon: const Icon(Icons.add, size: 16),
                         label: const Text('Add / Type Question'),
@@ -2903,8 +3127,22 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                           backgroundColor: AppColors.secondary,
                           foregroundColor: Colors.white,
                         ),
-                      ),
-                    ],
+                      );
+
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 10,
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 480),
+                            child: textInfo,
+                          ),
+                          addBtn,
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 14),
                   Wrap(
@@ -3095,7 +3333,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Wrap(
-                    spacing: 12,
+                    spacing: 8,
                     runSpacing: 8,
                     alignment: WrapAlignment.spaceBetween,
                     crossAxisAlignment: WrapCrossAlignment.center,
@@ -3104,8 +3342,8 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                           'Step 3: CO Average Attainment Summary for ${exam.examType}',
                           style: AppTypography.h3
                               .copyWith(fontWeight: FontWeight.bold)),
-                      Chip(
-                        label: const Text(
+                      const Chip(
+                        label: Text(
                             'Threshold Rules: 81-100% = L3 | 61-80% = L2 | 40-60% = L1'),
                         backgroundColor: AppColors.primarySoft,
                       ),
@@ -3297,7 +3535,10 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [AppColors.secondary.withOpacity(0.9), AppColors.secondary],
+                colors: [
+                  AppColors.secondary.withOpacity(0.9),
+                  AppColors.secondary
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -3325,24 +3566,31 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                         color: Colors.white.withOpacity(0.2),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.sync_rounded, color: Colors.white, size: 24),
+                      child: const Icon(Icons.sync_rounded,
+                          color: Colors.white, size: 24),
                     ),
                     const SizedBox(width: 14),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 550),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'SLI Module Integration Sync',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                          ),
-                          const SizedBox(height: 2),
-                          const Text(
-                            'Fetch live student understanding & mastery survey responses directly from SLI END-Semester Records.',
-                            style: TextStyle(color: Colors.white70, fontSize: 11.5),
-                          ),
-                        ],
+                    Flexible(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 550),
+                        child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'SLI Module Integration Sync',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Fetch live student understanding & mastery survey responses directly from SLI END-Semester Records.',
+                              style: TextStyle(
+                                  color: Colors.white70, fontSize: 11.5),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -3351,11 +3599,15 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: AppColors.secondary,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
                   ),
                   icon: const Icon(Icons.cloud_download_rounded, size: 18),
-                  label: const Text('Sync SLI Responses', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                  label: const Text('Sync SLI Responses',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 12.5)),
                   onPressed: _syncSliIndirectData,
                 ),
               ],
@@ -3378,67 +3630,213 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   borderRadius: BorderRadius.circular(12)),
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 60,
-                      height: 44,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(resp.coId,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15)),
-                    ),
-                    const SizedBox(width: 20),
-                    Expanded(
-                      child: Row(
+                child: LayoutBuilder(
+                  builder: (context, cardConstraints) {
+                    final isNarrow = cardConstraints.maxWidth < 650;
+                    if (isNarrow) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildSurveyCounter(
-                              'Strongly Agree (3)', resp.stronglyAgree3, (v) {
-                            setState(() {
-                              resp.stronglyAgree3 = v;
-                              _recalculate();
-                            });
-                          }),
-                          const SizedBox(width: 16),
-                          _buildSurveyCounter('Agree (2)', resp.agree2, (v) {
-                            setState(() {
-                              resp.agree2 = v;
-                              _recalculate();
-                            });
-                          }),
-                          const SizedBox(width: 16),
-                          _buildSurveyCounter('Neutral (1)', resp.neutral1,
-                              (v) {
-                            setState(() {
-                              resp.neutral1 = v;
-                              _recalculate();
-                            });
-                          }),
+                          Wrap(
+                            alignment: WrapAlignment.spaceBetween,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  resp.coId,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text('Indirect: ',
+                                      style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 12)),
+                                  Text(
+                                    _getSurveyScore(resp).toStringAsFixed(2),
+                                    style: AppTypography.h3.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          const Divider(height: 1),
+                          const SizedBox(height: 10),
+                          if (cardConstraints.maxWidth < 320)
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 10,
+                              children: [
+                                _buildSurveyCounter(
+                                  'Strongly Agree (3)',
+                                  resp.stronglyAgree3,
+                                  (v) {
+                                    setState(() {
+                                      resp.stronglyAgree3 = v;
+                                      _recalculate();
+                                    });
+                                  },
+                                ),
+                                _buildSurveyCounter(
+                                  'Agree (2)',
+                                  resp.agree2,
+                                  (v) {
+                                    setState(() {
+                                      resp.agree2 = v;
+                                      _recalculate();
+                                    });
+                                  },
+                                ),
+                                _buildSurveyCounter(
+                                  'Neutral (1)',
+                                  resp.neutral1,
+                                  (v) {
+                                    setState(() {
+                                      resp.neutral1 = v;
+                                      _recalculate();
+                                    });
+                                  },
+                                ),
+                              ],
+                            )
+                          else
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildSurveyCounter(
+                                    'Strongly Agree (3)',
+                                    resp.stronglyAgree3,
+                                    (v) {
+                                      setState(() {
+                                        resp.stronglyAgree3 = v;
+                                        _recalculate();
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: _buildSurveyCounter(
+                                    'Agree (2)',
+                                    resp.agree2,
+                                    (v) {
+                                      setState(() {
+                                        resp.agree2 = v;
+                                        _recalculate();
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: _buildSurveyCounter(
+                                    'Neutral (1)',
+                                    resp.neutral1,
+                                    (v) {
+                                      setState(() {
+                                        resp.neutral1 = v;
+                                        _recalculate();
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
                         ],
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text('Indirect Attainment',
-                            style: AppTypography.caption
-                                .copyWith(color: AppColors.textSecondary)),
-                        Text(
-                          _getSurveyScore(resp).toStringAsFixed(2),
-                          style: AppTypography.h3.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primary),
-                        ),
-                      ],
-                    ),
-                  ],
+                      );
+                    } else {
+                      return Row(
+                        children: [
+                          Container(
+                            width: 60,
+                            height: 44,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              resp.coId,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15),
+                            ),
+                          ),
+                          const SizedBox(width: 20),
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: _buildSurveyCounter(
+                                      'Strongly Agree (3)', resp.stronglyAgree3,
+                                      (v) {
+                                    setState(() {
+                                      resp.stronglyAgree3 = v;
+                                      _recalculate();
+                                    });
+                                  }),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: _buildSurveyCounter(
+                                      'Agree (2)', resp.agree2, (v) {
+                                    setState(() {
+                                      resp.agree2 = v;
+                                      _recalculate();
+                                    });
+                                  }),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: _buildSurveyCounter(
+                                      'Neutral (1)', resp.neutral1, (v) {
+                                    setState(() {
+                                      resp.neutral1 = v;
+                                      _recalculate();
+                                    });
+                                  }),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 20),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text('Indirect Attainment',
+                                  style: AppTypography.caption.copyWith(
+                                      color: AppColors.textSecondary)),
+                              Text(
+                                _getSurveyScore(resp).toStringAsFixed(2),
+                                style: AppTypography.h3.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    }
+                  },
                 ),
               ),
             ),
@@ -3461,33 +3859,55 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
 
   Widget _buildSurveyCounter(
       String label, int value, ValueChanged<int> onChanged) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary)),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.remove_circle_outline, size: 20),
-                onPressed: value > 0 ? () => onChanged(value - 1) : null,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            InkWell(
+              onTap: value > 0 ? () => onChanged(value - 1) : null,
+              borderRadius: BorderRadius.circular(14),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(
+                  Icons.remove_circle_outline,
+                  size: 18,
+                  color: value > 0 ? AppColors.textPrimary : AppColors.divider,
+                ),
               ),
-              Text('$value',
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text('$value',
                   style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 14)),
-              IconButton(
-                icon: const Icon(Icons.add_circle_outline, size: 20),
-                onPressed: () => onChanged(value + 1),
+                      fontWeight: FontWeight.bold, fontSize: 13)),
+            ),
+            InkWell(
+              onTap: () => onChanged(value + 1),
+              borderRadius: BorderRadius.circular(14),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(
+                  Icons.add_circle_outline,
+                  size: 18,
+                  color: AppColors.primary,
+                ),
               ),
-            ],
-          ),
-        ],
-      ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -3529,40 +3949,41 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                   alignment: WrapAlignment.spaceBetween,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(8),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 500),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.picture_as_pdf_rounded,
+                                color: Colors.white, size: 24),
                           ),
-                          child: const Icon(Icons.picture_as_pdf_rounded,
-                              color: Colors.white, size: 24),
-                        ),
-                        const SizedBox(width: 12),
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 550),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'NBA Compliance Audit Report Generator',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold),
-                              ),
-                              Text(
-                                'Active Rules: Direct ${_repository.config.directWeightPercent.toInt()}% · Survey ${_repository.config.indirectWeightPercent.toInt()}% · Passing Cutoff ${_repository.config.passingThresholdPercent.toInt()}% · Target ${_repository.config.targetBenchmark.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                    color: Colors.white70, fontSize: 11.5),
-                              ),
-                            ],
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'NBA Compliance Audit Report Generator',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                Text(
+                                  'Active Rules: Direct ${_repository.config.directWeightPercent.toInt()}% · Survey ${_repository.config.indirectWeightPercent.toInt()}% · Passing Cutoff ${_repository.config.passingThresholdPercent.toInt()}% · Target ${_repository.config.targetBenchmark.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                      color: Colors.white70, fontSize: 11.5),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
@@ -3598,7 +4019,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       ),
                       icon: const Icon(Icons.print_rounded, size: 18),
                       label: const Text(
-                        'Print / Save as PDF Report 🖨️',
+                        'Print / Save as PDF Report',
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 13),
                       ),
@@ -3748,7 +4169,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Wrap(
-                    spacing: 12,
+                    spacing: 8,
                     runSpacing: 8,
                     alignment: WrapAlignment.spaceBetween,
                     crossAxisAlignment: WrapCrossAlignment.center,
@@ -3771,21 +4192,25 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   Container(
+                    width: double.infinity,
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: Text(
-                      'Formula: Course Attainment = ${(_repository.config.directWeightPercent / 100).toStringAsFixed(1)} * Direct Attainment + ${(_repository.config.indirectWeightPercent / 100).toStringAsFixed(1)} * Indirect Attainment',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                          color: AppColors.textPrimary,
-                          fontFamily: 'monospace'),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Text(
+                        'Formula: Course Attainment = ${(_repository.config.directWeightPercent / 100).toStringAsFixed(1)} * Direct Attainment + ${(_repository.config.indirectWeightPercent / 100).toStringAsFixed(1)} * Indirect Attainment',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            color: AppColors.textPrimary,
+                            fontFamily: 'monospace'),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -4068,7 +4493,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Wrap(
-              spacing: 12,
+              spacing: 8,
               runSpacing: 8,
               alignment: WrapAlignment.spaceBetween,
               crossAxisAlignment: WrapCrossAlignment.center,
@@ -4213,8 +4638,6 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                               left: 0,
                               right: 0,
                               child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceAround,
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: report.coAttainments.map((co) {
                                   final val = co.finalAttainment;
@@ -4227,48 +4650,55 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                                       : (val >= 2.0
                                           ? const Color(0xFFD97706)
                                           : const Color(0xFFDC2626));
+                                  final barW = (constraints.maxWidth / 8)
+                                      .clamp(16.0, 44.0);
 
-                                  return Column(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: [
-                                      // Value badge above bar
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: barColor,
-                                          borderRadius:
-                                              BorderRadius.circular(4),
+                                  return Expanded(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        // Value badge above bar
+                                        FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 5, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: barColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              val.toStringAsFixed(2),
+                                              style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 10.5),
+                                            ),
+                                          ),
                                         ),
-                                        child: Text(
-                                          val.toStringAsFixed(2),
-                                          style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 11),
+                                        const SizedBox(height: 4),
+                                        AnimatedContainer(
+                                          duration:
+                                              const Duration(milliseconds: 400),
+                                          width: barW,
+                                          height: barH,
+                                          decoration: BoxDecoration(
+                                            color: barColor,
+                                            borderRadius:
+                                                const BorderRadius.vertical(
+                                                    top: Radius.circular(6)),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                  color: barColor.withValues(
+                                                      alpha: 0.3),
+                                                  blurRadius: 4,
+                                                  offset: const Offset(0, 2)),
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      AnimatedContainer(
-                                        duration:
-                                            const Duration(milliseconds: 400),
-                                        width: 44,
-                                        height: barH,
-                                        decoration: BoxDecoration(
-                                          color: barColor,
-                                          borderRadius:
-                                              const BorderRadius.vertical(
-                                                  top: Radius.circular(6)),
-                                          boxShadow: [
-                                            BoxShadow(
-                                                color:
-                                                    barColor.withOpacity(0.3),
-                                                blurRadius: 4,
-                                                offset: const Offset(0, 2)),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   );
                                 }).toList(),
                               ),
@@ -4280,17 +4710,16 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                               left: 0,
                               right: 0,
                               child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceAround,
                                 children: report.coAttainments.map((co) {
-                                  return SizedBox(
-                                    width: 44,
+                                  return Expanded(
                                     child: Text(
                                       co.coId,
                                       textAlign: TextAlign.center,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           fontWeight: FontWeight.bold,
-                                          fontSize: 12,
+                                          fontSize: constraints.maxWidth < 340
+                                              ? 10
+                                              : 12,
                                           color: AppColors.primary),
                                     ),
                                   );
@@ -4348,12 +4777,16 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
             ),
           ),
           const SizedBox(width: 10),
-          Text(
-            'Current Step: ${_stepNames[currentStep]}',
-            style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 13.5,
-                color: AppColors.textPrimary),
+          Expanded(
+            child: Text(
+              'Current Step: ${_stepNames[currentStep]}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13.5,
+                  color: AppColors.textPrimary),
+            ),
           ),
         ],
       ),
@@ -4386,25 +4819,23 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
         top: false,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final isCompact = constraints.maxWidth < 640;
+            final isMobile = constraints.maxWidth < 650;
 
             final backButton = OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.textPrimary,
-                padding: EdgeInsets.symmetric(
-                    horizontal: isCompact ? 8 : 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
               ),
-              icon: const Icon(Icons.arrow_back, size: 15),
+              icon: const Icon(Icons.arrow_back, size: 16),
               label: Text(
-                isCompact
-                    ? 'Back'
-                    : (hasPrev ? 'Back: $prevTitle' : 'Switch Course'),
-                style: const TextStyle(
-                    fontSize: 11.5, fontWeight: FontWeight.w600),
+                hasPrev ? 'Back: $prevTitle' : 'Switch Course',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
               ),
               onPressed: hasPrev
                   ? () => _goToTab(currentIndex - 1)
@@ -4417,20 +4848,18 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                     hasNext ? AppColors.secondary : AppColors.success,
                 foregroundColor: Colors.white,
                 elevation: 2,
-                padding: EdgeInsets.symmetric(
-                    horizontal: isCompact ? 10 : 14, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
               ),
-              icon: Icon(hasNext ? Icons.arrow_forward : Icons.check, size: 15),
+              icon: Icon(hasNext ? Icons.arrow_forward : Icons.check, size: 16),
               label: Text(
-                isCompact
-                    ? (hasNext ? 'Next ➔' : 'Ready ✓')
-                    : (hasNext ? 'Next: $nextTitle ➔' : 'Report Ready ✓'),
-                style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.bold),
+                hasNext ? 'Next: $nextTitle' : 'Report Ready',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+                style:
+                    const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
               ),
               onPressed: () {
                 if (hasNext) {
@@ -4449,7 +4878,7 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
               },
             );
 
-            final dotsWidget = Row(
+            final progressIndicator = Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
@@ -4462,46 +4891,57 @@ class _CopoWorkbenchScreenState extends State<CopoWorkbenchScreen>
                       borderRadius: BorderRadius.circular(10),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                        margin: const EdgeInsets.symmetric(horizontal: 3),
-                        width: isCurrent ? 22 : 6,
-                        height: 6,
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        width: isCurrent ? 26 : 8,
+                        height: 8,
                         decoration: BoxDecoration(
                           color: isCurrent
                               ? AppColors.secondary
-                              : (isPast ? AppColors.primary : AppColors.divider),
-                          borderRadius: BorderRadius.circular(3),
+                              : (isPast
+                                  ? AppColors.primary
+                                  : AppColors.divider),
+                          borderRadius: BorderRadius.circular(4),
                         ),
                       ),
                     );
                   }),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 8),
                 Text(
                   '${currentIndex + 1}/8',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 11,
+                    fontSize: 12,
                     color: AppColors.textSecondary,
                   ),
                 ),
               ],
             );
 
+            if (isMobile) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Center(child: progressIndicator),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(child: backButton),
+                      const SizedBox(width: 8),
+                      Expanded(child: nextButton),
+                    ],
+                  ),
+                ],
+              );
+            }
+
             return Row(
               children: [
-                Flexible(flex: 3, child: backButton),
-                const SizedBox(width: 4),
-                Expanded(
-                  flex: 4,
-                  child: Center(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: dotsWidget,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Flexible(flex: 3, child: nextButton),
+                backButton,
+                const Spacer(),
+                progressIndicator,
+                const Spacer(),
+                nextButton,
               ],
             );
           },

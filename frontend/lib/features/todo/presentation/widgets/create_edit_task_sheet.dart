@@ -6,6 +6,7 @@ import '../../data/todo_models.dart';
 
 class CreateEditTaskSheet extends StatefulWidget {
   final TaskModel? existingTask;
+  final DateTime? initialDueDate;
   final Function({
     required String title,
     String? description,
@@ -22,12 +23,14 @@ class CreateEditTaskSheet extends StatefulWidget {
   const CreateEditTaskSheet({
     super.key,
     this.existingTask,
+    this.initialDueDate,
     required this.onSave,
   });
 
   static Future<void> show(
     BuildContext context, {
     TaskModel? existingTask,
+    DateTime? initialDueDate,
     required Function({
       required String title,
       String? description,
@@ -47,6 +50,7 @@ class CreateEditTaskSheet extends StatefulWidget {
       isScrollControlled: true,
       builder: (_) => CreateEditTaskSheet(
         existingTask: existingTask,
+        initialDueDate: initialDueDate,
         onSave: onSave,
       ),
     );
@@ -66,17 +70,19 @@ class _CreateEditTaskSheetState extends State<CreateEditTaskSheet> {
   late String _priority;
   DateTime? _dueDate;
   TimeOfDay? _dueTime;
+  int? _estimatedDurationMinutes;
   String _recurrenceFreq = 'NONE'; // NONE, DAILY, WEEKDAYS, WEEKLY, MONTHLY, YEARLY
   final List<String> _subtasks = [];
   bool _isAdvancedExpanded = false;
   bool _isSubmitting = false;
 
   final List<String> _categoryPresets = [
-    'Academics',
+    'Academic',
+    'Assignments',
     'Exams',
-    'Mentoring',
-    'Administrative',
+    'Projects',
     'Personal',
+    'Other',
   ];
 
   @override
@@ -89,9 +95,14 @@ class _CreateEditTaskSheetState extends State<CreateEditTaskSheet> {
     _subtaskInputController = TextEditingController();
 
     _priority = task?.priority ?? 'medium';
+    _estimatedDurationMinutes = task?.estimatedDurationMinutes;
+
     if (task?.dueDate != null) {
       _dueDate = task!.dueDate;
       _dueTime = TimeOfDay(hour: task.dueDate!.hour, minute: task.dueDate!.minute);
+    } else if (widget.initialDueDate != null) {
+      _dueDate = widget.initialDueDate;
+      _dueTime = const TimeOfDay(hour: 17, minute: 0);
     }
 
     if (task?.recurrenceRule != null) {
@@ -229,6 +240,7 @@ class _CreateEditTaskSheetState extends State<CreateEditTaskSheet> {
         category: _categoryController.text.trim().isNotEmpty
             ? _categoryController.text.trim()
             : null,
+        estimatedDurationMinutes: _estimatedDurationMinutes,
         recurrenceRule: recurrence,
         subtasks: subtasksList,
       );

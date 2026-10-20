@@ -105,7 +105,7 @@ def sync_task_reminders(
     """
     current_time = _ensure_naive_utc(now) or datetime.now(timezone.utc).replace(tzinfo=None)
 
-    if task.status == TaskStatus.COMPLETED.value or task.due_date is None:
+    if task.is_completed or task.status == TaskStatus.COMPLETED.value or task.due_date is None:
         for r in task.reminders:
             if r.status == ReminderStatus.SCHEDULED.value:
                 r.status = ReminderStatus.CANCELLED.value
@@ -252,7 +252,7 @@ def advance_recurring_task(task: Task, completed_at: datetime | None = None) -> 
 
 def is_task_overdue(task: Task, now: datetime | None = None) -> bool:
     """Returns True if the task is past its due datetime and not completed."""
-    if task.status == TaskStatus.COMPLETED.value or not task.due_date:
+    if task.is_completed or task.status == TaskStatus.COMPLETED.value or not task.due_date:
         return False
     current_time = _ensure_naive_utc(now) or datetime.now(timezone.utc).replace(tzinfo=None)
     due = _ensure_naive_utc(task.due_date)
@@ -276,7 +276,7 @@ def evaluate_and_dispatch_reminders(
     tasks = db.query(Task).filter(Task.owner_id == user_id).all()
 
     for task in tasks:
-        if task.status == TaskStatus.COMPLETED.value:
+        if task.is_completed or task.status == TaskStatus.COMPLETED.value:
             continue
 
         for reminder in task.reminders:
