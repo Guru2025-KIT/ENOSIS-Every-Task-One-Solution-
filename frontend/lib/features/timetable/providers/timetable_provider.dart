@@ -1158,9 +1158,35 @@ class TimetableProvider extends ChangeNotifier {
             grid[slot.key] = cellList.map((e) => e.toString()).toList();
           }
           _publishedTimetable[className] = grid;
+          _generatedTimetable[className] = Map<String, List<String>>.from(grid);
         }
         isTimetableSaved = true;
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('enosis_cached_published_timetable', jsonEncode(_publishedTimetable));
+        } catch (_) {}
         notifyListeners();
+      } else {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final cached = prefs.getString('enosis_cached_published_timetable');
+          if (cached != null && cached.isNotEmpty && _publishedTimetable.isEmpty) {
+            final decoded = jsonDecode(cached) as Map<String, dynamic>;
+            for (final entry in decoded.entries) {
+              final className = entry.key;
+              final slots = entry.value as Map<String, dynamic>;
+              final grid = <String, List<String>>{};
+              for (final slot in slots.entries) {
+                final cellList = slot.value as List<dynamic>;
+                grid[slot.key] = cellList.map((e) => e.toString()).toList();
+              }
+              _publishedTimetable[className] = grid;
+              _generatedTimetable[className] = Map<String, List<String>>.from(grid);
+            }
+            isTimetableSaved = true;
+            notifyListeners();
+          }
+        } catch (_) {}
       }
     } catch (e) {
       debugPrint('Error fetching published timetable: $e');

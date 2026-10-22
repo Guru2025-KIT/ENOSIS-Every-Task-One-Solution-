@@ -646,16 +646,15 @@ class TimetableCpSatSolver:
                 ))
 
         # 3. Individual (division-specific theory + labs)
-        # Group lab assignments by (class_name, subject) to detect parallel batches
-        lab_assignments_by_class_subject: Dict[Tuple[str, str], List[Assignment]] = defaultdict(list)
         theory_individual: List[Assignment] = []
+        lab_individual: List[Assignment] = []
 
         for idx, a in enumerate(individual):
             t = a.type.lower()
             if t == "theory":
                 theory_individual.append(a)
             elif t == "lab":
-                lab_assignments_by_class_subject[(self._normalize(a.class_name), self._normalize(a.subject))].append(a)
+                lab_individual.append(a)
 
         # Emit theory sessions
         for idx, a in enumerate(theory_individual):
@@ -667,55 +666,25 @@ class TimetableCpSatSolver:
                     duration=1, session_index=h,
                 ))
 
-        # Emit lab sessions — enforce: each lab is >= 2 slots, Batch 1 & Batch 2 are ALWAYS paired in the same slot
-        for (cls_key, subj_key), lab_group in lab_assignments_by_class_subject.items():
-            lab_slots = max(2, self.lab_slots_per_session)  # HARD MINIMUM: labs are always >= 2 slots
-
-            # Separate by batch label
-            batch_map: Dict[str, Assignment] = {}
-            for a in lab_group:
-                bl = (a.batch if a.batch and a.batch not in ("-", "All", "") else "Batch 1").strip()
-                if bl not in batch_map:
-                    batch_map[bl] = a  # Use first occurrence per batch
-
-            # Ensure both Batch 1 and Batch 2 exist (create synthetic if missing)
-            if len(batch_map) == 1:
-                existing_batch = list(batch_map.keys())[0]
-                other_batch = "Batch 2" if "1" in existing_batch else "Batch 1"
-                ref = batch_map[existing_batch]
-                # Auto-create complementary batch with same parameters
-                batch_map[other_batch] = Assignment(
-                    faculty=ref.faculty,  # same faculty fallback — solver will de-conflict via room separation
-                    subject=ref.subject,
-                    class_name=ref.class_name,
-                    type="Lab",
-                    batch=other_batch,
-                    weekly_hours=ref.weekly_hours,
-                    subject_code=ref.subject_code,
-                )
-
-            # Compute how many parallel-pair blocks per week
-            # weekly_hours for a lab assignment means X lecture-slots; divide by lab_slots to get blocks
-            max_hours = max(a.weekly_hours for a in lab_group)
-            blocks = max(1, max_hours // lab_slots)
-
-            batch_keys = sorted(batch_map.keys())  # e.g. ["Batch 1", "Batch 2"]
-
+        # Emit lab sessions — enforce: each lab block is >= 2 consecutive slots
+        lab_slots = max(2, self.lab_slots_per_session)
+        for a in lab_individual:
+            bl = (a.batch if a.batch and a.batch not in ("-", "All", "") else "All").strip()
+            # If lab assignment has weekly_hours >= lab_slots, emit in blocks of lab_slots
+            dur = lab_slots if a.weekly_hours >= lab_slots else a.weekly_hours
+            blocks = max(1, a.weekly_hours // dur)
             for b in range(blocks):
-                # Emit all batches with the SAME session_index b so the parallel sync reward fires
-                for bl in batch_keys:
-                    a = batch_map[bl]
-                    sessions.append(SolverSession(
-                        session_id=f"lab_{id(a)}_{bl.replace(' ', '_')}_b{b}",
-                        faculty=a.faculty,
-                        subject=a.subject,
-                        subject_code=a.subject_code,
-                        type="Lab",
-                        batch=bl,
-                        classes=[a.class_name],
-                        duration=lab_slots,
-                        session_index=b,
-                    ))
+                sessions.append(SolverSession(
+                    session_id=f"lab_{id(a)}_{bl.replace(' ', '_')}_b{b}",
+                    faculty=a.faculty,
+                    subject=a.subject,
+                    subject_code=a.subject_code,
+                    type="Lab",
+                    batch=bl,
+                    classes=[a.class_name],
+                    duration=dur,
+                    session_index=b,
+                ))
 
         return sessions
 
@@ -898,31 +867,19 @@ class TimetableCpSatSolver:
                 model.Add(sum(row) == sv) if row else model.Add(sv == 0)
 
         # Faculty: strictly at most one session per (normalized_faculty_part, day, slot)
-        # Exception: Do NOT conflict parallel batches of the same synchronized lab session for the same class
-        fac_slot: Dict[Tuple[str, str, int], Dict[Tuple[str, str, int], List]] = defaultdict(lambda: defaultdict(list))
+        # HARD CONSTRAINT: A faculty member can NEVER teach two classes, batches, or lab sessions
+        # simultaneously in the same slot. Zero double-booking strictly enforced.
+        fac_slot: Dict[Tuple[str, str, int], List] = defaultdict(list)
         for i, (sess, opts) in enumerate(zip(sessions, session_options)):
             fps = [self._normalize(f) for f in sess.faculty.split("|") if f.strip()]
-            sess_grp = (
-                self._normalize(sess.classes[0]) if sess.classes else "",
-                self._normalize(sess.subject),
-                sess.session_index if sess.type == "Lab" else -i,
-            )
             for j, opt in enumerate(opts):
                 for fp in fps:
                     for s in opt.slots:
-                        fac_slot[(fp, opt.day, s)][sess_grp].append(choice_vars[i][j])
+                        fac_slot[(fp, opt.day, s)].append(choice_vars[i][j])
 
-        for (fp, day, s), grp_map in fac_slot.items():
-            if len(grp_map) > 1:
-                grp_sum_vars = []
-                for grp_vars in grp_map.values():
-                    if len(grp_vars) == 1:
-                        grp_sum_vars.append(grp_vars[0])
-                    else:
-                        g_var = model.NewBoolVar(f"fac_grp_{abs(hash((fp, day, s, id(grp_vars)))) % 1000000}")
-                        model.Add(sum(grp_vars) >= g_var)
-                        grp_sum_vars.append(g_var)
-                model.AddAtMostOne(grp_sum_vars)
+        for (fp, day, s), vl in fac_slot.items():
+            if len(vl) > 1:
+                model.AddAtMostOne(vl)
 
         # Class: theory sessions and lab batches
         #   - theory: at most one theory per (class, day, slot)
@@ -976,6 +933,23 @@ class TimetableCpSatSolver:
                 for j, opt in enumerate(opts):
                     sd_vars[(norm_cls, sess.subject, opt.day)].append(choice_vars[i][j])
         for vl in sd_vars.values():
+            if len(vl) > 1:
+                model.AddAtMostOne(vl)
+
+        # No two batches of the same class should take the SAME lab subject at the same (day, slot)
+        # In college labs, Batch 1 and Batch 2 do different subjects simultaneously (e.g. Batch 1 does Python Lab, Batch 2 does Web Lab)
+        cls_lab_subj_slot: Dict[Tuple[str, str, int, str], List] = defaultdict(list)
+        for i, (sess, opts) in enumerate(zip(sessions, session_options)):
+            if sess.type == "Lab":
+                norm_subj = self._normalize(sess.subject)
+                for j, opt in enumerate(opts):
+                    v = choice_vars[i][j]
+                    for cls in sess.classes:
+                        norm_cls = self._normalize(cls)
+                        for s in opt.slots:
+                            cls_lab_subj_slot[(norm_cls, opt.day, s, norm_subj)].append(v)
+
+        for (cls, day, slot, subj), vl in cls_lab_subj_slot.items():
             if len(vl) > 1:
                 model.AddAtMostOne(vl)
 
@@ -1040,61 +1014,9 @@ class TimetableCpSatSolver:
                         model.Add(sum(vl) - max_d <= excess_var)
                         pen.append(excess_var * 200)
 
-        # ── HARD CONSTRAINT: Synchronize parallel lab batches ──────────────────
-        # Both Batch 1 and Batch 2 of the SAME class+subject must land on the
-        # SAME day and SAME starting slot. This prevents one batch being free.
-        # Group lab sessions by (class, subject, session_index/block)
-        lab_sync_groups: Dict[Tuple[str, str, int], Dict[str, int]] = defaultdict(dict)
-        for i, sess in enumerate(sessions):
-            if sess.type == "Lab" and sess.batch and sess.batch not in ("-", "All", ""):
-                # session_index is the block number (b), same for paired batches
-                key = (
-                    self._normalize(sess.classes[0]) if sess.classes else "",
-                    self._normalize(sess.subject),
-                    sess.session_index,
-                )
-                lab_sync_groups[key][sess.batch] = i  # map batch -> session index in sessions[]
-
-        # For each pair of batches in the same group, enforce same day+slot
-        for (cls_k, subj_k, blk_idx), batch_sess_map in lab_sync_groups.items():
-            batch_labels = sorted(batch_sess_map.keys())
-            if len(batch_labels) < 2:
-                continue
-            # For every pair (b1, b2), add hard constraints: they must share day AND start slot
-            for pi in range(len(batch_labels) - 1):
-                b1_idx = batch_sess_map[batch_labels[pi]]
-                b2_idx = batch_sess_map[batch_labels[pi + 1]]
-                b1_opts = session_options[b1_idx]
-                b2_opts = session_options[b2_idx]
-                # Build: for each (day, start_slot) option of b1, create a flag
-                # that forces b2 to choose the same day+slot if b1 is placed there
-                for j1, opt1 in enumerate(b1_opts):
-                    # find matching options in b2 with same day and start_slot
-                    matching_j2 = [
-                        j2 for j2, opt2 in enumerate(b2_opts)
-                        if opt2.day == opt1.day and opt2.start_slot == opt1.start_slot
-                    ]
-                    if not matching_j2:
-                        # If b2 has no option on that day+slot, b1 cannot be placed there
-                        model.Add(choice_vars[b1_idx][j1] == 0)
-                        continue
-                    # If b1 is chosen at this option, EXACTLY ONE of the matching b2 must also be chosen
-                    model.Add(
-                        sum(choice_vars[b2_idx][j2] for j2 in matching_j2) >= choice_vars[b1_idx][j1]
-                    )
-                for j2, opt2 in enumerate(b2_opts):
-                    matching_j1 = [
-                        j1 for j1, opt1 in enumerate(b1_opts)
-                        if opt1.day == opt2.day and opt1.start_slot == opt2.start_slot
-                    ]
-                    if not matching_j1:
-                        model.Add(choice_vars[b2_idx][j2] == 0)
-                        continue
-                    model.Add(
-                        sum(choice_vars[b1_idx][j1] for j1 in matching_j1) >= choice_vars[b2_idx][j2]
-                    )
-
-        # Soft reward: further encourage exact same-slot alignment (for objective quality)
+        # ── Synchronize parallel lab batches ──────────────────
+        # Multiple batches of the same class (e.g. Batch 1 & Batch 2) running different subjects simultaneously
+        # are strongly rewarded to align in the same time slot across separate labs with separate teachers.
         lab_class_slot_batches: Dict[Tuple[str, str, int], Dict[str, List]] = defaultdict(lambda: defaultdict(list))
         for i, (sess, opts) in enumerate(zip(sessions, session_options)):
             if sess.type == "Lab" and sess.batch and sess.batch not in ("-", "All", ""):
@@ -1106,14 +1028,14 @@ class TimetableCpSatSolver:
 
         for (cls, day, slot), batch_vars_map in lab_class_slot_batches.items():
             if len(batch_vars_map) > 1:
-                batch_keys = list(batch_vars_map.keys())
+                batch_keys = sorted(batch_vars_map.keys())
                 for b_idx in range(len(batch_keys) - 1):
                     b1_list = batch_vars_map[batch_keys[b_idx]]
                     b2_list = batch_vars_map[batch_keys[b_idx + 1]]
-                    sync_var = model.NewBoolVar(f"sync_lab_{cls}_{day}_{slot}_{b_idx}")
+                    sync_var = model.NewBoolVar(f"sync_lab_{abs(hash((cls, day, slot, b_idx))) % 1000000}")
                     model.Add(sum(b1_list) >= sync_var)
                     model.Add(sum(b2_list) >= sync_var)
-                    rew.append(sync_var * 500)
+                    rew.append(sync_var * 3000)
 
 
         # Schedule Compaction & Gap Minimization (strictly eliminate free holes/empty periods in the middle of a class day)

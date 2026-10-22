@@ -1928,6 +1928,7 @@ def publish_timetable(
             "day_names": day_names,
             "periods_per_day": config.periods_per_day if config else 8,
             "published_at": now.isoformat(),
+            "published_timetable": timetable_data,
         },
         conflicts=[],
         suggestions=[],
@@ -1976,6 +1977,17 @@ def get_published_timetable(
     if not latest_run:
         return {}  # No timetable has been generated yet
 
+    # If the generation run saved the exact published timetable dictionary in config_snapshot,
+    # return the exact generated timetable snapshot for class views:
+    snapshot_tt = (latest_run.config_snapshot or {}).get("published_timetable")
+    if view_type == "class" and snapshot_tt and isinstance(snapshot_tt, dict):
+        if target:
+            for k, v in snapshot_tt.items():
+                if k.lower() == target.lower():
+                    return {k: v}
+            return {}
+        return snapshot_tt
+
     query = db.query(TimetableEntry).filter(TimetableEntry.batch_id == latest_run.id)
 
     # Apply target filter
@@ -2000,7 +2012,7 @@ def get_published_timetable(
     fac_cache: dict[str, str] = {}
     room_cache: dict[str, str] = {}
 
-    grid: dict[str, dict[str, list[str]]] = defaultdict(dict)
+    slot_entries: dict[str, dict[str, list[tuple[str, str, str, str]]]] = defaultdict(lambda: defaultdict(list))
 
     for e in entries:
         # Lazily populate caches
@@ -2022,17 +2034,39 @@ def get_published_timetable(
 
         if view_type == "class":
             group_key = div_cache[e.division_id]
+            c1 = sub_cache[e.subject_id]
+            c2 = fac_cache[e.faculty_id]
+            c3 = room_cache[e.room_id]
+            c4 = e.batch_name or "All"
         elif view_type == "faculty":
             group_key = fac_cache[e.faculty_id]
+            c1 = sub_cache[e.subject_id]
+            c2 = div_cache[e.division_id]
+            c3 = room_cache[e.room_id]
+            c4 = e.batch_name or "All"
         else:
             group_key = room_cache[e.room_id]
+            c1 = sub_cache[e.subject_id]
+            c2 = fac_cache[e.faculty_id]
+            c3 = div_cache[e.division_id]
+            c4 = e.batch_name or "All"
 
-        grid[group_key][slot_key] = [
-            sub_cache[e.subject_id],
-            fac_cache[e.faculty_id],
-            room_cache[e.room_id],
-            e.batch_name or "All"
-        ]
+        slot_entries[group_key][slot_key].append((c1, c2, c3, c4))
+
+    grid: dict[str, dict[str, list[str]]] = defaultdict(dict)
+    for group_key, slots in slot_entries.items():
+        for slot_key, items in slots.items():
+            if not items:
+                continue
+            if len(items) == 1:
+                grid[group_key][slot_key] = list(items[0])
+            else:
+                grid[group_key][slot_key] = [
+                    " | ".join(it[0] for it in items),
+                    " | ".join(it[1] for it in items),
+                    " | ".join(it[2] for it in items if it[2]),
+                    " | ".join(it[3] for it in items if it[3] and it[3] != "All"),
+                ]
 
     return dict(grid)
 
